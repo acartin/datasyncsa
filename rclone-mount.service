@@ -1,0 +1,21 @@
+[Unit]
+Description=Rclone Mount for R2 Storage (Dev)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=acartin
+Group=acartin
+ExecStart=/usr/bin/rclone mount datasync-dev: /srv/datasyncsa/volumes/r2_storage \
+    --allow-other \
+    --vfs-cache-mode full \
+    --vfs-cache-max-size 10G \
+    --log-file /var/log/rclone-storage.log \
+    --log-level INFO
+ExecStop=/bin/fusermount -u /srv/datasyncsa/volumes/r2_storage
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

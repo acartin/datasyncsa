@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+redis
+httpx
+psycopg2-binary
