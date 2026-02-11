@@ -161,11 +161,18 @@ services:
     restart: unless-stopped
     ports:
       - "${REALTOR_WEB_PORT}:80"
-    environment:
-      - API_HOST=${ENV_PREFIX}-web-realtor-api
+    networks:
+      - internal_network
+
+  # Corporate Website (Static)
+  datasyncsa-web:
+    image: nginx:alpine
+    container_name: ${ENV_PREFIX}-web-corporate
+    restart: unless-stopped
+    ports:
+      - "${CORPORATE_WEB_PORT}:80"
     volumes:
-      - ./services/web/realtor-chat/frontend:/usr/share/nginx/html:ro
-      - ./services/web/realtor-chat/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./services/web/datasyncsa:/usr/share/nginx/html:ro
     networks:
       - internal_network
 
