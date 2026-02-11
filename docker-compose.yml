@@ -7,7 +7,9 @@ services:
   
   # Database (Replaces CT 101)
   postgres:
-    image: pgvector/pgvector:pg17
+    build:
+      context: ./services/database
+      dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-infra-postgres
     restart: always
     environment:
