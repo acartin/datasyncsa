@@ -1,0 +1,13 @@
+{
+    "results": [
+        {
+            "content_id": "string",
+            "title": "string",
+            "body_content": "string",
+            "score": "float",
+            "metadata": "object"
+        }
+    ],
+    "query_text": "string",
+    "client_id": "string"
+}

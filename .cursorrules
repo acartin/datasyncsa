@@ -1,0 +1,64 @@
+# PROYECTO DATASYNCSA - REGLAS DE COMPORTAMIENTO PARA IA
+
+Este archivo define las reglas inquebrantables de interacción y desarrollo en el entorno DatasyncSA.
+
+---
+
+## 1. REGLA SUPREMA DE INTERACCIÓN (NO-EXECUTION BY DEFAULT)
+
+> **CUALQUIER PREGUNTA DEL USUARIO DEBE SER INTERPRETADA ESTRICTAMENTE COMO UNA SOLICITUD DE INFORMACIÓN, ANÁLISIS O CONSULTA.**
+
+- **PROHIBIDO EJECUTAR** cambios, comandos o modificaciones de archivos ante una pregunta abierta ("¿qué pasaría si...?", "¿cómo se hace...?", "¿revisar esto...?").
+- **SOLO EJECUTAR** ante una instrucción imperativa, explícita e inequívoca ("Ejecuta el comando...", "Aplica el cambio...", "Borra el archivo...").
+- Ante la duda, **PREGUNTA PRIMERO**. Pide confirmación explícita antes de tocar una sola línea de código o infraestructura.
+
+---
+
+## 2. FUENTE DE VERDAD Y DOCUMENTACIÓN
+- **Infraestructura & Lógica**: La verdad absoluta reside en `.agent/` y sus subdirectorios.
+- **Contratos de Datos**: Los esquemas en `/srv/datasyncsa/schemas/` (volumen `/app/schemas`) son la LEY.
+  - Ningún servicio puede inventar estructuras de datos. Debe leer `canonical_document.json`, `rag_query.json`, etc.
+- **No inventes**: No asumas flujos ni arquitecturas. Si no está en `.agent/`, pregunta o propón documentarlo primero.
+
+## 3. SEPARACIÓN DE RESPONSABILIDADES (SCOPE)
+Respeta estrictamente los límites de cada contenedor Docker:
+
+- **etl-processor**: 
+  - Única entrada de escritura de datos crudos.
+  - Responsable de normalización y hashing (SHA-256) para idempotencia.
+- **semantic-adapter**: 
+  - Solo lectura (Read-Only) para consultas vectoriales.
+  - Generación de embeddings (Gemini/OpenAI) bajo demanda.
+  - Gestión de índices `pgvector` (HNSW).
+- **inference-core**: 
+  - Cerebro orquestador. Lógica de negocio RAG.
+  - Único punto de contacto para clientes externos (vía API Gateway).
+  - Gestión de Prompts dinámicos (`lead_ai_prompts`).
+- **web-stack**:
+  - Consumidores pasivos de la API. No deben tener lógica de negocio pesada.
+
+## 4. ESTÁNDARES TÉCNICOS
+- **Stack**: Python 3.11+, FastAPI, LangChain.
+- **Validación**: Uso obligatorio de Type Hints y Pydantic alineados con los esquemas JSON compartidos.
+- **Persistencia**: 
+  - Relacional: Postgres (Container `postgres`).
+  - Vectorial: `pgvector` en la misma instancia Postgres.
+  - Archivos: R2 Storage montado en `/app/data/storage`. **NUNCA** guardar en sistema de archivos efímero del contenedor.
+
+## 5. COMUNICACIÓN TÉCNICA
+- Respuestas directas, breves y técnicas.
+- Cero "relleno conversationnal" (ej: "Es una excelente observación", "Me alegra que preguntes").
+- Ve al grano: Problema -> Análisis -> Solución.
+
+## 6. PRUEBAS Y EXPERIMENTOS (SANDBOX)
+- **Zona Segura:** Todo script de prueba, experimento o validación temporal DEBE crearse dentro de la carpeta `temp/` de cada servicio.
+- **Gitignore:** Asegúrate de que `temp/` esté ignorado en git.
+- **Limpieza:** No dejes archivos basura en la raíz del servicio.
+
+## 7. PROHIBICIONES ABSOLUTAS
+- **Git Commands:** NUNCA ejecutes comandos `git` (checkout, reset, revert, etc.). Si necesitas deshacer cambios, usa herramientas de edición de archivos.
+- **Destructive Operations:** No borres bases de datos, volúmenes Docker, o archivos de configuración sin confirmación explícita del usuario.
+
+---
+
+**SI NO CUMPLES ESTAS REGLAS, ROMPES EL SISTEMA.**

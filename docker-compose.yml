@@ -47,12 +47,17 @@ services:
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-backend-inference
     restart: always
+    ports:
+      - "8083:8003"
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}
+      - DATABASE_URL=${DATABASE_URL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - LLM_MODEL=${LLM_MODEL}
       - STORAGE_PATH=/app/data/storage
     volumes:
       - ${HOST_PATH_STORAGE}:/app/data/storage
+      - ./schemas:/app/schemas:ro
     networks:
       - internal_network
 
@@ -65,10 +70,14 @@ services:
     restart: always
     ports:
       - "${SEMANTIC_PORT}:8000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}
       - INFERENCE_CORE_URL=http://inference-core:8003
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - TABLE_VECTORS=${TABLE_VECTORS}
+    volumes:
+      - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
       - inference-core
@@ -83,7 +92,7 @@ services:
     container_name: ${ENV_PREFIX}-backend-etl
     restart: always
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}
+      - DATABASE_URL=${DATABASE_URL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
@@ -91,6 +100,7 @@ services:
     volumes:
       - ${HOST_PATH_STAGING}:/app/data/staging
       - ${HOST_PATH_STORAGE}:/app/data/storage
+      - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
       - redis
@@ -114,6 +124,10 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
+      - INFERENCE_CORE_URL=http://inference-core:8003
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    volumes:
+      - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
     networks:
@@ -149,6 +163,9 @@ services:
       - DB_HOST=postgres
       - REDIS_URL=redis://redis:6379
       - INFERENCE_CORE_URL=http://inference-core:8003/api/v1
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    volumes:
+      - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
       - redis
@@ -175,6 +192,18 @@ services:
       - "${CORPORATE_WEB_PORT}:80"
     volumes:
       - ./services/web/datasyncsa:/usr/share/nginx/html:ro
+    networks:
+      - internal_network
+
+  # Test UI (Development Only)
+  test-ui:
+    image: nginx:alpine
+    container_name: ${ENV_PREFIX}-web-test-ui
+    restart: unless-stopped
+    ports:
+      - "${TEST_UI_PORT}:80"
+    volumes:
+      - ./services/web/tests:/usr/share/nginx/html:ro
     networks:
       - internal_network
 

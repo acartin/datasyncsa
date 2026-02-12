@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "fields": {
+    "content_id": "string",
+    "source": "string",
+    "title": "string",
+    "body_content": "string",
+    "metadata": {
+      "client_id": "string",
+      "category": "string",
+      "url": "string",
+      "source_timestamp": "iso8601",
+      "ingested_at": "iso8601"
+    },
+    "hash": "sha256"
+  },
+  "required": [
+    "content_id",
+    "source",
+    "body_content"
+  ]
+}

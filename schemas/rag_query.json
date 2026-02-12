@@ -1,0 +1,9 @@
+{
+    "query_text": "string",
+    "client_id": "string",
+    "top_k": "integer",
+    "filters": {
+        "category": "string",
+        "source": "string"
+    }
+}
