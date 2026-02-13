@@ -1,27 +1,34 @@
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
+from uuid import UUID
+import logging
 
 from app.embedder import GeminiEmbedder
 from app.vector_repo import VectorRepository
 
 router = APIRouter()
+logger = logging.getLogger("semantic_adapter.api")
 
 # Instancias Globales
 try:
     embedder = GeminiEmbedder()
 except ValueError as e:
     embedder = None
-    print(f"Warning: Embedder not initialized: {e}")
+    logger.warning("Embedder not initialized: %s", e)
 
-repo = VectorRepository()
+try:
+    repo = VectorRepository()
+except Exception as e:
+    repo = None
+    logger.warning("Vector repository not initialized: %s", e)
 
 class SearchRequest(BaseModel):
     query_text: str
-    client_id: str
+    client_id: UUID
     filters: Optional[Dict[str, Any]] = None
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1, le=20)
 
 class SearchResult(BaseModel):
     content_id: str
@@ -33,18 +40,18 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     results: List[SearchResult]
     query_text: str
-    client_id: str
+    client_id: UUID
 
 @router.get("/health")
 async def health_check():
     """
     Health check endpoint to verify service status.
     """
-    db_status = "unknown"
+    db_status = "not_configured"
     try:
-        # Simple verficación de conexión si fuera necesario
-        # with repo._get_connection() as conn: ...
-        db_status = "connected"
+        if repo:
+            is_connected = await run_in_threadpool(repo.ping)
+            db_status = "connected" if is_connected else "disconnected"
     except Exception:
         db_status = "disconnected"
         
@@ -63,24 +70,28 @@ async def search_documents(req: SearchRequest):
     """
     if not embedder:
         raise HTTPException(status_code=503, detail="Embedder service not configured")
+    if not repo:
+        raise HTTPException(status_code=503, detail="Vector repository is not available")
 
     # 1. Generar embedding para la query
     try:
         query_vector = await embedder.embed_query(req.query_text)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
+        logger.exception("Embedding generation failed")
+        raise HTTPException(status_code=500, detail="Embedding generation failed")
 
     # 2. Búsqueda en DB (en threadpool ya que search_similar es síncrona)
     try:
         db_results = await run_in_threadpool(
             repo.search_similar, 
-            req.client_id, 
+            str(req.client_id), 
             query_vector, 
             req.top_k,
             req.filters
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database search failed: {str(e)}")
+        logger.exception("Database search failed")
+        raise HTTPException(status_code=500, detail="Database search failed")
 
     # 3. Formatear resultados
     formatted_results = []

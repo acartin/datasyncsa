@@ -1,7 +1,11 @@
 import os
+import asyncio
+import logging
 from typing import List
 from google import genai
 from google.genai import types
+
+logger = logging.getLogger("semantic_adapter.embedder")
 
 class GeminiEmbedder:
     """
@@ -18,7 +22,7 @@ class GeminiEmbedder:
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is not set.")
         
-        self.model = model or os.getenv("EMBEDDING_MODEL", "text-embedding-004")
+        self.model = model or os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
         if self.model.startswith("models/"):
             self.model = self.model.replace("models/", "")
         self.client = genai.Client(api_key=self.api_key)
@@ -34,16 +38,17 @@ class GeminiEmbedder:
         try:
             # Per ETL guide: NO output_dimensionality parameter
             # Model returns 3072 dimensions automatically
-            response = self.client.models.embed_content(
+            response = await asyncio.to_thread(
+                self.client.models.embed_content,
                 model=self.model,
                 contents=texts,
                 config=types.EmbedContentConfig(
                     task_type="RETRIEVAL_QUERY"  # Same as query for compatibility
-                )
+                ),
             )
             return [e.values for e in response.embeddings]
         except Exception as e:
-            print(f"Batch embedding failed, trying sequential: {e}")
+            logger.warning("Batch embedding failed, falling back to sequential mode: %s", e)
             results = []
             for text in texts:
                 emb = await self.embed_query(text)
@@ -55,11 +60,12 @@ class GeminiEmbedder:
         Generate embedding for a single query asynchronously.
         Returns 3072-dimensional vector automatically.
         """
-        response = self.client.models.embed_content(
+        response = await asyncio.to_thread(
+            self.client.models.embed_content,
             model=self.model,
             contents=text,
             config=types.EmbedContentConfig(
                 task_type="RETRIEVAL_QUERY"  # Per ETL guide
-            )
+            ),
         )
         return response.embeddings[0].values

@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.models.chat import ChatMessageRequest, ChatMessageResponse
 from app.services.chat_orchestrator import ChatOrchestrator
 import logging
+from uuid import UUID
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 orchestrator = ChatOrchestrator()
@@ -17,24 +19,20 @@ async def chat_endpoint(request: ChatMessageRequest):
         response = await orchestrator.chat(request)
         return response
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unhandled error in /chat")
+        raise HTTPException(status_code=500, detail="Internal inference error")
 
 @router.get("/chat/{conversation_id}")
-async def get_chat_history(conversation_id: str):
+async def get_chat_history(conversation_id: UUID):
     """
     Recupera el historial completo de una conversación.
     """
     try:
-        from uuid import UUID
-        history = orchestrator.get_conversation_history(UUID(conversation_id))
-        if not history and len(history) == 0:
-             # Si devuelve lista vacía puede ser que no exista o que esté vacía.
-             # Por simplicidad devolvemos lista vacía.
-             pass
+        history = await run_in_threadpool(orchestrator.get_conversation_history, conversation_id)
         return history
     except Exception as e:
-        logger.error(f"Error fetching history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error fetching history")
+        raise HTTPException(status_code=500, detail="Internal inference error")
 
 @router.get("/health")
 async def health_check():

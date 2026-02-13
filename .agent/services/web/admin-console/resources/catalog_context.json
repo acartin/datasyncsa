@@ -1,0 +1,7 @@
+{
+  "catalog": {
+    "layouts": ["dashboard-standard", "dashboard-horizontal", "full-canvas", "form-centered"],
+    "components": ["card-simple", "card-metric", "card-list", "grid-visual", "form-container"],
+    "icons": "Velzon Icon Set (ri- prefix)"
+  }
+}

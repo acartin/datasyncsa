@@ -1,1 +1,398 @@
-<h1>Realtor Chat Frontend Ready</h1>
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>Hommie - Asistente Inmobiliario AI</title>
+    <!-- Premium Design System -->
+    <link rel="stylesheet" href="index.css?v=3">
+</head>
+
+<body>
+    <!-- Launcher Button -->
+    <div id="chat-launcher" onclick="toggleWidget()">
+        <svg viewBox="0 0 24 24">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+        </svg>
+    </div>
+
+    <!-- Chat Widget -->
+    <div id="chat-widget">
+        <!-- Header -->
+        <div class="widget-header">
+            <div class="avatar-container">
+                <div class="brand-avatar">H</div>
+                <div class="status-indicator">
+                    <span class="dot"></span>
+                    <span>En línea</span>
+                </div>
+            </div>
+            <div class="header-info">
+                <h3>Hommie AI</h3>
+            </div>
+            <button class="close-button" onclick="toggleWidget()" aria-label="Cerrar chat">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="chat-messages">
+            <div class="message-wrapper bot">
+                <div class="sender-name">Hommie AI</div>
+                <div class="message-bubble">
+                    Hola! 👋 Soy Hommie, tu asistente experto. ¿En qué zona estás buscando tu próxima propiedad?
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="widget-input-area">
+            <form id="chat-form">
+                <div class="input-wrapper">
+                    <input type="text" id="user-input" placeholder="Escribe tu mensaje..." required autocomplete="off">
+                    <button type="submit" class="send-button">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- UI Logic & Components -->
+    <script type="module">
+        // Manejo de Errores Global para Depuración
+        window.onerror = (msg, url, line) => {
+            console.error(`Error en UI: ${msg} en ${url}:${line}`);
+        };
+
+        import { ChatRenderer } from './core/renderer.js?v=3';
+
+        // Realtor Components
+        import './components/realtor/property-card.js';
+        import './components/realtor/property-grid.js';
+        import './components/interactive/action-menu.js';
+        import './components/interactive/mortgage-calc.js';
+        import './components/media/map-widget.js';
+        import './components/media/photo-carousel.js';
+
+        const renderer = new ChatRenderer('chat-messages');
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('user-input');
+        const widget = document.getElementById('chat-widget');
+
+        // Extraction of Context from URL (FB Ads, QR Codes, etc.)
+        const urlParams = new URLSearchParams(window.location.search);
+        const DEFAULT_CLIENT_ID = '64f357a0-98eb-44f1-9f41-6e615ed26180';
+        const clientId = urlParams.get('clientId') || DEFAULT_CLIENT_ID;
+        const utmSource = urlParams.get('utm_source') || 'direct';
+        const propertyId = urlParams.get('propertyId'); // For QR codes specific to a house
+
+        const pushSystemMessage = (text) => {
+            renderer.renderResponse({
+                components: [{ type: 'chat', text, sender: 'bot' }]
+            });
+        };
+
+        // Toggle Widget
+        window.toggleWidget = () => {
+            const launcher = document.getElementById('chat-launcher');
+            widget.classList.toggle('active');
+
+            if (widget.classList.contains('active')) {
+                launcher.classList.add('hidden');
+                // input.focus(); // Eliminado para evitar que el teclado salte en móviles
+            } else {
+                launcher.classList.remove('hidden');
+            }
+        };
+
+        const applyBranding = (branding) => {
+            console.log("Applying branding:", branding);
+            if (!branding) return;
+            const root = document.documentElement;
+
+            // 1. Jerarquía de Marca (Primary -> Estructural)
+            if (branding.primary_color) {
+                root.style.setProperty('--brand-primary', branding.primary_color);
+                root.style.setProperty('--brand-accent', branding.primary_color);
+            }
+            if (branding.text_on_primary) {
+                root.style.setProperty('--text-on-primary', branding.text_on_primary);
+            }
+
+            // 2. CTAs (Secondary -> Conversión)
+            if (branding.secondary_color) {
+                root.style.setProperty('--brand-secondary', branding.secondary_color);
+            }
+            if (branding.text_on_secondary) {
+                root.style.setProperty('--text-on-secondary', branding.text_on_secondary);
+            }
+
+            // 3. Legibilidad y Fondo (Surface -> Backgrounds)
+            if (branding.surface_color) {
+                root.style.setProperty('--brand-surface', branding.surface_color);
+            }
+            if (branding.text_on_surface) {
+                root.style.setProperty('--text-on-surface', branding.text_on_surface);
+            }
+
+            // 4. Tipografías Dinámicas
+            if (branding.font_heading_url) {
+                loadFont(branding.font_heading_url);
+            }
+            if (branding.font_body_url) {
+                loadFont(branding.font_body_url);
+            }
+            if (branding.font_heading_name) {
+                root.style.setProperty('--font-heading', `'${branding.font_heading_name}', sans-serif`);
+            }
+            if (branding.font_body_name) {
+                root.style.setProperty('--font-body', `'${branding.font_body_name}', sans-serif`);
+            }
+
+            // 5. Estética (Shadows & Radius)
+            if (branding.border_radius) {
+                root.style.setProperty('--border-radius', branding.border_radius);
+            }
+            if (branding.box_shadow_style) {
+                root.style.setProperty('--box-shadow', branding.box_shadow_style);
+            }
+
+            // 6. Logos y Wordmark (Acomodado Premium)
+            const titleElement = document.querySelector('.header-info h3');
+            if (titleElement) {
+                if (branding.brand_wordmark_base64) {
+                    titleElement.innerHTML = '';
+                    const img = document.createElement('img');
+                    const src = formatDataUri(branding.brand_wordmark_base64);
+                    console.log("Wordmark potential src start:", src.substring(0, 50));
+
+                    img.src = src;
+                    img.alt = ""; // Evitar que se vea el texto si falla, el onerror se encarga
+                    img.className = "brand-wordmark";
+
+                    // Fallback si la imagen no carga
+                    img.onerror = () => {
+                        console.warn("Logo wordmark falló al cargar. Usando texto.");
+                        titleElement.innerText = branding.agent_name || "Hommie AI";
+                    };
+
+                    titleElement.appendChild(img);
+                    titleElement.style.padding = "4px 0";
+                } else if (branding.agent_name) {
+                    titleElement.innerText = branding.agent_name;
+                }
+            }
+
+            if (branding.agent_name) {
+                renderer.setBotName(branding.agent_name);
+            }
+
+            const avatar = document.querySelector('.brand-avatar');
+            if (avatar) {
+                if (branding.logo_header_base64) {
+                    avatar.innerHTML = '';
+                    const img = document.createElement('img');
+                    const src = formatDataUri(branding.logo_header_base64);
+                    img.src = src;
+                    img.alt = "";
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'contain';
+
+                    img.onerror = () => {
+                        avatar.innerText = (branding.agent_name || "H").charAt(0).toUpperCase();
+                        avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
+                    };
+
+                    avatar.appendChild(img);
+                    avatar.style.background = 'transparent';
+                    avatar.style.padding = '4px';
+                    avatar.style.boxShadow = 'none';
+                } else if (branding.agent_name) {
+                    const initials = branding.agent_name.charAt(0).toUpperCase();
+                    avatar.innerText = initials;
+                    avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
+                }
+            }
+
+            if (branding.favicon_base64) {
+                updateFavicon(branding.favicon_base64);
+            }
+        };
+
+        const formatDataUri = (input) => {
+            if (!input) return '';
+            const raw = input.trim();
+
+            // Caso 1: Ya es un Data URI completo
+            if (raw.startsWith('data:')) return raw;
+
+            // Caso 2: Es un SVG crudo (XML/SVG) -> Lo convertimos a Base64
+            if (raw.includes('<svg') || raw.includes('<?xml')) {
+                try {
+                    return `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(raw)))}`;
+                } catch (e) {
+                    console.error("Error encoding raw SVG:", e);
+                    return '';
+                }
+            }
+
+            // Caso 3: Es Base64 puro -> Detectamos el MIME y armamos el Data URI
+            const mime = getMimeType(raw);
+            return `data:${mime};base64,${raw}`;
+        };
+
+        const getMimeType = (base64) => {
+            if (base64.includes('PHN2Zy') || base64.includes('PD94bWw')) return 'image/svg+xml';
+            if (base64.includes('UklGR')) return 'image/webp';
+            if (base64.startsWith('iVBORw0KG')) return 'image/png';
+            if (base64.startsWith('/9j/')) return 'image/jpeg';
+            return 'image/svg+xml'; // SVG como fallback seguro para este proyecto
+        };
+
+        const updateFavicon = (base64) => {
+            let link = document.querySelector("link[rel*='icon']");
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            link.href = formatDataUri(base64);
+        };
+
+        // Helper para cargar fuentes dinámicamente
+        window.loadFont = (url) => {
+            if (!url || document.querySelector(`link[href="${url}"]`)) return;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = url;
+            document.head.appendChild(link);
+        };
+
+        // 🔧 FIX DEFINITIVO: Ajuste Visual Viewport
+        // Maneja el redimensionamiento del teclado sin saltos ni pérdida del header
+        if (window.visualViewport) {
+            const handleResize = () => {
+                const widget = document.getElementById('chat-widget');
+                const viewport = window.visualViewport;
+
+                // Solo aplicar en móviles y si el widget está activo
+                if (widget && widget.classList.contains('active') && window.innerWidth <= 480) {
+
+                    // Altura total disponible en el viewport visual
+                    const availableHeight = viewport.height;
+
+                    // Restamos los márgenes (16px bottom + 16px top)
+                    // Usamos 32px para mantener el 'look' flotante pero asegurar que quepa
+                    const safeHeight = availableHeight - 32;
+
+                    // Aplicamos la altura calculada
+                    widget.style.height = `${safeHeight}px`;
+
+                    // Scroll al fondo
+                    requestAnimationFrame(() => renderer.scrollToBottom());
+                }
+            };
+
+            // Escuchar resize y scroll del viewport visual
+            window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+        }
+
+
+
+        // Initialize Branding on Load
+
+        // Initialize Branding on Load
+        (async () => {
+            try {
+                // Hacemos una petición silenciosa solo para branding
+                const res = await fetch('/api/chat/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: clientId
+                    })
+                });
+                const data = await res.json();
+                applyBranding(data.branding);
+            } catch (e) {
+                console.warn("Branding init error:", e);
+            }
+        })();
+
+        document.addEventListener('chat-action', (event) => {
+            const payload = event.detail?.payload;
+            if (!payload) return;
+
+            const payloadToText = {
+                SCHEDULE_VISIT: 'Quiero agendar una visita',
+                CALL_AGENT: 'Quiero hablar con un asesor',
+            };
+
+            const text = payloadToText[payload] || `Acción: ${payload}`;
+            input.value = text;
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+        });
+
+        document.addEventListener('property-open-map', (event) => {
+            const location = event.detail?.location || event.detail?.title || '';
+            const query = encodeURIComponent(location || 'propiedad');
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+            window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = input.value;
+            input.value = '';
+
+            // User Message
+            renderer.renderResponse({
+                components: [{ type: 'chat', text: text, sender: 'user' }]
+            });
+
+            try {
+                renderer.showTyping();
+
+                const payload = {
+                    text: text,
+                    client_id: clientId,
+                    utm_source: utmSource,
+                    source_property_ref: propertyId,
+                    landing_page_url: window.location.href
+                };
+
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+                const data = await response.json();
+
+                // Apply Dynamic Branding
+                applyBranding(data.branding);
+
+                renderer.hideTyping();
+                renderer.renderResponse(data);
+            } catch (err) {
+                renderer.hideTyping();
+                console.error("Error bridge:", err);
+                pushSystemMessage("No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
+            }
+        });
+    </script>
+</body>
+
+</html>

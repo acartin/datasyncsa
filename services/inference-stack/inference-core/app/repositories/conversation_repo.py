@@ -1,6 +1,6 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor, Json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from uuid import UUID, uuid4
 from datetime import datetime
 from app.core.config import settings
@@ -12,7 +12,8 @@ class ConversationRepository:
     def _get_connection(self):
         return psycopg2.connect(self.dsn, cursor_factory=RealDictCursor)
 
-    def get_or_create_conversation(self, client_id: str, conversation_id: Optional[UUID] = None) -> Dict[str, Any]:
+    def get_or_create_conversation(self, client_id: Union[str, UUID], conversation_id: Optional[UUID] = None) -> Dict[str, Any]:
+        client_id_str = str(client_id)
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 if conversation_id:
@@ -28,7 +29,7 @@ class ConversationRepository:
                 new_lead_id = str(uuid4())
                 cur.execute(
                     "INSERT INTO lead_leads (id, client_id, source_id, full_name) VALUES (%s, %s, %s, %s)",
-                    (new_lead_id, client_id, 14, f"User {client_id[:8]}")
+                    (new_lead_id, client_id_str, 14, f"User {client_id_str[:8]}")
                 )
                 lead_id = new_lead_id
 
@@ -86,16 +87,17 @@ class ConversationRepository:
                 )
                 conn.commit()
 
-    def get_system_prompt(self, client_id: str, slug: str = 'primary_chat') -> str:
+    def get_system_prompt(self, client_id: Union[str, UUID], slug: str = 'primary_chat') -> str:
         """
         Recupera el prompt de sistema para un cliente específico o el global por defecto.
         """
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                client_id_str = str(client_id)
                 # 1. Intentar obtener prompt específico del cliente
                 cur.execute(
                     "SELECT prompt_text FROM lead_ai_prompts WHERE client_id = %s AND slug = %s AND is_active = true",
-                    (client_id, slug)
+                    (client_id_str, slug)
                 )
                 row = cur.fetchone()
                 if row:

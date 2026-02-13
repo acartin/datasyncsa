@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List, Any, Dict
 import psycopg2
 from psycopg2.extras import RealDictCursor, Json
@@ -8,13 +9,22 @@ from pgvector.psycopg2 import register_vector
 class VectorRepository:
     def __init__(self):
         self.conn_url = os.getenv("DATABASE_URL")
-        self.table_name = os.getenv("TABLE_VECTORS", "ai_vectors")
-        self._init_db()
+        raw_table_name = os.getenv("TABLE_VECTORS", "ai_vectors")
+        if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", raw_table_name):
+            raise ValueError(f"Invalid TABLE_VECTORS value: {raw_table_name}")
+        self.table_name = raw_table_name
+        self._initialized = False
 
     def _get_connection(self):
         conn = psycopg2.connect(self.conn_url)
         register_vector(conn)  # Registra el tipo vector en la conexión
         return conn
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        self._init_db()
+        self._initialized = True
 
     def _init_db(self):
         """
@@ -53,6 +63,13 @@ class VectorRepository:
                 cur.execute(query)
                 conn.commit()
 
+    def ping(self) -> bool:
+        self._ensure_initialized()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                return cur.fetchone()[0] == 1
+
     def search_similar(
         self, 
         client_id: str, 
@@ -68,6 +85,7 @@ class VectorRepository:
         
         Usa Named Placeholders (%(name)s) para evitar errores de conteo de parámetros.
         """
+        self._ensure_initialized()
         filters = filters or {}
         category = filters.get('category')
         

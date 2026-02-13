@@ -1,0 +1,6 @@
+{
+  "mapping": {
+    "colors": ["primary", "success", "danger", "warning", "info"],
+    "classes": { "card": "card", "grid": "grid", "button": "btn" }
+  }
+}

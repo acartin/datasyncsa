@@ -1,19 +1,18 @@
 server {
-    listen       80;
-    listen  [::]:80;
-    server_name  localhost;
+    listen 80;
+    listen [::]:80;
+    server_name localhost;
     client_max_body_size 100M;
 
-    root   /usr/share/nginx/html;
-    index  index.html index.htm;
+    root /usr/share/nginx/html;
+    index index.html index.htm;
 
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy genérico para el Backend de Admin Console
-    location /api/ {
-        proxy_pass http://${API_HOST}:8000/;
+    location /brand-config {
+        proxy_pass http://${API_HOST}:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -21,12 +20,8 @@ server {
         proxy_set_header Authorization $http_authorization;
     }
 
-    # Compatibilidad para el endpoint viejo /brand-config
-    location /brand-config {
-        proxy_pass http://${API_HOST}:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
     }
 }

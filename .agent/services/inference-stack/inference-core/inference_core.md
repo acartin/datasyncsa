@@ -32,3 +32,16 @@ El Inference Core es responsable de:
 3. **Augmentation:** Inserta el contexto en el template del prompt.
 4. **Generation:** Llama al LLM (Gemini/OpenAI).
 5. **Post-processing:** Formatea la respuesta según la necesidad del canal de salida.
+
+## 6. Regresión Reutilizable
+- Unit tests:
+  - Ruta: `services/inference-stack/inference-core/tests/`
+  - Comandos:
+    - `docker compose exec -T inference-core pip install --no-cache-dir -r requirements-dev.txt`
+    - `docker compose exec -T inference-core pytest -q tests`
+- Smoke funcional:
+  - Script: `services/inference-stack/inference-core/scripts/smoke_chat.py`
+  - Comando:
+    - `docker compose exec -T inference-core python scripts/smoke_chat.py`
+- Referencia rápida:
+  - `services/inference-stack/inference-core/tests/README.md`

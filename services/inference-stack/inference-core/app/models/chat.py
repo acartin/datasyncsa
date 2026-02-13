@@ -1,7 +1,10 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict, AliasGenerator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from pydantic.alias_generators import to_camel
+import logging
+
+logger = logging.getLogger("inference-core.models")
 
 class ChatMessageRequest(BaseModel):
     model_config = ConfigDict(
@@ -10,8 +13,8 @@ class ChatMessageRequest(BaseModel):
         extra='ignore' # Important to ignore leadId if not needed
     )
 
-    query_text: str = Field(..., description="The user's question or message")
-    client_id: str = Field(..., description="The tenant/client identifier")
+    query_text: str = Field(..., min_length=1, max_length=4000, description="The user's question or message")
+    client_id: UUID = Field(..., description="The tenant/client identifier")
     filters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional filters like category or source")
     conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID if applicable")
     user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional context about the user")
@@ -26,8 +29,8 @@ class ChatMessageRequest(BaseModel):
                 # Try to validate if it's a valid UUID string
                 UUID(v)
             except ValueError:
-                # If not a valid UUID, just ignore it and treat as new conversation
-                print(f"Warning: Invalid UUID received for conversation_id: {v}. Ignoring.")
+                # Ignore invalid values and treat the message as a new conversation
+                logger.warning("Invalid UUID received for conversation_id; ignoring value")
                 return None
         return v
 

@@ -1,0 +1,85 @@
+14. Definición del Tema Velzon
+Objetivo:
+Definir de forma centralizada todos los elementos visuales y tokens de diseño que gobiernan la UI de Web IAFirst, de manera que la IA y los desarrolladores puedan componer dashboards consistentes sin decisiones estéticas ad-hoc.
+
+14.1 Paleta de Colores
+Token	Valor CSS	Uso Principal
+primary	#556ee6	Botones, links principales
+secondary	#f1f3fa	Fondos y elementos secundarios
+success	#34c38f	Mensajes de éxito, indicadores positivos
+danger	#f46a6a	Alertas, errores, indicadores críticos
+warning	#f1b44c	Alertas leves, precaución
+info	#50a5f1	Información, notificaciones
+light	#f8f9fa	Fondos neutros
+dark	#343a40	Textos principales, headers
+muted	#6c757d	Textos secundarios, desactivados
+    Nota: todos los componentes deben usar tokens, no valores directos.
+
+14.2 Tipografía
+Token	Valor CSS	Uso
+font-family-base	'Inter', sans-serif	Texto general y labels
+font-size-base	14px	Texto normal
+font-size-sm	12px	Subtítulos, labels secundarios
+font-size-lg	18px	Headers y títulos
+font-weight-regular	400	Texto normal
+font-weight-bold	700	Títulos y énfasis
+
+14.3 Espaciado y Grid
+Token	Valor	Uso
+spacing-xs	4px	Márgenes y paddings pequeños
+spacing-sm	8px	Separación entre elementos menores
+spacing-md	16px	Espacios estándar
+spacing-lg	24px	Contenedores y bloques grandes
+spacing-xl	32px	Margen de layout y secciones
+grid-columns	12	Sistema de columnas flexible
+gutter-width	16px	Separación entre columnas
+    Reglas: todos los layouts y containers deben usar este sistema de 12 columnas y espaciados definidos.
+
+14.4 Bordes y Radios
+Token	Valor	Uso
+border-radius-sm	4px	Botones pequeños y inputs
+border-radius-md	8px	Cards y contenedores
+border-radius-lg	12px	Paneles y modales
+border-width	1px	Bordes de contenedores y inputs
+border-color	#e9ecef	Bordes neutros
+
+14.5 Sombras y Elevación
+Token	Valor CSS	Uso
+shadow-sm	0 1px 2px rgba(0,0,0,0.05)	Inputs y elementos ligeros
+shadow-md	0 2px 6px rgba(0,0,0,0.1)	Cards y paneles medianos
+shadow-lg	0 4px 12px rgba(0,0,0,0.15)	Paneles y modales
+
+14.6 Iconografía
+    • Todas las referencias de iconos se extraen de Velzon Icon Set.
+    • Tokens principales:
+        ○ icon-users
+        ○ icon-dashboard
+        ○ icon-settings
+        ○ icon-alert
+    • Regla: la IA solo puede elegir iconos declarativos desde este catálogo.
+
+14.7 Estados Visuales
+Estado	Color Token	Uso
+normal	primary	Elementos activos
+hover	info	Interacción mouse
+disabled	muted	Elementos no disponibles
+success	success	Indicadores positivos
+error	danger	Mensajes de error
+warning	warning	Alertas o precaución
+    Todos los estados deben respetar este esquema. No se usan colores directos.
+
+14.8 Tokens Globales
+Token	Valor	Descripción
+z-index-modal	1050	Elevación máxima para modales
+z-index-dropdown	1000	Menús desplegables
+transition-speed	0.3s	Animaciones básicas
+border-style	solid	Bordes estándar
+radius-global	6px	Radio estándar
+
+14.9 Reglas de Gobernanza Visual
+    1. Centralización: ningún componente define color, tamaño o sombra local.
+    2. Declarativo: la IA solo usa tokens, no valores CSS arbitrarios.
+    3. Versionado: cambios en el tema son versionados y auditables.
+    4. Compatibilidad: todos los layouts y componentes se ajustan al sistema de 12 columnas, espaciados y clases Velzon.
+    5. Consistencia: grids, cards, formularios y menús deben seguir la paleta y tipografía.
+    6. Flexibilidad limitada: la IA puede componer dashboards, pero no inventar nuevos estilos.

@@ -27,3 +27,16 @@ El Semantic Adapter es responsable de:
 - Mapeos estructurales (esto es del ETL Adapter).
 - Inferencia / Chat directo con el usuario final.
 - Orquestación o Scheduling.
+
+## 4. Regresión Reutilizable
+- Unit tests:
+  - Ruta: `services/inference-stack/semantic-adapter/tests/`
+  - Comandos:
+    - `docker compose exec -T semantic-adapter pip install --no-cache-dir -r requirements-dev.txt`
+    - `docker compose exec -T semantic-adapter pytest -q tests`
+- Smoke funcional:
+  - Script: `services/inference-stack/semantic-adapter/scripts/smoke_search.py`
+  - Comando:
+    - `docker compose exec -T semantic-adapter python scripts/smoke_search.py`
+- Referencia rápida:
+  - `services/inference-stack/semantic-adapter/tests/README.md`

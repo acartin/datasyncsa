@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from typing import List, Dict, Any
 from google import genai
 from google.genai import types
@@ -54,7 +55,8 @@ Devuelve los scores, el reasoning y los campos extraídos.
 
         try:
             # Configuración para salida estructurada (JSON) usando Pydantic model como esquema
-            response = self.client.models.generate_content(
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
                 model=self.model_id,
                 contents=prompt,
                 config=types.GenerateContentConfig(

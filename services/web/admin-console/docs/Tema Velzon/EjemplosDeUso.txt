@@ -1,0 +1,115 @@
+15. Ejemplos de Dashboards y Componentes con Tema Velzon
+Objetivo:
+Mostrar ejemplos de cómo se usan layouts, grids, cards, menús y formularios de forma declarativa usando los tokens y clases del tema Velzon.
+
+15.1 Dashboard Standard con Menú Vertical
+Layout: dashboard-standard
+Componentes:
+	• menu-vertical izquierdo
+	• header superior
+	• canvas central con 3 cards horizontales
+
+{
+  "layout": "dashboard-standard",
+  "menu": [
+    { "label": "Dashboard", "icon": "icon-dashboard", "route": "/dashboard", "permission": "dashboard.view" },
+    { "label": "Leads", "icon": "icon-users", "route": "/leads", "permission": "leads.read" },
+    { "label": "Settings", "icon": "icon-settings", "route": "/settings", "permission": "settings.manage" }
+  ],
+  "canvas": {
+    "cards": [
+      { "type": "card-grid", "columns": ["category","price","stock"], "data": "leads-summary" },
+      { "type": "card-metric", "metric": "total-sales", "icon": "icon-chart", "color": "primary" },
+      { "type": "card-alert", "title": "Alertas críticas", "icon": "icon-alert", "color": "danger", "data": "alerts" }
+    ]
+  }
+}
+Reglas aplicadas:
+	• Todos los colores, iconos y tipografía usan tokens Velzon.
+	• La IA no decide diseño: solo elige componentes y los ordena.
+	• Permisos son verificados antes de renderizar cada opción de menú.
+
+15.2 Grid de Leads con Columnas Visuales
+Grid de Datos:
+
+{
+  "columns": [
+    { "field": "name", "label": "Nombre", "type": "text", "sortable": true },
+    { "field": "score", "label": "Score", "icon": "trending-up", "type": "visual", "sortable": true, "filterable": true },
+    { "field": "status", "label": "Estado", "type": "status", "sortable": true }
+  ],
+  "rows": [
+    { "name": "Juan Pérez", "score": { "value": 85, "icon": "fire", "color": "danger" }, "status": "activo" },
+    { "name": "Ana Gómez", "score": { "value": 45, "icon": "alert", "color": "warning" }, "status": "inactivo" }
+  ]
+}
+Características:
+	• Cada celda respeta tokens de color y tipografía.
+	• Filtros y ordenamiento son declarativos, procesados por backend.
+	• Se pueden incrustar dentro de cards (card-grid).
+
+15.3 Formulario de Alta de Leads
+
+{
+  "type": "form",
+  "fields": [
+    { "type": "input-text", "label": "Nombre", "name": "name", "required": true },
+    { "type": "input-number", "label": "Edad", "name": "age" },
+    { "type": "select", "label": "Categoría", "name": "category", "options": ["A","B","C"] },
+    { "type": "checkbox", "label": "Activo", "name": "active" },
+    { "type": "submit-button", "label": "Guardar" }
+  ],
+  "validation": "backend"
+}
+Reglas:
+	• Validaciones vienen del backend.
+	• Estilos y layout usan tokens Velzon.
+	• La IA solo arma la estructura declarativa, no la lógica.
+
+15.4 Cards Combinadas con Grids Internos
+
+{
+  "cards": [
+    {
+      "type": "card-simple",
+      "title": "Resumen Categorías",
+      "columns": ["category","sales","stock"],
+      "data": "categories-summary"
+    },
+    {
+      "type": "card-metric",
+      "title": "Ventas Totales",
+      "metric": "total-sales",
+      "icon": "icon-chart",
+      "color": "success"
+    },
+    {
+      "type": "card-alert",
+      "title": "Alertas de Inventario",
+      "icon": "icon-alert",
+      "color": "warning",
+      "data": "inventory-alerts"
+    }
+  ]
+}
+Beneficios:
+	• Cards y grids alineadas horizontalmente.
+	• Visualización consistente con tema centralizado.
+	• IA puede replicar patrón para cualquier dashboard sin inventar estilo.
+
+15.5 Menú de Componentes para IA y Humanos
+Ejemplo de catálogo que IA puede usar:
+
+{
+  "layouts": ["dashboard-standard","dashboard-horizontal","dashboard-compact","full-canvas","form-centered"],
+  "containers": ["container","row","column","stack","divider"],
+  "cards": ["card-simple","card-metric","card-list","card-grid","card-alert"],
+  "forms": ["form","input-text","input-number","select","checkbox","textarea","date-picker","submit-button"],
+  "components": ["badge","alert","toast","loading-indicator","empty-state"],
+  "icons": ["icon-dashboard","icon-users","icon-settings","icon-alert","icon-fire","icon-trending-up"]
+}
+	Todo lo que no esté en este catálogo no existe visualmente.
+	
+	
+	
+	

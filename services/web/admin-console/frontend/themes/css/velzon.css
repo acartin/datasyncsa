@@ -1,0 +1,300 @@
+/* Variables del tema */
+:root {
+  --primary-color: #556ee6;
+  --secondary-color: #34c38f;
+  --danger-color: #f46a6a;
+  --warning-color: #f1b44c;
+  --info-color: #50a5f1;
+  --font-family-base: 'Inter', sans-serif;
+  --border-radius-base: 0.5rem;
+  --spacing-base: 1rem;
+}
+
+/* Layouts */
+.layout-dashboard {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+}
+
+.layout-header {
+  height: 60px;
+  background-color: var(--primary-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-base);
+}
+
+.layout-sidebar {
+  width: 240px;
+  background-color: #f8f9fa;
+  flex-shrink: 0;
+}
+
+.layout-content {
+  flex: 1;
+  padding: var(--spacing-base);
+  overflow-y: auto;
+}
+
+/* Menús */
+.menu-vertical {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-vertical .menu-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.menu-vertical .menu-item:hover {
+  background-color: var(--primary-color);
+  color: #fff;
+}
+
+.menu-horizontal {
+  display: flex;
+  flex-direction: row;
+}
+
+.menu-horizontal .menu-item {
+  margin-right: var(--spacing-base);
+  cursor: pointer;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  border-radius: var(--border-radius-base);
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, .075);
+  padding: var(--spacing-base);
+  margin-bottom: var(--spacing-base);
+}
+
+.card-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-base);
+}
+
+/* Grids */
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.grid th,
+.grid td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.grid th {
+  background: #f1f3fa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Forms */
+.input-text,
+.input-number,
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: var(--border-radius-base);
+  border: 1px solid #d8dbe0;
+  font-family: var(--font-family-base);
+}
+
+.input-text:focus,
+.input-number:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(85, 110, 230, .25);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius-base);
+  cursor: pointer;
+  font-family: var(--font-family-base);
+  border: none;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: #fff;
+}
+
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: #fff;
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: #fff;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+/* Tokens de color para celdas */
+.text-primary {
+  color: var(--primary-color) !important;
+}
+
+.text-success {
+  color: var(--secondary-color) !important;
+}
+
+.text-danger {
+  color: var(--danger-color) !important;
+}
+
+.text-warning {
+  color: var(--warning-color) !important;
+}
+
+.text-info {
+  color: var(--info-color) !important;
+}
+
+.text-white {
+  color: #fff !important;
+}
+
+.text-muted {
+  color: #878a99 !important;
+}
+
+/* --- VELZON SIDEBAR STYLES (Mocked) --- */
+#layout-wrapper {
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.app-menu.navbar-menu {
+  width: 250px;
+  background: #405189;
+  /* Velzon Dark Sidebar Color */
+  color: #abb9e8;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1002;
+  transition: all .1s ease-out;
+  border-right: 1px solid #4d609c;
+}
+
+.main-content {
+  margin-left: 250px;
+  /* Offset for sidebar */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background-color: #f3f3f9;
+}
+
+.page-content {
+  padding: calc(70px + 1.5rem) 1.5rem 60px 1.5rem;
+}
+
+/* Brand Logo */
+.navbar-brand-box {
+  height: 70px;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  background: #405189;
+  border-bottom: 1px solid #4d609c;
+}
+
+.navbar-brand-box .logo-lg {
+  font-weight: 700;
+  font-size: 20px;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Sidebar Menu Items */
+.navbar-nav {
+  padding: 10px 0;
+  list-style: none;
+  margin: 0;
+}
+
+.navbar-nav .nav-item {
+  position: relative;
+  display: block;
+}
+
+.navbar-nav .nav-link {
+  display: flex;
+  align-items: center;
+  padding: 0.625rem 1.5rem;
+  color: #abb9e8;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: all .3s;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link[aria-expanded="true"] {
+  color: #fff;
+}
+
+.navbar-nav .nav-link i {
+  font-size: 18px;
+  margin-right: 10px;
+  display: inline-block;
+}
+
+/* Submenu collapse */
+.menu-dropdown {
+  display: none;
+  /* Initially hidden */
+}
+
+.nav-link[aria-expanded="true"]+.menu-dropdown {
+  display: block;
+  /* Show when active (Bootstrap JS usually handles this, simplified here) */
+}
+
+/* Menu Title */
+.menu-title {
+  padding: 12px 20px;
+  letter-spacing: .05em;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #839bf0;
+  font-weight: 600;
+}
+
+/* Hamburger Button (Hidden on mockup but structurally there) */
+.btn-vertical-sm-hover {
+  display: none;
+}
