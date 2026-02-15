@@ -19,3 +19,16 @@ These rules apply to all services within the DataSyncSA consolidated instance.
 ## 📝 Logging
 - Standardize logs to be accessible via `docker logs`.
 - Critical services should mirror logs to `/srv/datasyncsa/volumes/logs/[service-name]`.
+
+## ✅ Testing Layout (Repository Standard)
+- Every service stores tests under `tests/` with this structure:
+  - `tests/unit/`
+  - `tests/integration/`
+  - `tests/contract/`
+  - `tests/smoke/`
+  - `tests/sandbox/` (temporary/ad-hoc diagnostics; clean regularly)
+- Cross-service/E2E tests live at repository root:
+  - `tests/system/`
+  - `tests/smoke-stack/`
+  - `tests/fixtures-shared/`
+  - `tests/scripts/`

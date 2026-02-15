@@ -2,6 +2,9 @@
 
 Reusable automated checks for `services/inference-stack/inference-core`.
 
+Includes tenant-isolation coverage in:
+`tests/integration/test_tenant_isolation.py`
+
 ## Run Unit Tests
 From repository root:
 
@@ -13,12 +16,12 @@ docker compose exec -T inference-core pytest -q tests
 ## Reusable Smoke Test
 Script:
 
-`services/inference-stack/inference-core/scripts/smoke_chat.py`
+`services/inference-stack/inference-core/tests/smoke/test_smoke_chat.py`
 
 Run:
 
 ```bash
-docker compose exec -T inference-core python scripts/smoke_chat.py
+docker compose exec -T inference-core python tests/smoke/test_smoke_chat.py
 ```
 
 Optional env vars:

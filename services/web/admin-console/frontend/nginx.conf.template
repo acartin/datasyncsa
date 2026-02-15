@@ -7,17 +7,37 @@ server {
     root /usr/share/nginx/html;
     index index.html index.htm;
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /brand-config {
+    # Proxy API routes to backend (BFF)
+    location ~ ^/(health|app-init|dashboard|leads|campaigns|ai-library|clients|countries|prompts|auth|users|roles|contacts|grid-presets|brand-config)(/|$) {
         proxy_pass http://${API_HOST}:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Authorization $http_authorization;
+    }
+
+    # SPA refresh support for direct route entry.
+    # Without this, refreshing /ai-library may hit backend route proxy and return non-HTML responses.
+    location = /ai-library {
+        try_files /index.html =404;
+    }
+
+    location = /ai-library/ {
+        try_files /index.html =404;
+    }
+
+    # Without this, refreshing /prompts may hit backend route proxy and return 401/JSON.
+    location = /prompts {
+        try_files /index.html =404;
+    }
+
+    location = /prompts/ {
+        try_files /index.html =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
     }
 
     error_page 500 502 503 504 /50x.html;

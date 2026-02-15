@@ -1,9 +1,9 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas.chat import ChatRequest, InitRequest
+from app.schemas.chat import ChatRequest, InitRequest, InternalMemoryResetRequest
 from app.schemas.ui import SDUIResponse
 
 app = FastAPI(title="Realtor Chat Polymorphic Bridge")
@@ -31,10 +31,12 @@ async def health_check():
     return {"status": "operational", "service": "realtor-chat-bridge"}
 
 from app.core.inference_bridge import InferenceClient
+from app.core.memory_reset import MemoryResetClient
 from app.transformer.core import SDUITransformer
 from app.session.manager import SessionManager
 
 inference_client = InferenceClient()
+memory_reset_client = MemoryResetClient()
 transformer = SDUITransformer()
 session_manager = SessionManager()
 
@@ -109,3 +111,38 @@ async def chat_interaction(query: ChatRequest):
 @app.get("/")
 async def root():
     return {"message": "Realtor Chat SDUI Bridge is running"}
+
+
+def _assert_internal_token(request: Request):
+    expected = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
+    if not expected:
+        return
+    provided = (request.headers.get("X-Internal-Token") or "").strip()
+    if provided != expected:
+        raise HTTPException(status_code=401, detail="Invalid internal token")
+
+
+@app.post("/internal/memory/reset")
+async def internal_memory_reset(payload: InternalMemoryResetRequest, request: Request):
+    """
+    Internal endpoint: resets chat memory for a client.
+    Clears bridge session (Redis) and inference conversation memory.
+    """
+    _assert_internal_token(request)
+
+    client_id = str(payload.client_id)
+    session_deleted = await session_manager.delete_session(client_id)
+    try:
+        inference_result = await memory_reset_client.reset_inference_memory(
+            client_id=client_id,
+            reason=payload.reason,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Inference memory reset failed: {e}") from e
+
+    return {
+        "status": "ok",
+        "client_id": client_id,
+        "session_deleted": session_deleted,
+        "inference": inference_result,
+    }

@@ -47,6 +47,13 @@ class ChatOrchestrator:
         # Replace variable in system prompt
         # The original code expected {context_text} in the prompt template
         final_system_instruction = system_prompt_template.replace("{context_text}", context_text)
+        if not context_docs:
+            final_system_instruction = (
+                f"{final_system_instruction}\n\n"
+                "REGLA CRITICA: No hay documentos recuperados para este cliente. "
+                "No asumas marcas, proyectos, inventario o datos internos. "
+                "Responde de forma general y pide al usuario cargar documentos si requiere respuestas basadas en su negocio."
+            )
 
         # Convert history format for google-genai SDK
         # SDK expects a list of types.Content

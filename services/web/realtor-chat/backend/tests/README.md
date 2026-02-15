@@ -2,6 +2,9 @@
 
 Reusable automated checks for `services/web/realtor-chat/backend`.
 
+Includes tenant-isolation coverage in:
+`tests/integration/test_tenant_isolation.py`
+
 ## Run Unit Tests
 From repository root:
 
@@ -13,12 +16,17 @@ docker compose exec -T realtor-api pytest -q tests
 ## Reusable Smoke Test
 Script:
 
-`services/web/realtor-chat/backend/scripts/smoke_bridge.py`
+`services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py`
+
+Proxy smoke (UI nginx -> /api -> bridge):
+
+`services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py`
 
 Run:
 
 ```bash
-docker compose exec -T realtor-api python scripts/smoke_bridge.py
+docker compose exec -T realtor-api python tests/smoke/test_smoke_bridge.py
+docker compose exec -T realtor-api python tests/smoke/test_smoke_web_proxy.py
 ```
 
 Optional env vars:

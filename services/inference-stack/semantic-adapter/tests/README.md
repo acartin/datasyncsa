@@ -2,6 +2,9 @@
 
 Reusable automated checks for `services/inference-stack/semantic-adapter`.
 
+Includes tenant-isolation coverage in:
+`tests/integration/test_tenant_isolation.py`
+
 ## Run Unit Tests
 From repository root:
 
@@ -13,12 +16,12 @@ docker compose exec -T semantic-adapter pytest -q tests
 ## Reusable Smoke Test
 Script:
 
-`services/inference-stack/semantic-adapter/scripts/smoke_search.py`
+`services/inference-stack/semantic-adapter/tests/smoke/test_smoke_search.py`
 
 Run:
 
 ```bash
-docker compose exec -T semantic-adapter python scripts/smoke_search.py
+docker compose exec -T semantic-adapter python tests/smoke/test_smoke_search.py
 ```
 
 Optional env vars:

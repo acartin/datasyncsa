@@ -27,3 +27,10 @@ class ChatRequest(BaseModel):
     )
     landing_page_url: Optional[str] = None
     is_init: bool = False
+
+
+class InternalMemoryResetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId"))
+    reason: Optional[str] = None

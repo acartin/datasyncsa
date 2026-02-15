@@ -80,7 +80,13 @@ async function _hydrateStandardGrids(grids) {
                 try { return JSON.parse(safeAtob(s)); }
                 catch (e) { try { return JSON.parse(s); } catch (e2) { return []; } }
             })(),
-            polling: container.dataset.polling
+            polling: container.dataset.polling,
+            row_key: container.dataset.rowKey || '',
+            polling_compare_fields: (() => {
+                const raw = container.dataset.pollingCompareFields;
+                if (!raw) return [];
+                try { return JSON.parse(raw); } catch (e) { return []; }
+            })()
         });
         window.gridInstances[gridId] = instance;
     });
@@ -156,5 +162,4 @@ function showFeedback(id) {
         setTimeout(() => btn.innerText = original, 2000);
     }
 }
-
 

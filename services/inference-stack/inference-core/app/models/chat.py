@@ -62,3 +62,14 @@ class LeadScoringResult(BaseModel):
     extracted_debts: Optional[float] = Field(None, description="Detected current debts")
     extracted_currency_id: Optional[str] = Field(None, description="Currency code (e.g., USD, CRC)")
     extracted_contact_pref_id: Optional[str] = Field(None, description="Contact preference UUID")
+
+
+class InternalMemoryResetRequest(BaseModel):
+    client_id: UUID
+    reason: Optional[str] = None
+
+
+class InternalMemoryResetResponse(BaseModel):
+    status: str
+    client_id: UUID
+    conversations_deleted: int

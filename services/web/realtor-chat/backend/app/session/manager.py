@@ -53,6 +53,14 @@ class SessionManager:
         await r.setex(key, self.ttl, json.dumps(current_data))
         logger.debug(f"💾 Sesión actualizada: {session_id}")
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Deletes a session key for a client/session id."""
+        if not session_id:
+            return False
+        r = await self._get_connection()
+        deleted = await r.delete(f"session:{session_id}")
+        return bool(deleted)
+
     async def close(self):
         """Cierra la conexión (útil para shutdowns)"""
         if self._redis:

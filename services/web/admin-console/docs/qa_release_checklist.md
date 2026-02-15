@@ -16,7 +16,7 @@
 
 ## 3. Smoke de aislamiento tenant (bloqueante)
 - Ejecutar:
-  - `docker compose exec -T admin-console-api python scripts/smoke_tenant_isolation.py`
+  - `docker compose exec -T admin-console-api python tests/smoke/test_smoke_tenant_isolation.py`
 - Validar:
   - Login de superadmin y admins de tenant responde `200`.
   - Endpoints devuelven solo datos del tenant autenticado.
@@ -35,5 +35,5 @@
 ## 6. Evidencia minima para release
 - Guardar salida de:
   - `pytest -q tests`
-  - `python scripts/smoke_tenant_isolation.py`
+  - `python tests/smoke/test_smoke_tenant_isolation.py`
 - Registrar hash/fecha de imagen desplegada en QA.

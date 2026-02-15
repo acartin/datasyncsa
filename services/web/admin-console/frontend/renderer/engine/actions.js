@@ -81,6 +81,10 @@ export async function submitModalForm(event, formId, actionUrl, method = 'POST')
         if (res.ok) {
             const modalEl = form.closest('.modal');
             const modal = bootstrap.Modal.getInstance(modalEl);
+            // Prevent focused descendants from staying active while modal becomes aria-hidden.
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
             modal.hide();
 
             // Refresh via global event or exported function
@@ -194,6 +198,13 @@ export async function openGenericModal(schema, url, method, title, data = {}) {
     const modalEl = document.getElementById(modalId);
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
+
+    modalEl.addEventListener('hide.bs.modal', () => {
+        const activeEl = document.activeElement;
+        if (activeEl && modalEl.contains(activeEl) && typeof activeEl.blur === 'function') {
+            activeEl.blur();
+        }
+    });
 
     modalEl.addEventListener('hidden.bs.modal', () => { modalContainer.remove(); });
 

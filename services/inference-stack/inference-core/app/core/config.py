@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Environment
     ENV: str = "production"
     DEBUG: bool = False
+    INTERNAL_API_TOKEN: str = ""
 
     @property
     def semantic_db_url(self) -> str:

@@ -35,9 +35,9 @@ La capa web es estrictamente operacional. Prohibida la lógica creativa o heurí
     - `docker compose exec -T admin-console-api pip install --no-cache-dir -r requirements-dev.txt`
     - `docker compose exec -T admin-console-api pytest -q tests`
 - **Smoke Test de Aislamiento Tenant (reutilizable):**
-  - Script: `services/web/admin-console/backend/scripts/smoke_tenant_isolation.py`
+  - Script: `services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py`
   - Comando:
-    - `docker compose exec -T admin-console-api python scripts/smoke_tenant_isolation.py`
+    - `docker compose exec -T admin-console-api python tests/smoke/test_smoke_tenant_isolation.py`
 - **Referencia rápida de ejecución:**
   - `services/web/admin-console/backend/tests/README.md`
 
@@ -46,7 +46,7 @@ La capa web es estrictamente operacional. Prohibida la lógica creativa o heurí
   - Eliminados `*_Old` dashboards y archivos `*.bak` del backend.
 - **Scripts operativos centralizados**:
   - Ruta: `services/web/admin-console/backend/scripts/`
-  - Incluye utilidades de diagnóstico y mantenimiento (`check_hash_config.py`, `restore_pass.py`, `verify_password_change.py`, `smoke_tenant_isolation.py`).
+  - Incluye utilidades de diagnóstico y mantenimiento (`check_hash_config.py`, `restore_pass.py`, `verify_password_change.py`).
 - **Duplicidad SDUI reducida**:
   - Helpers compartidos en `services/web/admin-console/backend/app/modules/shared/sdui.py`.
   - Routers refactorizados para reutilizar helpers: `users/router.py`, `roles/router.py`.
@@ -76,11 +76,11 @@ La capa web es estrictamente operacional. Prohibida la lógica creativa o heurí
 ## 11. REGRESIÓN DEV AMPLIADA (FASE ACTUAL)
 - **Cobertura de contrato SDUI extendida**:
   - Nuevos tests para módulos críticos adicionales:
-    - `tests/test_sdui_router_contracts.py` (`users`, `roles`, `prompts`, `clients`)
-    - `tests/test_leads_ai_library_contracts.py` (`leads`, `ai-library`)
+    - `tests/contract/test_sdui_router_contracts.py` (`users`, `roles`, `prompts`, `clients`)
+    - `tests/contract/test_leads_ai_library_contracts.py` (`leads`, `ai-library`)
 - **Ejecución unificada de regresión en desarrollo**:
   - Script: `services/web/admin-console/backend/scripts/run_dev_regression.sh`
-  - Verifica `pytest` y solo instala deps de test si faltan; luego ejecuta `pytest -q tests` y `smoke_tenant_isolation.py`.
+  - Verifica `pytest` y solo instala deps de test si faltan; luego ejecuta `pytest -q tests` y `tests/smoke/test_smoke_tenant_isolation.py`.
 - **Contenedor dev-test estabilizado**:
   - `services/web/admin-console/backend/Dockerfile` soporta `ARG INSTALL_DEV_DEPS`.
   - `docker-compose.yml` activa `INSTALL_DEV_DEPS: "true"` para `admin-console-api`.

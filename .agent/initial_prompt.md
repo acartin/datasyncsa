@@ -14,7 +14,7 @@ Before performing any action, you MUST identify which service you are interactin
 
 ## Services Map
 
-- **ETL:** `services/etl-processor`
+- **ETL:** `services/etl-docs`
 - **Inference Stack:**
   - `services/inference-stack/inference-core`
   - `services/inference-stack/semantic-adapter`

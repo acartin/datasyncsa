@@ -69,6 +69,7 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL}
       - LLM_MODEL=${LLM_MODEL}
       - STORAGE_PATH=/app/data/storage
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
       - ${HOST_PATH_STORAGE}:/app/data/storage
       - ./schemas:/app/schemas:ro
@@ -98,19 +99,59 @@ services:
     networks:
       - internal_network
 
-  # ETL Processor (Media Worker)
-  etl-processor:
+  # ETL Docs API
+  etl-docs:
     build:
-      context: ./services/etl-processor
+      context: ./services/etl-docs
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-etl
+    container_name: ${ENV_PREFIX}-backend-etl-docs
     restart: always
+    ports:
+      - "${ETL_DOCS_PORT}:8000"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
       - PATH_STORAGE=/app/data/storage
+      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_TIMEOUT=8
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+    volumes:
+      - ${HOST_PATH_STAGING}:/app/data/staging
+      - ${HOST_PATH_STORAGE}:/app/data/storage
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # ETL Docs Worker (RQ)
+  etl-docs-worker:
+    build:
+      context: ./services/etl-docs
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-etl-docs-worker
+    restart: always
+    command: ["rq", "worker", "docs", "--url", "redis://redis:6379/0"]
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - REDIS_URL=redis://redis:6379/0
+      - PATH_STAGING=/app/data/staging
+      - PATH_STORAGE=/app/data/storage
+      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_TIMEOUT=8
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
       - ${HOST_PATH_STAGING}:/app/data/staging
       - ${HOST_PATH_STORAGE}:/app/data/storage
@@ -173,7 +214,7 @@ services:
     build:
       context: ./services/web/realtor-chat/backend
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-realtor-api
+    container_name: ${ENV_PREFIX}-web-realtor-chat-api
     restart: unless-stopped
     ports:
       - "${REALTOR_BRIDGE_PORT}:8000"
@@ -188,7 +229,9 @@ services:
       - DB_PASSWORD=${DB_PASS}
       - REDIS_URL=redis://redis:6379/0
       - INFERENCE_CORE_URL=http://inference-core:8003/api/v1
+      - INFERENCE_CORE_RESET_URL=http://inference-core:8003/api/v1/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
@@ -201,7 +244,7 @@ services:
   # Realtor Chat Frontend (Nginx)
   realtor-web:
     image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-realtor-ui
+    container_name: ${ENV_PREFIX}-web-realtor-chat-ui
     restart: unless-stopped
     ports:
       - "${REALTOR_WEB_PORT}:80"
