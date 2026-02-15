@@ -15,6 +15,6 @@ printf '\n[2/3] Running unit tests...\n'
 docker compose exec -T "$SERVICE" pytest -q tests
 
 printf '\n[3/3] Running tenant isolation smoke...\n'
-docker compose exec -T "$SERVICE" python scripts/smoke_tenant_isolation.py
+docker compose exec -T "$SERVICE" python tests/smoke/test_smoke_tenant_isolation.py
 
 printf '\nRegression run completed successfully.\n'

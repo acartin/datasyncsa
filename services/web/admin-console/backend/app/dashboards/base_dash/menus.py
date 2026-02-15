@@ -23,6 +23,7 @@ MENU_SYSTEM = {
     "subItems": [
         {"id": "users", "label": "Usuarios", "link": "/system/users"},
         {"id": "roles", "label": "Roles", "link": "/system/roles"},
+        {"id": "public-docs", "label": "Documentos Públicos", "link": "/system/public-docs"},
         {"id": "countries", "label": "Países (Global)", "link": "/countries"}
     ]
 }

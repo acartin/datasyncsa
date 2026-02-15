@@ -17,7 +17,17 @@ class ConversationRepository:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 if conversation_id:
-                    cur.execute("SELECT * FROM lead_conversations WHERE id = %s", (str(conversation_id),))
+                    # Strict tenant isolation: only reuse a conversation if it belongs to the same client.
+                    cur.execute(
+                        """
+                        SELECT lc.*
+                        FROM lead_conversations lc
+                        JOIN lead_leads ll ON ll.id = lc.lead_id
+                        WHERE lc.id = %s
+                          AND ll.client_id = %s
+                        """,
+                        (str(conversation_id), client_id_str),
+                    )
                     conv = cur.fetchone()
                     if conv:
                         return dict(conv)
@@ -33,7 +43,9 @@ class ConversationRepository:
                 )
                 lead_id = new_lead_id
 
-                new_conv_id = str(conversation_id or uuid4())
+                # If a conversation_id was provided but was not found for this tenant,
+                # force a fresh ID to avoid collisions and cross-tenant reuse.
+                new_conv_id = str(uuid4())
                 cur.execute(
                     """
                     INSERT INTO lead_conversations (id, lead_id, platform, messages)
@@ -52,6 +64,27 @@ class ConversationRepository:
                 cur.execute("SELECT * FROM lead_conversations WHERE id = %s", (str(conversation_id),))
                 conv = cur.fetchone()
                 return dict(conv) if conv else None
+
+    def delete_conversations_by_client(self, client_id: Union[str, UUID]) -> int:
+        """
+        Deletes all conversations associated to leads of a specific client.
+        Returns number of deleted conversation rows.
+        """
+        client_id_str = str(client_id)
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM lead_conversations lc
+                    USING lead_leads ll
+                    WHERE lc.lead_id = ll.id
+                      AND ll.client_id = %s
+                    """,
+                    (client_id_str,),
+                )
+                deleted = cur.rowcount or 0
+                conn.commit()
+                return deleted
 
     def update_conversation(self, conversation_id: UUID, new_messages: List[Dict[str, Any]], summary: Optional[str] = None):
         # Calcular contadores

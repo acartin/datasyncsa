@@ -16,6 +16,8 @@ export function LinkGridVisual(component) {
                     data-enable-filters="${props.enableFilters ? 'true' : 'false'}"
                     data-filter-config='${JSON.stringify(props.filterConfig || {})}'
                     data-polling="${props.polling || ''}"
+                    data-row-key="${props.row_key || ''}"
+                    data-polling-compare-fields='${JSON.stringify(props.polling_compare_fields || [])}'
                     data-rows-b64="${props.rows_b64 || ''}">
                 </div>
             </div>

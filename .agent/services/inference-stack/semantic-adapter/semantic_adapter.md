@@ -35,8 +35,8 @@ El Semantic Adapter es responsable de:
     - `docker compose exec -T semantic-adapter pip install --no-cache-dir -r requirements-dev.txt`
     - `docker compose exec -T semantic-adapter pytest -q tests`
 - Smoke funcional:
-  - Script: `services/inference-stack/semantic-adapter/scripts/smoke_search.py`
+  - Script: `services/inference-stack/semantic-adapter/tests/smoke/test_smoke_search.py`
   - Comando:
-    - `docker compose exec -T semantic-adapter python scripts/smoke_search.py`
+    - `docker compose exec -T semantic-adapter python tests/smoke/test_smoke_search.py`
 - Referencia rápida:
   - `services/inference-stack/semantic-adapter/tests/README.md`

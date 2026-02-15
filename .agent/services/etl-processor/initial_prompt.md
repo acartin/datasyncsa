@@ -2,8 +2,11 @@
 
 This service handles the data extraction, transformation, and loading logic for DataSyncSA.
 
+> Deprecated context: active service moved to `services/etl-docs`.
+> Do not use this context for new implementation work.
+
 ## Context
-- **Path:** `services/etl-processor`
+- **Path:** `services/etl-processor` (deprecated)
 - **Dependencies:** Database stack (PostgreSQL), R2 Storage.
 - **Goal:** Efficient processing of incoming data streams into the unified schema.
 

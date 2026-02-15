@@ -121,6 +121,66 @@ def test_ai_library_view_contract(client):
     assert url_props["header_actions"][0]["action_url"] == "/ai-library/urls/add"
 
 
+def test_ai_library_view_hides_public_access_level_for_regular_tenant(client):
+    user = SimpleNamespace(
+        id=uuid.uuid4(),
+        is_superuser=False,
+        tenants=[SimpleNamespace(client_id=uuid.uuid4(), client=SimpleNamespace(name="zonapluscr"))],
+    )
+    _set_auth_override(user)
+    try:
+        response = client.get("/ai-library")
+    finally:
+        _clear_auth_override()
+
+    assert response.status_code == 200
+    body = response.json()
+    schema = body["components"][1]["items"][0]["content"][0]["properties"]["header_actions"][0]["schema"]
+    access_field = next(field for field in schema if field["name"] == "access_level")
+    option_values = [opt["value"] for opt in access_field["options"]]
+    assert option_values == ["shared"]
+
+
+def test_upload_pdf_rejects_public_access_level_for_regular_tenant(client):
+    user = SimpleNamespace(
+        id=uuid.uuid4(),
+        is_superuser=False,
+        tenants=[SimpleNamespace(client_id=uuid.uuid4(), client=SimpleNamespace(name="zonapluscr"))],
+    )
+    _set_auth_override(user)
+    try:
+        response = client.post(
+            "/ai-library/pdfs/upload",
+            files={"file": ("sample.pdf", b"%PDF-1.4\n...", "application/pdf")},
+            data={"access_level": "public", "category": "General"},
+        )
+    finally:
+        _clear_auth_override()
+
+    assert response.status_code == 422
+    assert "Use shared" in response.json()["detail"]
+
+
+def test_upload_pdf_rejects_private_access_level_for_regular_tenant(client):
+    user = SimpleNamespace(
+        id=uuid.uuid4(),
+        is_superuser=False,
+        tenants=[SimpleNamespace(client_id=uuid.uuid4(), client=SimpleNamespace(name="zonapluscr"))],
+    )
+    _set_auth_override(user)
+    try:
+        response = client.post(
+            "/ai-library/pdfs/upload",
+            files={"file": ("sample.pdf", b"%PDF-1.4\n...", "application/pdf")},
+            data={"access_level": "private", "category": "General"},
+        )
+    finally:
+        _clear_auth_override()
+
+    assert response.status_code == 422
+    assert "Use shared" in response.json()["detail"]
+
+
 def test_ai_library_pdfs_data_maps_sync_status(client, monkeypatch):
     tenant_id = uuid.uuid4()
     user = SimpleNamespace(id=uuid.uuid4(), is_superuser=False, tenants=[SimpleNamespace(client_id=tenant_id)])

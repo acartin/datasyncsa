@@ -6,7 +6,7 @@
 import { renderContent, renderComponent } from './engine/registry.js';
 export { renderContent, renderComponent };
 import { hydrateGrids } from './engine/hydration.js';
-import './engine/actions.js?v=95'; // Attaches handlers to window
+import './engine/actions.js?v=98'; // Attaches handlers to window
 
 import { LinkAppShell } from '../components/layout/AppShell.js';
 import { LinkSidebar } from '../components/layout/Sidebar.js';
@@ -14,7 +14,7 @@ import { LinkNavbar } from '../components/layout/Navbar.js';
 import { LinkProjectBanner } from '../components/layout/ProjectBanner.js';
 
 const API_BASE_URL = window.AppConfig.API_BASE_URL;
-const RENDERER_VERSION = "95";
+const RENDERER_VERSION = "98";
 console.log(`[Renderer] v${RENDERER_VERSION} Modular Initializing... (REGISTRY FIX)`);
 
 window.appState = { currentPath: null };

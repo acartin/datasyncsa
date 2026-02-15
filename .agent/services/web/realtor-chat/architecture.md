@@ -38,9 +38,9 @@ Para mantener la integridad del sistema central (`inference-core`), seguimos est
     - `docker compose exec -T realtor-api pip install --no-cache-dir -r requirements-dev.txt`
     - `docker compose exec -T realtor-api pytest -q tests`
 - Smoke funcional backend:
-  - Script: `services/web/realtor-chat/backend/scripts/smoke_bridge.py`
+  - Script: `services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py`
   - Comando:
-    - `docker compose exec -T realtor-api python scripts/smoke_bridge.py`
+    - `docker compose exec -T realtor-api python tests/smoke/test_smoke_bridge.py`
 - Referencia rápida:
   - `services/web/realtor-chat/backend/tests/README.md`
 

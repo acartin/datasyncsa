@@ -40,8 +40,8 @@ El Inference Core es responsable de:
     - `docker compose exec -T inference-core pip install --no-cache-dir -r requirements-dev.txt`
     - `docker compose exec -T inference-core pytest -q tests`
 - Smoke funcional:
-  - Script: `services/inference-stack/inference-core/scripts/smoke_chat.py`
+  - Script: `services/inference-stack/inference-core/tests/smoke/test_smoke_chat.py`
   - Comando:
-    - `docker compose exec -T inference-core python scripts/smoke_chat.py`
+    - `docker compose exec -T inference-core python tests/smoke/test_smoke_chat.py`
 - Referencia rápida:
   - `services/inference-stack/inference-core/tests/README.md`

@@ -5,12 +5,15 @@ import uuid
 from app.contracts.ui_schema import WebIAFirstResponse
 from app.modules.auth.config import current_active_user
 from app.modules.auth.models import User
+from app.modules.ai_library.access_policy import CLIENT_ALLOWED_ACCESS_LEVELS, normalize_access_level
 
 import os
 import logging
 
-# Use internal docker alias or external env var
-ETL_SERVICE_URL = os.getenv("ETL_SERVICE_URL", "http://etl-processor:8000")
+# External ETL endpoint is mandatory. No local fallback allowed.
+ETL_SERVICE_URL = os.getenv("ETL_SERVICE_URL", "").strip().rstrip("/")
+if not ETL_SERVICE_URL:
+    raise RuntimeError("ETL_SERVICE_URL is required and must point to the external ETL service.")
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -21,6 +24,8 @@ async def get_ai_library_view(user: User = Depends(current_active_user)):
     """
     Biblioteca de IA: Gestión de conocimiento y base documental.
     """
+    access_options = [{"label": "Compartido (Empresa)", "value": "shared"}]
+
     return {
         "layout": "dashboard-standard",
         "components": [
@@ -45,6 +50,9 @@ async def get_ai_library_view(user: User = Depends(current_active_user)):
                                 "properties": {
                                     "id": "grid_pdfs",
                                     "data_url": "/ai-library/pdfs/data",
+                                    "polling": "5000",
+                                    "row_key": "content_id",
+                                    "polling_compare_fields": ["status", "sync_status", "error_message"],
                                     "enableFilters": True,
                                     "filterConfig": {
                                         "searchPlaceholder": "Buscar PDF...",
@@ -59,7 +67,6 @@ async def get_ai_library_view(user: User = Depends(current_active_user)):
                                             "type": "badge",
                                             "uppercase": True,
                                             "badge_map": {
-                                                "private": "danger",
                                                 "shared": "warning",
                                                 "public": "success"
                                             }
@@ -106,11 +113,7 @@ async def get_ai_library_view(user: User = Depends(current_active_user)):
                                                     "label": "Nivel de Acceso", 
                                                     "type": "select", 
                                                     "required": True,
-                                                    "options": [
-                                                        {"label": "Privado (Solo yo)", "value": "private"},
-                                                        {"label": "Compartido (Empresa)", "value": "shared"},
-                                                        {"label": "Público (Global)", "value": "public"}
-                                                    ],
+                                                    "options": access_options,
                                                     "value": "shared"
                                                 }
                                             ]
@@ -269,6 +272,9 @@ async def upload_pdf(
 
     client_id = str(user.tenants[0].client_id)
     content_id = f"doc_{uuid.uuid4()}"
+    normalized_access_level = normalize_access_level(access_level)
+    if normalized_access_level not in CLIENT_ALLOWED_ACCESS_LEVELS:
+        raise HTTPException(status_code=422, detail="Invalid access_level for client library. Use shared.")
 
 
     async with httpx.AsyncClient() as client:
@@ -281,7 +287,7 @@ async def upload_pdf(
                 'client_id': client_id,
                 'content_id': content_id,
                 'category': category or "General",
-                'access_level': access_level,
+                'access_level': normalized_access_level,
                 'source': "PDF_UPLOAD",
                 'title': file.filename
             }

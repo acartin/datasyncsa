@@ -123,3 +123,34 @@ def test_clients_view_client_admin_uses_dashboard(monkeypatch, client):
     assert captured["client_id"] == tenant_id
     assert captured["email"] == "client-admin@test.local"
     assert response.json()["components"][0]["type"] == "tabs"
+
+
+def test_system_public_docs_ui_schema_contract(client):
+    user = SimpleNamespace(
+        is_superuser=False,
+        email="admin@datasyncsa.local",
+        tenants=[
+            SimpleNamespace(
+                client_id=uuid.uuid4(),
+                client=SimpleNamespace(name="datasyncsa"),
+                role=SimpleNamespace(slug="admin"),
+            )
+        ],
+    )
+    _set_auth_override(user)
+    try:
+        response = client.get("/system/public-docs")
+    finally:
+        _clear_auth_override()
+
+    assert response.status_code == 200
+    body = response.json()
+    props = body["components"][1]["properties"]
+    create_action = props["header_actions"][0]
+    delete_action = props["actions"][0]
+    access_column = next(col for col in props["columns"] if col["id"] == "access_level")
+
+    assert props["data_url"] == "/system/public-docs/data"
+    assert create_action["action_url"] == "/system/public-docs/upload"
+    assert delete_action["action_url"] == "/system/public-docs/{content_id}"
+    assert access_column["badge_map"] == {"public": "success"}

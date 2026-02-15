@@ -3,13 +3,13 @@
 This folder contains reusable automated checks for `services/web/admin-console/backend`.
 
 ## Test Files
-- `tests/test_security_and_scoping.py`
+- `tests/integration/test_security_and_scoping.py`
   - Verifies protected routes require auth.
   - Verifies lead-detail handler forwards tenant/user scope to service layer.
-- `tests/test_sdui_contract.py`
+- `tests/contract/test_sdui_contract.py`
   - Verifies shared SDUI helpers produce stable action contracts (`action_url`, `schema`, `modal_title`, etc.).
   - Verifies `encode_schema_b64` roundtrip for schema payloads.
-- `tests/test_sdui_router_contracts.py`
+- `tests/contract/test_sdui_router_contracts.py`
   - Verifies SDUI response contract for critical modules: `users`, `roles`, `prompts`, `clients`.
   - Verifies role-based view switching in `/clients` (superadmin grid vs client-admin dashboard).
 
@@ -24,12 +24,12 @@ docker compose exec -T admin-console-api pytest -q tests
 ## Reusable Smoke Test
 Use:
 
-`backend/scripts/smoke_tenant_isolation.py`
+`backend/tests/smoke/test_smoke_tenant_isolation.py`
 
 Run from container:
 
 ```bash
-docker compose exec -T admin-console-api python scripts/smoke_tenant_isolation.py
+docker compose exec -T admin-console-api python tests/smoke/test_smoke_tenant_isolation.py
 ```
 
 Environment variables supported by the script:

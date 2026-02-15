@@ -24,6 +24,7 @@ export class GridBase {
         this.pageSize = config.pageSize || 10;
         this.sortState = { colId: null, direction: 'asc' };
         this.pollingInterval = null;
+        this.lastDataSignature = null;
 
         // 1. Registry
         this.registerInstance();
@@ -61,7 +62,13 @@ export class GridBase {
                     this.pollingInterval = setInterval(() => {
                         // Solo refrescar si el elemento sigue en el DOM
                         if (document.getElementById(this.container.id)) {
-                            this.fetchData().then(() => {
+                            this.fetchData({ silent: true }).then((changed) => {
+                                // No re-render si no hay cambios reales en datos
+                                if (!changed) return;
+
+                                // Si hay filtros activos, applyFilters() ya renderiza internamente.
+                                if (this.filters && this.filters.hasActiveFilters()) return;
+
                                 this.applySort();
                                 this.render();
                             });
@@ -78,8 +85,9 @@ export class GridBase {
     }
 
     // Core Data Pipeline
-    async fetchData() {
-        this.toggleLoader(true);
+    async fetchData(options = {}) {
+        const silent = Boolean(options.silent);
+        if (!silent) this.toggleLoader(true);
 
         const token = localStorage.getItem('access_token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -94,30 +102,89 @@ export class GridBase {
             const json = await res.json();
 
             // Handle unwrapping of common API response patterns
+            let nextData = [];
             if (Array.isArray(json)) {
-                this.data = json;
+                nextData = json;
             } else if (json.data && Array.isArray(json.data)) {
-                this.data = json.data;
+                nextData = json.data;
             } else if (json.results && Array.isArray(json.results)) {
-                this.data = json.results;
+                nextData = json.results;
             } else if (json.items && Array.isArray(json.items)) {
-                this.data = json.items;
+                nextData = json.items;
             } else {
                 console.warn(`[${this.constructor.name}] API response is not an array`, json);
-                this.data = [];
+                nextData = [];
             }
 
+            const nextSignature = this.buildDataSignature(nextData);
+            const changed = nextSignature !== this.lastDataSignature;
+            if (!changed && silent) return false;
+
+            this.lastDataSignature = nextSignature;
+            this.data = nextData;
             this.filteredData = [...this.data];
 
             // Re-apply filters if they exist (e.g. on refresh)
             if (this.filters && this.filters.hasActiveFilters()) {
                 this.filters.applyFilters();
             }
+
+            return true;
         } catch (e) {
             throw e; // Propagate to init/forceRender
         } finally {
-            this.toggleLoader(false);
+            if (!silent) this.toggleLoader(false);
         }
+    }
+
+    buildDataSignature(rows) {
+        // Stable signature to avoid false positives caused by row/key ordering differences.
+        const configuredRowKey = this.config.row_key || '';
+        const compareFields = Array.isArray(this.config.polling_compare_fields)
+            ? this.config.polling_compare_fields.filter(Boolean)
+            : [];
+
+        const sortKeyForRow = (row) => {
+            if (!row || typeof row !== 'object') return '';
+            if (configuredRowKey && row[configuredRowKey] !== undefined && row[configuredRowKey] !== null) {
+                return String(row[configuredRowKey]);
+            }
+            return String(row.id ?? row.content_id ?? row.filename ?? row.url ?? '');
+        };
+
+        const normalize = (value) => {
+            if (Array.isArray(value)) {
+                return value.map(normalize);
+            }
+            if (value && typeof value === 'object') {
+                const out = {};
+                Object.keys(value).sort().forEach((k) => {
+                    out[k] = normalize(value[k]);
+                });
+                return out;
+            }
+            return value;
+        };
+
+        const rowsForSignature = compareFields.length > 0
+            ? rows.map((row) => {
+                const slim = {};
+                const rowKey = configuredRowKey || 'id';
+                slim[rowKey] = row?.[configuredRowKey] ?? row?.id ?? row?.content_id ?? row?.filename ?? row?.url ?? null;
+                compareFields.forEach((field) => {
+                    slim[field] = row?.[field];
+                });
+                return slim;
+            })
+            : rows;
+
+        const sortedRows = [...rowsForSignature].sort((a, b) => {
+            const ka = sortKeyForRow(a);
+            const kb = sortKeyForRow(b);
+            return ka.localeCompare(kb);
+        });
+
+        return JSON.stringify(normalize(sortedRows));
     }
 
     toggleLoader(show) {

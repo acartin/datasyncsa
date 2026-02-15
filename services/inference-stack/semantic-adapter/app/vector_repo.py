@@ -79,9 +79,9 @@ class VectorRepository:
         similarity_threshold: float = 0.0
     ):
         """
-        Busca documentos similares usando lógica Híbrida:
-        - Coincidencia Privada: client_id matches
-        - Coincidencia Pública: access_level = 'public'
+        Busca documentos similares con aislamiento por cliente:
+        - Coincidencia Privada/Compartida: siempre filtrada por client_id
+        - Coincidencia Pública Global: access_level = 'public'
         
         Usa Named Placeholders (%(name)s) para evitar errores de conteo de parámetros.
         """
@@ -99,7 +99,7 @@ class VectorRepository:
             1 - (embedding <=> %(vector)s::halfvec) AS similarity
         FROM {self.table_name}
         WHERE 
-            (client_id = %(client_id)s OR metadata->>'access_level' IN ('public', 'shared'))
+            (client_id = %(client_id)s OR metadata->>'access_level' = 'public')
             AND
             (%(category)s::text IS NULL OR metadata->>'category' = %(category)s)
             AND
