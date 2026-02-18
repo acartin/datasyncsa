@@ -47,6 +47,7 @@ async def chat_init(req: InitRequest):
         {"answer": "", "sources": []},
         "init",
         client_id,
+        brand_project=req.brand_project,
         include_fallback_text=False,
     )
 
@@ -55,7 +56,7 @@ async def chat_init(req: InitRequest):
 async def chat_interaction(query: ChatRequest):
     # Backwards compatibility: keep accepting is_init on /chat
     if query.is_init:
-        return await chat_init(InitRequest(client_id=query.client_id))
+        return await chat_init(InitRequest(client_id=query.client_id, brand_project=query.brand_project))
 
     client_id = str(query.client_id)
 
@@ -68,9 +69,20 @@ async def chat_interaction(query: ChatRequest):
         "client_id": client_id,
         "conversation_id": str(query.conversation_id) if query.conversation_id else session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
+        "brand_project": query.brand_project or session_data.get("brand_project"),
         "utm_source": query.utm_source or session_data.get("utm_source"),
         "utm_medium": query.utm_medium or session_data.get("utm_medium"),
         "utm_campaign": query.utm_campaign or session_data.get("utm_campaign"),
+        "utm_content": query.utm_content or session_data.get("utm_content"),
+        "utm_term": query.utm_term or session_data.get("utm_term"),
+        "gclid": query.gclid or session_data.get("gclid"),
+        "fbclid": query.fbclid or session_data.get("fbclid"),
+        "ttclid": query.ttclid or session_data.get("ttclid"),
+        "msclkid": query.msclkid or session_data.get("msclkid"),
+        "li_fat_id": query.li_fat_id or session_data.get("li_fat_id"),
+        "gbraid": query.gbraid or session_data.get("gbraid"),
+        "wbraid": query.wbraid or session_data.get("wbraid"),
+        "referrer_url": query.referrer_url or session_data.get("referrer_url"),
         "source_property_ref": query.source_property_ref or session_data.get("source_property_ref"),
         "landing_page_url": query.landing_page_url or session_data.get("landing_page_url"),
     }
@@ -84,9 +96,20 @@ async def chat_interaction(query: ChatRequest):
         if new_conversation_id:
             await session_manager.update_session(client_id, {
                 "conversation_id": new_conversation_id,
+                "brand_project": session_context.get("brand_project"),
                 "utm_source": session_context.get("utm_source"),
                 "utm_medium": session_context.get("utm_medium"),
                 "utm_campaign": session_context.get("utm_campaign"),
+                "utm_content": session_context.get("utm_content"),
+                "utm_term": session_context.get("utm_term"),
+                "gclid": session_context.get("gclid"),
+                "fbclid": session_context.get("fbclid"),
+                "ttclid": session_context.get("ttclid"),
+                "msclkid": session_context.get("msclkid"),
+                "li_fat_id": session_context.get("li_fat_id"),
+                "gbraid": session_context.get("gbraid"),
+                "wbraid": session_context.get("wbraid"),
+                "referrer_url": session_context.get("referrer_url"),
                 "source_property_ref": session_context.get("source_property_ref"),
                 "landing_page_url": session_context.get("landing_page_url"),
                 "last_interaction": datetime.now(timezone.utc).isoformat(),
@@ -97,6 +120,7 @@ async def chat_interaction(query: ChatRequest):
             ai_response,
             str(new_conversation_id or "init"),
             client_id,
+            brand_project=session_context.get("brand_project"),
         )
         
         return sdui_response

@@ -22,6 +22,7 @@ class SDUITransformer:
         ai_response: Dict[str, Any],
         session_id: str,
         client_id: str = "default",
+        brand_project: Union[str, None] = None,
         include_fallback_text: bool = True,
     ) -> SDUIResponse:
         """
@@ -64,7 +65,7 @@ class SDUITransformer:
             ))
 
         # 4. Configuración de Branding (Multi-tenant Real)
-        branding = await self._get_branding_for_client(client_id)
+        branding = await self._get_branding_for_client(client_id, brand_project)
 
         return SDUIResponse(
             session_id=session_id,
@@ -72,11 +73,11 @@ class SDUITransformer:
             components=components
         )
 
-    async def _get_branding_for_client(self, client_id: str) -> BrandingConfig:
+    async def _get_branding_for_client(self, client_id: str, brand_project: Union[str, None]) -> BrandingConfig:
         """
         Retorna la configuración visual adaptada al cliente desde la DB.
         """
-        db_brand = await asyncio.to_thread(db_manager.get_branding, client_id)
+        db_brand = await asyncio.to_thread(db_manager.get_branding, client_id, brand_project)
         if not db_brand:
             return BrandingConfig()
 

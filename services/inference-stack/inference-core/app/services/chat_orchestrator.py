@@ -31,6 +31,7 @@ class ChatOrchestrator:
             self.repo.get_or_create_conversation,
             request.client_id,
             request.conversation_id,
+            request.user_metadata or {},
         )
         conv_id = conversation['id']
         history = conversation.get('messages', [])

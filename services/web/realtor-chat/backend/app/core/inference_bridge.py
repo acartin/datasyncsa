@@ -35,9 +35,20 @@ class InferenceClient:
         
         user_metadata = {
             "lead_id": session.get("lead_id"),
+            "brand_project": session.get("brand_project"),
             "utm_source": session.get("utm_source"),
             "utm_medium": session.get("utm_medium"),
             "utm_campaign": session.get("utm_campaign"),
+            "utm_content": session.get("utm_content"),
+            "utm_term": session.get("utm_term"),
+            "gclid": session.get("gclid"),
+            "fbclid": session.get("fbclid"),
+            "ttclid": session.get("ttclid"),
+            "msclkid": session.get("msclkid"),
+            "li_fat_id": session.get("li_fat_id"),
+            "gbraid": session.get("gbraid"),
+            "wbraid": session.get("wbraid"),
+            "referrer_url": session.get("referrer_url"),
             "source_property_ref": session.get("source_property_ref"),
             "landing_page_url": session.get("landing_page_url")
         }

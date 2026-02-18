@@ -12,7 +12,59 @@ class ConversationRepository:
     def _get_connection(self):
         return psycopg2.connect(self.dsn, cursor_factory=RealDictCursor)
 
-    def get_or_create_conversation(self, client_id: Union[str, UUID], conversation_id: Optional[UUID] = None) -> Dict[str, Any]:
+    def _extract_click_id(self, user_metadata: Dict[str, Any]) -> Dict[str, Optional[str]]:
+        """
+        Returns normalized click_id + click_id_type.
+        Priority: explicit click_id > known platform-specific IDs.
+        """
+        click_id = user_metadata.get("click_id")
+        click_id_type = user_metadata.get("click_id_type")
+
+        if click_id:
+            return {"click_id": str(click_id), "click_id_type": str(click_id_type or "unknown")}
+
+        platform_click_keys = [
+            "gclid",
+            "gbraid",
+            "wbraid",
+            "fbclid",
+            "ttclid",
+            "msclkid",
+            "li_fat_id",
+        ]
+        for key in platform_click_keys:
+            value = user_metadata.get(key)
+            if value:
+                return {"click_id": str(value), "click_id_type": key}
+
+        return {"click_id": None, "click_id_type": None}
+
+    def _normalize_lead_metadata(self, user_metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        metadata = user_metadata or {}
+        click_data = self._extract_click_id(metadata)
+        return {
+            "brand_project": metadata.get("brand_project") or metadata.get("project"),
+            "utm_source": metadata.get("utm_source"),
+            "utm_medium": metadata.get("utm_medium"),
+            "utm_campaign": metadata.get("utm_campaign"),
+            "utm_content": metadata.get("utm_content"),
+            "utm_term": metadata.get("utm_term"),
+            "click_id": click_data["click_id"],
+            "click_id_type": click_data["click_id_type"],
+            "source_property_ref": metadata.get("source_property_ref"),
+            "source_property_url": metadata.get("source_property_url"),
+            "landing_page_url": metadata.get("landing_page_url"),
+            "referrer_url": metadata.get("referrer_url"),
+            "user_agent": metadata.get("user_agent"),
+            "ip_address": metadata.get("ip_address"),
+        }
+
+    def get_or_create_conversation(
+        self,
+        client_id: Union[str, UUID],
+        conversation_id: Optional[UUID] = None,
+        user_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         client_id_str = str(client_id)
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -37,9 +89,22 @@ class ConversationRepository:
                 # User Requirement: "when a new conversation enters, it must necessarily create a new lead"
                 
                 new_lead_id = str(uuid4())
+                lead_metadata = self._normalize_lead_metadata(user_metadata)
+                base_fields = {
+                    "id": new_lead_id,
+                    "client_id": client_id_str,
+                    "source_id": 14,
+                    "full_name": f"User {client_id_str[:8]}",
+                }
+                insert_data = {
+                    **base_fields,
+                    **{k: v for k, v in lead_metadata.items() if v not in (None, "")},
+                }
+                columns = ", ".join(insert_data.keys())
+                placeholders = ", ".join(["%s"] * len(insert_data))
                 cur.execute(
-                    "INSERT INTO lead_leads (id, client_id, source_id, full_name) VALUES (%s, %s, %s, %s)",
-                    (new_lead_id, client_id_str, 14, f"User {client_id_str[:8]}")
+                    f"INSERT INTO lead_leads ({columns}) VALUES ({placeholders})",
+                    tuple(insert_data.values())
                 )
                 lead_id = new_lead_id
 

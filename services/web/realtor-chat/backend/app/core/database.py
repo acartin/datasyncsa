@@ -51,13 +51,33 @@ class DatabaseManager:
             logger.error(f"Error fetching property {property_id}: {e}")
             return None
 
-    def get_branding(self, client_id):
+    def get_branding(self, client_id, brand_project=None):
         conn = self.get_connection()
         if not conn: return None
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT * FROM lead_brand_configs WHERE client_id = %s", (client_id,))
-                brand = cur.fetchone()
+                brand = None
+                if brand_project:
+                    cur.execute(
+                        "SELECT * FROM lead_brand_configs WHERE client_id = %s AND project = %s",
+                        (client_id, brand_project),
+                    )
+                    brand = cur.fetchone()
+
+                if not brand:
+                    cur.execute(
+                        "SELECT * FROM lead_brand_configs WHERE client_id = %s AND project = %s",
+                        (client_id, "default"),
+                    )
+                    brand = cur.fetchone()
+
+                if not brand:
+                    cur.execute(
+                        "SELECT * FROM lead_brand_configs WHERE client_id = %s ORDER BY project LIMIT 1",
+                        (client_id,),
+                    )
+                    brand = cur.fetchone()
+
                 if not brand:
                     # Fallback to client name if no config exists
                     cur.execute("SELECT name FROM lead_clients WHERE id = %s", (client_id,))

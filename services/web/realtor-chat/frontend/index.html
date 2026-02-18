@@ -91,8 +91,75 @@
         const urlParams = new URLSearchParams(window.location.search);
         const DEFAULT_CLIENT_ID = '64f357a0-98eb-44f1-9f41-6e615ed26180';
         const clientId = urlParams.get('clientId') || DEFAULT_CLIENT_ID;
-        const utmSource = urlParams.get('utm_source') || 'direct';
+        const brandProject = urlParams.get('project') || urlParams.get('brand_project');
         const propertyId = urlParams.get('propertyId'); // For QR codes specific to a house
+        const ATTRIBUTION_FIRST_TOUCH_KEY = 'realtor_chat_attribution_first_touch';
+        const ATTRIBUTION_LAST_TOUCH_KEY = 'realtor_chat_attribution_last_touch';
+        const ATTRIBUTION_KEYS = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+            'gclid', 'fbclid', 'ttclid', 'msclkid', 'li_fat_id', 'gbraid', 'wbraid'
+        ];
+
+        const safeParseJSON = (raw) => {
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                return null;
+            }
+        };
+        const readStorage = (key) => {
+            try {
+                return localStorage.getItem(key);
+            } catch (_) {
+                return null;
+            }
+        };
+        const writeStorage = (key, value) => {
+            try {
+                localStorage.setItem(key, value);
+            } catch (_) {
+                // Ignore storage failures (private mode/webviews with blocked storage)
+            }
+        };
+
+        const extractAttribution = (params) => {
+            const data = {};
+            ATTRIBUTION_KEYS.forEach((key) => {
+                const val = params.get(key);
+                if (val) data[key] = val;
+            });
+            return data;
+        };
+
+        const hasAttributionData = (data) => Object.keys(data).length > 0;
+
+        const queryAttribution = extractAttribution(urlParams);
+        const storedFirstTouch = safeParseJSON(readStorage(ATTRIBUTION_FIRST_TOUCH_KEY)) || {};
+        const storedLastTouch = safeParseJSON(readStorage(ATTRIBUTION_LAST_TOUCH_KEY)) || {};
+
+        // Keep first touch stable for attribution reports.
+        if (!hasAttributionData(storedFirstTouch) && hasAttributionData(queryAttribution)) {
+            writeStorage(ATTRIBUTION_FIRST_TOUCH_KEY, JSON.stringify({
+                ...queryAttribution,
+                first_touch_at: new Date().toISOString()
+            }));
+        }
+
+        // Update last touch whenever URL contains attribution params.
+        if (hasAttributionData(queryAttribution)) {
+            writeStorage(ATTRIBUTION_LAST_TOUCH_KEY, JSON.stringify({
+                ...queryAttribution,
+                last_touch_at: new Date().toISOString()
+            }));
+        }
+
+        const runtimeAttribution = {
+            ...storedFirstTouch,
+            ...storedLastTouch,
+            ...queryAttribution
+        };
+        if (!runtimeAttribution.utm_source) runtimeAttribution.utm_source = 'direct';
 
         const pushSystemMessage = (text) => {
             renderer.renderResponse({
@@ -319,7 +386,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        client_id: clientId
+                        client_id: clientId,
+                        brand_project: brandProject
                     })
                 });
                 const data = await res.json();
@@ -366,9 +434,11 @@
                 const payload = {
                     text: text,
                     client_id: clientId,
-                    utm_source: utmSource,
+                    brand_project: brandProject,
                     source_property_ref: propertyId,
-                    landing_page_url: window.location.href
+                    landing_page_url: window.location.href,
+                    referrer_url: document.referrer || null,
+                    ...runtimeAttribution
                 };
 
                 const response = await fetch('/api/chat', {

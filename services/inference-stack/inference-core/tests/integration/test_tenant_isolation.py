@@ -10,7 +10,7 @@ def test_chat_keeps_tenant_scope_across_requests(monkeypatch):
     seen_repo_client_ids = []
     seen_semantic_client_ids = []
 
-    def fake_get_or_create_conversation(client_id, _conversation_id):
+    def fake_get_or_create_conversation(client_id, _conversation_id, _user_metadata):
         seen_repo_client_ids.append(str(client_id))
         return {"id": str(uuid4()), "messages": [], "lead_id": None}
 

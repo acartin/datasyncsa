@@ -90,3 +90,41 @@ def test_get_or_create_conversation_creates_new_when_provided_id_not_in_tenant(m
     # Must not reuse a foreign/mismatched requested conversation id.
     assert insert_conv_params[0] != requested_conversation_id
     assert fake_conn.commits == 1
+
+
+def test_get_or_create_conversation_persists_utm_and_click_id(monkeypatch):
+    repo = ConversationRepository()
+    client_id = str(uuid4())
+    inserted = {"id": str(uuid4()), "messages": [], "lead_id": str(uuid4())}
+
+    fake_cursor = _FakeCursor([None, inserted])
+    fake_conn = _FakeConnection(fake_cursor)
+    monkeypatch.setattr(repo, "_get_connection", lambda: fake_conn)
+
+    metadata = {
+        "brand_project": "zonaplus",
+        "utm_source": "google",
+        "utm_medium": "cpc",
+        "utm_campaign": "camp-123",
+        "utm_content": "creative-a",
+        "utm_term": "casa en venta",
+        "gclid": "gclid-xyz",
+        "landing_page_url": "https://example.com/chat?utm_source=google",
+        "referrer_url": "https://www.google.com/",
+    }
+    repo.get_or_create_conversation(client_id, None, metadata)
+
+    lead_insert_sql, lead_insert_params = next(
+        (sql, params) for sql, params in fake_cursor.executed if "INSERT INTO lead_leads" in sql
+    )
+    assert "utm_source" in lead_insert_sql
+    assert "brand_project" in lead_insert_sql
+    assert "utm_campaign" in lead_insert_sql
+    assert "click_id" in lead_insert_sql
+    assert "click_id_type" in lead_insert_sql
+    assert "landing_page_url" in lead_insert_sql
+    assert "referrer_url" in lead_insert_sql
+    assert "google" in lead_insert_params
+    assert "zonaplus" in lead_insert_params
+    assert "gclid-xyz" in lead_insert_params
+    assert "gclid" in lead_insert_params
