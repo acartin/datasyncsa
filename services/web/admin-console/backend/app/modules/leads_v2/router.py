@@ -1,0 +1,440 @@
+from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import List, Optional
+from uuid import UUID
+from app.modules.auth.config import current_active_user
+from app.modules.auth.models import User
+from app.modules.leads_v2.service import service as lead_v2_service
+from app.contracts.ui_schema import WebIAFirstResponse
+from app.contracts.scoring_schema import (
+    ScoringSchemaV2, 
+    ScoringValuesV2,
+    DynamicGridConfig,
+    DynamicLeadGridColumn
+)
+from app.config.settings import settings
+
+
+router = APIRouter()
+
+
+def _get_tenant_ids(user: User) -> List[UUID]:
+    """Extract tenant IDs from user."""
+    if not user.tenants:
+        return []
+    return [tenant.client_id for tenant in user.tenants if getattr(tenant, "client_id", None)]
+
+
+@router.get("/", response_model=WebIAFirstResponse)
+async def get_leads_grid_v2(
+    user: User = Depends(current_active_user),
+    lead_type: Optional[str] = Query(None, description="Filter by lead type")
+):
+    """
+    Returns the dynamic leads grid for v2 scoring.
+    Uses dynamic scoring schema based on lead_type or defaults.
+    """
+    # Check if dynamic UI is enabled
+    if not settings.admin_dynamic_scoring_ui:
+        # Fallback to legacy view
+        from app.modules.leads.router import get_my_leads as get_legacy_my_leads
+        return await get_legacy_my_leads(user)
+    
+    # Fetch leads data with v2 scoring
+    leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
+    
+    # Determine lead type for schema (use first lead's type or default)
+    target_lead_type = lead_type or "realtor"
+    if leads and not target_lead_type:
+        target_lead_type = leads[0].get('lead_type', 'realtor')
+    
+    # Get scoring schema for this lead type
+    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+        target_lead_type, 
+        user.client_id if hasattr(user, 'client_id') else None
+    )
+    
+    # Build dynamic grid configuration
+    grid_config = _build_dynamic_grid_config(schema, target_lead_type)
+    
+    # Transform leads to grid rows
+    rows = _transform_leads_to_dynamic_rows(leads, schema)
+    
+    return {
+        "layout": "dashboard-standard",
+        "components": [
+            {
+                "type": "typography",
+                "tag": "h2",
+                "text": f"Leads - {target_lead_type.capitalize()}",
+                "class": "mb-4"
+            },
+            {
+                "type": "card",
+                "size": "col-12",
+                "components": [
+                    {
+                        "type": "custom-leads-grid",
+                        "label": "Panel de Leads (v2)",
+                        "properties": grid_config.model_dump()
+                    }
+                ]
+            }
+        ],
+        "permissions_required": ["leads.view"],
+        "metadata": {
+            "scoring_schema": schema.model_dump() if schema else None,
+            "dynamic_ui_enabled": True
+        }
+    }
+
+
+@router.get("/data", response_model=List[dict])
+async def list_leads_data_v2(
+    user: User = Depends(current_active_user),
+    lead_type: Optional[str] = Query(None, description="Filter by lead type")
+):
+    """
+    Returns raw data for leads with v2 scoring.
+    """
+    leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
+    
+    # Determine lead type for schema
+    target_lead_type = lead_type or "realtor"
+    if leads and not target_lead_type:
+        target_lead_type = leads[0].get('lead_type', 'realtor')
+    
+    # Get scoring schema
+    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+        target_lead_type,
+        user.client_id if hasattr(user, 'client_id') else None
+    )
+    
+    # Transform leads
+    return _transform_leads_to_dynamic_rows(leads, schema)
+
+
+@router.get("/{lead_id}", response_model=WebIAFirstResponse)
+async def get_lead_detail_v2(
+    lead_id: UUID, 
+    user: User = Depends(current_active_user)
+):
+    """
+    Returns detailed view for a single lead with v2 scoring.
+    """
+    # Fetch lead data with v2 scoring
+    lead = await lead_v2_service.get_lead_detail_with_scoring_v2(
+        lead_id=lead_id,
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found or not assigned.")
+    
+    # Get scoring values
+    scoring_values = lead_v2_service.transform_to_scoring_values(lead)
+    
+    # Get scoring schema for this lead's type
+    lead_type = lead.get('lead_type', 'realtor')
+    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+        lead_type,
+        user.client_id if hasattr(user, 'client_id') else None
+    )
+    
+    # Build detail components with dynamic scoring
+    components = _build_lead_detail_components(lead, scoring_values, schema)
+    
+    return {
+        "layout": "dashboard-standard",
+        "components": components,
+        "permissions_required": ["leads.view"],
+        "metadata": {
+            "scoring_values": scoring_values.model_dump(),
+            "scoring_schema": schema.model_dump() if schema else None,
+            "dynamic_ui_enabled": settings.admin_dynamic_scoring_ui
+        }
+    }
+
+
+@router.get("/{lead_id}/scoring", response_model=ScoringValuesV2)
+async def get_lead_scoring_values(
+    lead_id: UUID,
+    user: User = Depends(current_active_user)
+):
+    """
+    Returns scoring values for a specific lead.
+    """
+    lead = await lead_v2_service.get_lead_detail_with_scoring_v2(
+        lead_id=lead_id,
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    
+    return lead_v2_service.transform_to_scoring_values(lead)
+
+
+@router.get("/schema/{lead_type}", response_model=ScoringSchemaV2)
+async def get_scoring_schema(
+    lead_type: str,
+    user: User = Depends(current_active_user)
+):
+    """
+    Returns scoring schema for a specific lead type.
+    """
+    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+        lead_type,
+        user.client_id if hasattr(user, 'client_id') else None
+    )
+    
+    if not schema:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"No active scoring schema found for lead type: {lead_type}"
+        )
+    
+    return schema
+
+
+def _build_dynamic_grid_config(schema: Optional[ScoringSchemaV2], lead_type: str) -> DynamicGridConfig:
+    """
+    Build dynamic grid configuration based on scoring schema.
+    """
+    columns = []
+    
+    # Always include identity column
+    columns.append(DynamicLeadGridColumn(
+        id="identity",
+        label="Lead / Calificación",
+        type="gauge-identity",
+        sortable=True,
+        width="250px",
+        icon="ri-shield-user-line"
+    ))
+    
+    # Add dynamic scoring columns if schema exists
+    if schema and schema.criteria:
+        for criterion in sorted(schema.criteria, key=lambda c: c.display_order):
+            columns.append(DynamicLeadGridColumn(
+                id=f"scoring_{criterion.criterion_key}",
+                label=criterion.label,
+                type="scoring-pillar",
+                sortable=True,
+                icon=criterion.bands[0].icon if criterion.bands else "ri-star-line",
+                criterion_key=criterion.criterion_key
+            ))
+    
+    # Add static contact columns
+    columns.extend([
+        DynamicLeadGridColumn(
+            id="email",
+            label="Email",
+            type="text",
+            sortable=True,
+            icon="ri-mail-line"
+        ),
+        DynamicLeadGridColumn(
+            id="phone",
+            label="Teléfono",
+            type="text",
+            sortable=True,
+            icon="ri-phone-line"
+        ),
+        DynamicLeadGridColumn(
+            id="created",
+            label="Fecha",
+            type="date",
+            sortable=True,
+            icon="ri-calendar-line"
+        )
+    ])
+    
+    return DynamicGridConfig(
+        grid_id=f"leads-v2-{lead_type}",
+        data_url=f"/leads_v2/data?lead_type={lead_type}",
+        enable_filters=True,
+        columns=columns,
+        filter_config={
+            "searchFields": ["full_name", "email"],
+            "filterableColumns": [
+                {"id": "identity", "label": "Lead", "icon": "ri-shield-user-line"}
+            ] + ([
+                {"id": f"scoring_{c.criterion_key}", "label": c.label, "icon": c.bands[0].icon if c.bands else "ri-star-line"}
+                for c in (schema.criteria if schema else [])
+            ] if schema else [])
+        },
+        actions=[
+            {"label": "Ver Detalle", "icon": "ri-eye-line", "action": "navigate", "action_url": "/dashboard/leads_v2/{id}"},
+            {"label": "Chat", "icon": "ri-chat-3-line", "action": "navigate", "action_url": "/dashboard/leads/{id}/chat"}
+        ]
+    )
+
+
+def _transform_leads_to_dynamic_rows(leads: List[dict], schema: Optional[ScoringSchemaV2]) -> List[dict]:
+    """
+    Transform leads data to dynamic grid rows based on scoring schema.
+    """
+    rows = []
+    
+    for lead in leads:
+        row = {
+            "id": str(lead['id']),
+            "identity": {
+                "name": lead['full_name'] or "",
+                "score": lead['score_total'] or 0,
+                "color": lead.get('prio_color') or "thermal-none"
+            },
+            "email": lead['email'] or "-",
+            "phone": lead['phone'] or "-",
+            "created": lead['created_at'].strftime("%Y-%m-%d") if lead['created_at'] else "-"
+        }
+        
+        # Add dynamic scoring columns
+        if schema and schema.criteria and lead.get('score_items'):
+            score_items_dict = {
+                item.get('criterion_key'): item 
+                for item in (lead.get('score_items') or []) 
+                if isinstance(item, dict)
+            }
+            
+            for criterion in schema.criteria:
+                item_data = score_items_dict.get(criterion.criterion_key, {})
+                score = float(item_data.get('score', 0.0))
+                
+                # Find matching band
+                band_info = {}
+                for band in criterion.bands:
+                    if band.min_score <= score < band.max_score:
+                        band_info = {
+                            "label": band.label,
+                            "icon": band.icon,
+                            "color": band.color
+                        }
+                        break
+                
+                row[f"scoring_{criterion.criterion_key}"] = {
+                    "score": score,
+                    "totalScore": lead['score_total'] or 0,
+                    "label": band_info.get("label", "-"),
+                    "icon": band_info.get("icon", "ri-question-line"),
+                    "color": band_info.get("color", "thermal-none")
+                }
+        
+        rows.append(row)
+    
+    return rows
+
+
+def _build_lead_detail_components(
+    lead: dict, 
+    scoring_values: ScoringValuesV2, 
+    schema: Optional[ScoringSchemaV2]
+) -> List[dict]:
+    """
+    Build lead detail components with dynamic scoring visualization.
+    """
+    components = [
+        {
+            "type": "layout-row",
+            "components": [
+                {
+                    "type": "layout-col",
+                    "size": "col-xl-4",
+                    "components": [
+                        {
+                            "type": "card",
+                            "title": "Información del Lead",
+                            "components": [
+                                {"type": "typography", "tag": "h4", "text": lead['full_name'], "class": "mb-1"},
+                                {"type": "typography", "tag": "p", "text": f"Tipo: {lead.get('lead_type', 'realtor').capitalize()}", "class": "text-muted mb-1"},
+                                {"type": "typography", "tag": "p", "text": f"Status: {lead.get('status_label') or 'Nuevo'}", "class": "text-muted mb-3"},
+                                {"type": "typography", "tag": "p", "text": f"Email: {lead['email'] or '-'}"},
+                                {"type": "typography", "tag": "p", "text": f"Tel: {lead['phone'] or '-'}"}
+                            ]
+                        },
+                        {
+                            "type": "card-metric",
+                            "title": "Score Total",
+                            "value": str(scoring_values.score_total),
+                            "icon": "ri-star-fill",
+                            "color": "warning",
+                            "label": scoring_values.priority_label or "Basado en scoring dinámico"
+                        }
+                    ]
+                },
+                {
+                    "type": "layout-col",
+                    "size": "col-xl-8",
+                    "components": [
+                        {
+                            "type": "card",
+                            "title": "Scoring Dinámico",
+                            "components": _build_scoring_detail_components(scoring_values, schema)
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+    
+    return components
+
+
+def _build_scoring_detail_components(scoring_values: ScoringValuesV2, schema: Optional[ScoringSchemaV2]) -> List[dict]:
+    """
+    Build scoring detail components with visual bands.
+    """
+    components = []
+    
+    if not scoring_values.score_items:
+        components.append({
+            "type": "typography",
+            "tag": "p",
+            "text": "No hay datos de scoring disponibles para este lead.",
+            "class": "text-muted"
+        })
+        return components
+    
+    # Add reasoning if available
+    if scoring_values.reasoning:
+        components.append({
+            "type": "typography",
+            "tag": "p",
+            "text": scoring_values.reasoning,
+            "class": "mb-3"
+        })
+    
+    # Add scoring items as progress bars or metrics
+    for item in scoring_values.score_items:
+        # Find criterion details from schema
+        criterion_label = item.criterion_key
+        if schema:
+            for criterion in schema.criteria:
+                if criterion.criterion_key == item.criterion_key:
+                    criterion_label = criterion.label
+                    break
+        
+        components.append({
+            "type": "progress-metric",
+            "label": criterion_label,
+            "value": item.score,
+            "maxValue": 100.0,  # Normalized to 0-100
+            "color": item.band_color or "primary",
+            "icon": item.band_icon or "ri-star-line",
+            "subtext": item.explanation or f"Band: {item.band_label or 'N/A'}"
+        })
+    
+    # Add metadata
+    if scoring_values.scorecard_id:
+        components.append({
+            "type": "typography",
+            "tag": "p",
+            "text": f"Scorecard ID: {scoring_values.scorecard_id}",
+            "class": "text-muted small mt-3"
+        })
+    
+    return components

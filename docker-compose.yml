@@ -99,6 +99,53 @@ services:
     networks:
       - internal_network
 
+  # Inference Core V2
+  inference-core-v2:
+    build:
+      context: ./services/inference-stack-v2/inference-core-v2
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-inference-v2
+    restart: always
+    ports:
+      - "${INFERENCE_V2_PORT}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # Semantic Adapter V2 (isolated runtime for v2 rollout)
+  semantic-adapter-v2:
+    build:
+      context: ./services/inference-stack/semantic-adapter
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-semantic-v2
+    restart: always
+    ports:
+      - "${SEMANTIC_V2_PORT}:8000"
+    env_file:
+      - .env
+    environment:
+      - INFERENCE_CORE_URL=http://inference-core-v2:8000
+      - DATABASE_URL=${DATABASE_URL}
+      - TABLE_VECTORS=${TABLE_VECTORS}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - inference-core-v2
+    networks:
+      - internal_network
+
   # ETL Docs API
   etl-docs:
     build:
@@ -238,6 +285,48 @@ services:
       - postgres
       - redis
       - inference-core
+    networks:
+      - internal_network
+
+  # Generic Bridge V2
+  generic-bridge-v2:
+    build:
+      context: ./services/generic-bridge-v2
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-web-generic-bridge-v2
+    restart: unless-stopped
+    ports:
+      - "${GENERIC_BRIDGE_V2_PORT}:8000"
+    environment:
+      - INFERENCE_V2_URL=http://inference-core-v2:8000
+      - INFERENCE_V2_API_PREFIX=/api/v2
+      - REQUEST_TIMEOUT=30
+      - MAX_RETRIES=3
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - inference-core-v2
+    networks:
+      - internal_network
+
+  # Realtor Bridge V2
+  realtor-bridge-v2:
+    build:
+      context: ./services/realtor-bridge-v2
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-web-realtor-bridge-v2
+    restart: unless-stopped
+    ports:
+      - "${REALTOR_BRIDGE_V2_PORT}:8000"
+    environment:
+      - INFERENCE_V2_URL=http://inference-core-v2:8000
+      - INFERENCE_V2_API_PREFIX=/api/v2
+      - REQUEST_TIMEOUT=30
+      - MAX_RETRIES=3
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - inference-core-v2
     networks:
       - internal_network
 

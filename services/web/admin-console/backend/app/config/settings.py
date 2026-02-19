@@ -28,6 +28,11 @@ class Settings(BaseSettings):
             return self.database_url_raw
         return f"postgresql+asyncpg://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_database}"
 
+    # Feature flags for scoring v2 rollout
+    scoring_v2_enabled: bool = os.getenv("SCORING_V2_ENABLED", "false").lower() == "true"
+    admin_dynamic_scoring_ui: bool = os.getenv("ADMIN_DYNAMIC_SCORING_UI", "false").lower() == "true"
+    legacy_scoring_read_compat: bool = os.getenv("LEGACY_SCORING_READ_COMPAT", "true").lower() == "true"
+    
     @property
     def cors_allow_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]

@@ -18,8 +18,7 @@ Reglas de coordinación:
    - pruebas,
    - evidencias de ejecución,
    - checklist de aceptación.
-4. Cada IA trabaja sobre rama separada:
-   - `phase-1-qwen`, `phase-2-deepseek`, etc.
+4. !
 5. Antes de cerrar fase, la IA responsable debe dejar:
    - `CHANGELOG_PHASE_X.md` en `docs/`,
    - lista de riesgos abiertos,
