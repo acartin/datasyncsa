@@ -51,54 +51,6 @@ services:
   # ---------------------------------------------------------------------------
   # BACKEND SERVICES
   # ---------------------------------------------------------------------------
-
-
-
-  # Inference Generic Core (Existing)
-  inference-core:
-    build:
-      context: ./services/inference-stack/inference-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-inference
-    restart: always
-    ports:
-      - "8083:8003"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
-      - LLM_MODEL=${LLM_MODEL}
-      - STORAGE_PATH=/app/data/storage
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-    volumes:
-      - ${HOST_PATH_STORAGE}:/app/data/storage
-      - ./schemas:/app/schemas:ro
-    networks:
-      - internal_network
-
-  # Semantic Adapter (Existing)
-  semantic-adapter:
-    build:
-      context: ./services/inference-stack/semantic-adapter
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-semantic
-    restart: always
-    ports:
-      - "${SEMANTIC_PORT}:8000"
-    env_file:
-      - .env
-    environment:
-      - INFERENCE_CORE_URL=http://inference-core:8003
-      - DATABASE_URL=${DATABASE_URL}
-      - TABLE_VECTORS=${TABLE_VECTORS}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - inference-core
-    networks:
-      - internal_network
-
   # Inference Core V2
   inference-core-v2:
     build:
@@ -115,6 +67,8 @@ services:
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
+      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
+      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
@@ -126,7 +80,7 @@ services:
   # Semantic Adapter V2 (isolated runtime for v2 rollout)
   semantic-adapter-v2:
     build:
-      context: ./services/inference-stack/semantic-adapter
+      context: ./services/inference-stack-v2/semantic-adapter-v2
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-backend-semantic-v2
     restart: always
@@ -228,7 +182,7 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
-      - INFERENCE_CORE_URL=http://inference-core:8003
+      - INFERENCE_CORE_URL=http://inference-core-v2:8000
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
       - ./schemas:/app/schemas:ro
@@ -275,8 +229,8 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_PASSWORD=${DB_PASS}
       - REDIS_URL=redis://redis:6379/0
-      - INFERENCE_CORE_URL=http://inference-core:8003/api/v1
-      - INFERENCE_CORE_RESET_URL=http://inference-core:8003/api/v1/internal/memory/reset
+      - INFERENCE_V2_URL=http://inference-core-v2:8000
+      - INFERENCE_V2_RESET_URL=http://inference-core-v2:8000/api/v2/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -284,7 +238,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - inference-core
+      - inference-core-v2
     networks:
       - internal_network
 

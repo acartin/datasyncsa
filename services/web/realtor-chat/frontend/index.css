@@ -218,6 +218,18 @@ body {
     white-space: nowrap;
 }
 
+.status-indicator.status-ok {
+    color: var(--text-muted);
+}
+
+.status-indicator.status-degraded {
+    color: #fbbf24;
+}
+
+.status-indicator.status-down {
+    color: #f87171;
+}
+
 .dot {
     width: 8px;
     height: 8px;
@@ -225,6 +237,16 @@ body {
     border-radius: 50%;
     box-shadow: 0 0 10px #10b981;
     animation: pulse 2s infinite;
+}
+
+.status-indicator.status-degraded .dot {
+    background: #f59e0b;
+    box-shadow: 0 0 10px #f59e0b;
+}
+
+.status-indicator.status-down .dot {
+    background: #ef4444;
+    box-shadow: 0 0 10px #ef4444;
 }
 
 @keyframes pulse {

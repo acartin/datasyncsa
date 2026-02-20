@@ -14,6 +14,249 @@ class ScoringRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def get_conversation_messages(
+        self,
+        conversation_id: UUID,
+        client_id: UUID,
+        max_messages: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Returns tenant-scoped conversation messages for LLM context.
+        """
+        query = text("""
+            SELECT lc.messages
+            FROM lead_conversations lc
+            JOIN lead_leads ll ON ll.id = lc.lead_id
+            WHERE lc.conversation_id = :conversation_id
+              AND ll.client_id = :client_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            query,
+            {
+                "conversation_id": str(conversation_id),
+                "client_id": str(client_id),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            return []
+
+        messages = row.get("messages") or []
+        if isinstance(messages, str):
+            try:
+                messages = json.loads(messages)
+            except Exception:
+                logger.warning("Invalid JSON in lead_conversations.messages for %s", conversation_id)
+                return []
+
+        if not isinstance(messages, list):
+            return []
+
+        if max_messages <= 0:
+            return []
+        return messages[-max_messages:]
+
+    async def get_conversation_metrics(
+        self,
+        conversation_id: UUID,
+        client_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Returns tenant-scoped metrics for a conversation.
+        """
+        query = text("""
+            SELECT
+                lc.lead_id,
+                lc.total_messages,
+                lc.bot_messages,
+                lc.lead_messages,
+                lc.last_message_at
+            FROM lead_conversations lc
+            JOIN lead_leads ll ON ll.id = lc.lead_id
+            WHERE lc.conversation_id = :conversation_id
+              AND ll.client_id = :client_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            query,
+            {
+                "conversation_id": str(conversation_id),
+                "client_id": str(client_id),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            return None
+        return {
+            "lead_id": str(row.get("lead_id")) if row.get("lead_id") else None,
+            "total_messages": row.get("total_messages", 0),
+            "bot_messages": row.get("bot_messages", 0),
+            "lead_messages": row.get("lead_messages", 0),
+            "last_message_at": row.get("last_message_at").isoformat() if row.get("last_message_at") else None,
+        }
+
+    async def get_lead_snapshot(
+        self,
+        lead_id: UUID,
+        client_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Returns tenant-scoped lead snapshot for structured RAG context.
+        """
+        query = text("""
+            SELECT
+                id,
+                full_name,
+                email,
+                phone,
+                lead_type,
+                business_domain,
+                source_id,
+                current_scorecard_id,
+                created_at
+            FROM lead_leads
+            WHERE id = :lead_id
+              AND client_id = :client_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            query,
+            {
+                "lead_id": str(lead_id),
+                "client_id": str(client_id),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            return None
+        return {
+            "id": str(row.get("id")),
+            "full_name": row.get("full_name"),
+            "email": row.get("email"),
+            "phone": row.get("phone"),
+            "lead_type": row.get("lead_type"),
+            "business_domain": row.get("business_domain"),
+            "source_id": row.get("source_id"),
+            "current_scorecard_id": str(row.get("current_scorecard_id")) if row.get("current_scorecard_id") else None,
+            "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+        }
+
+    async def delete_conversations_by_client(self, client_id: UUID) -> int:
+        """
+        Deletes conversation rows for a tenant and returns deleted count.
+        """
+        stmt = text("""
+            DELETE FROM lead_conversations lc
+            USING lead_leads ll
+            WHERE lc.lead_id = ll.id
+              AND ll.client_id = :client_id
+        """)
+        result = await self.session.execute(stmt, {"client_id": str(client_id)})
+        await self.session.commit()
+        return result.rowcount or 0
+
+    async def get_or_create_conversation(
+        self,
+        lead_id: UUID,
+        conversation_id: UUID,
+        platform: str = "webchat"
+    ) -> Dict[str, Any]:
+        """Get or create a conversation"""
+        # Try to find existing conversation
+        query = text("""
+            SELECT id, lead_id, platform, conversation_id, messages, total_messages
+            FROM lead_conversations 
+            WHERE lead_id = :lead_id 
+              AND conversation_id = :conversation_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(query, {
+            "lead_id": str(lead_id),
+            "conversation_id": str(conversation_id)
+        })
+        row = result.mappings().first()
+        
+        if row:
+            return dict(row)
+        
+        # Create new conversation
+        insert_query = text("""
+            INSERT INTO lead_conversations (lead_id, platform, conversation_id, messages, total_messages, bot_messages, lead_messages)
+            VALUES (:lead_id, :platform, :conversation_id, '[]'::jsonb, 0, 0, 0)
+            RETURNING id, lead_id, platform, conversation_id, messages, total_messages
+        """)
+        result = await self.session.execute(insert_query, {
+            "lead_id": str(lead_id),
+            "platform": platform,
+            "conversation_id": str(conversation_id)
+        })
+        row = result.mappings().first()
+        await self.session.commit()
+        return dict(row)
+
+    async def update_conversation(
+        self,
+        conversation_id: UUID,
+        lead_id: UUID,
+        user_message: str,
+        bot_message: str
+    ) -> None:
+        """Update conversation with new messages"""
+        # Get current messages - search by conversation_id field
+        query = text("""
+            SELECT id, messages, total_messages, bot_messages, lead_messages
+            FROM lead_conversations 
+            WHERE conversation_id = :conversation_id
+        """)
+        result = await self.session.execute(query, {"conversation_id": str(conversation_id)})
+        row = result.mappings().first()
+        
+        if not row:
+            logger.warning(f"Conversation {conversation_id} not found")
+            return
+        
+        messages = row.get("messages", [])
+        if isinstance(messages, str):
+            messages = json.loads(messages)
+        
+        from datetime import datetime
+        # Add user message
+        messages.append({
+            "role": "user",
+            "content": user_message,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        # Add bot message
+        messages.append({
+            "role": "assistant", 
+            "content": bot_message,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        total = row.get("total_messages", 0) + 2
+        bot_count = row.get("bot_messages", 0) + 1
+        lead_count = row.get("lead_messages", 0) + 1
+        
+        update_query = text("""
+            UPDATE lead_conversations 
+            SET messages = :messages,
+                total_messages = :total_messages,
+                bot_messages = :bot_messages,
+                lead_messages = :lead_messages,
+                last_message_at = :last_message_at
+            WHERE conversation_id = :conversation_id
+        """)
+        await self.session.execute(update_query, {
+            "messages": json.dumps(messages),
+            "total_messages": total,
+            "bot_messages": bot_count,
+            "lead_messages": lead_count,
+            "last_message_at": datetime.utcnow(),
+            "conversation_id": str(conversation_id)
+        })
+        await self.session.commit()
+    
     @staticmethod
     def _normalize_extraction_result(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Drop null/empty placeholder values so accumulation is monotonic."""
@@ -507,73 +750,62 @@ class ScoringRepository:
             raise
     
     async def get_active_prompt(self, model_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get the active prompt for a scoring model"""
-        try:
-            stmt = text("""
-                SELECT id, model_id, version, prompt_template, extraction_schema, is_active, created_at
-                FROM lead_scoring_prompts
-                WHERE model_id = :model_id AND is_active = true
-                ORDER BY version DESC
-                LIMIT 1
-            """)
-            result = await self.session.execute(stmt, {"model_id": str(model_id)})
-            row = result.mappings().first()
-            
-            if row:
-                prompt = dict(row)
-                logger.debug(f"Found active prompt v{prompt['version']} for model {model_id}")
-                return prompt
-            
-            logger.warning(f"No active prompt found for model {model_id}")
+        """
+        Get active prompt for scoring model using raw SQL
+        """
+        query = text("""
+            SELECT id, model_id, version, prompt_template, extraction_schema, is_active
+            FROM lead_scoring_prompts
+            WHERE model_id = :model_id
+              AND is_active = true
+            ORDER BY version DESC
+            LIMIT 1
+        """)
+        result = await self.session.execute(query, {"model_id": str(model_id)})
+        row = result.mappings().first()
+        if not row:
             return None
-            
-        except Exception as e:
-            logger.error(f"Error getting active prompt: {e}")
-            raise
-    
-    async def get_current_scorecard(self, lead_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get the current scorecard for a lead"""
-        try:
-            current_stmt = text("""
-                SELECT current_scorecard_id
-                FROM lead_leads
-                WHERE id = :lead_id
-            """)
-            current_res = await self.session.execute(current_stmt, {"lead_id": str(lead_id)})
-            current_row = current_res.fetchone()
-            current_scorecard_id = current_row[0] if current_row else None
+        
+        return {
+            "id": str(row["id"]),
+            "model_id": str(row["model_id"]),
+            "version": row["version"],
+            "prompt_template": row["prompt_template"],
+            "extraction_schema": row.get("extraction_schema"),
+            "is_active": row["is_active"]
+        }
 
-            if current_scorecard_id:
-                stmt = text("""
-                    SELECT id, score_total, priority_label, reasoning, extraction_result
-                    FROM lead_scorecards
-                    WHERE id = :scorecard_id
-                    LIMIT 1
-                """)
-                res = await self.session.execute(stmt, {"scorecard_id": str(current_scorecard_id)})
-            else:
-                stmt = text("""
-                    SELECT id, score_total, priority_label, reasoning, extraction_result
-                    FROM lead_scorecards
-                    WHERE lead_id = :lead_id
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                """)
-                res = await self.session.execute(stmt, {"lead_id": str(lead_id)})
-
-            row = res.fetchone()
-            if row:
-                return {
-                    "id": row[0],
-                    "score_total": row[1],
-                    "priority_label": row[2],
-                    "reasoning": row[3],
-                    "extraction_result": row[4]
-                }
-            return None
-        except Exception as e:
-            logger.error(f"Error getting current scorecard: {e}")
-            raise
+    async def get_client_system_prompt(self, client_id: UUID, slug: str = "primary_chat") -> Optional[str]:
+        """
+        Get system prompt for chat (from lead_ai_prompts)
+        """
+        # Try client-specific prompt first
+        query = text("""
+            SELECT prompt_text FROM lead_ai_prompts
+            WHERE client_id = :client_id
+              AND slug = :slug
+              AND is_active = true
+            LIMIT 1
+        """)
+        result = await self.session.execute(query, {"client_id": str(client_id), "slug": slug})
+        row = result.mappings().first()
+        if row:
+            return row["prompt_text"]
+        
+        # Fallback to global prompt (client_id IS NULL)
+        query = text("""
+            SELECT prompt_text FROM lead_ai_prompts
+            WHERE client_id IS NULL
+              AND slug = :slug
+              AND is_active = true
+            LIMIT 1
+        """)
+        result = await self.session.execute(query, {"slug": slug})
+        row = result.mappings().first()
+        if row:
+            return row["prompt_text"]
+        
+        return None
     
     async def upsert_scorecard(
         self,

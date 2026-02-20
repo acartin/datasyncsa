@@ -86,6 +86,9 @@
         const form = document.getElementById('chat-form');
         const input = document.getElementById('user-input');
         const widget = document.getElementById('chat-widget');
+        const statusIndicator = document.querySelector('.status-indicator');
+        const statusDot = document.querySelector('.status-indicator .dot');
+        const statusLabel = document.querySelector('.status-indicator span:last-child');
 
         // Extraction of Context from URL (FB Ads, QR Codes, etc.)
         const urlParams = new URLSearchParams(window.location.search);
@@ -167,6 +170,35 @@
             });
         };
 
+        const setRuntimeStatus = (kind, label, details = '') => {
+            if (!statusIndicator || !statusDot || !statusLabel) return;
+            statusIndicator.classList.remove('status-ok', 'status-degraded', 'status-down');
+            statusIndicator.classList.add(kind);
+            statusLabel.textContent = label;
+            statusIndicator.title = details || label;
+        };
+
+        const refreshRuntimeStatus = async () => {
+            try {
+                const res = await fetch('/api/health/dependencies', { method: 'GET' });
+                if (!res.ok) throw new Error(`health status ${res.status}`);
+                const data = await res.json();
+                const deps = data?.dependencies || {};
+                const infOk = !!deps?.inference_core_v2?.ok;
+                const semOk = !!deps?.semantic_adapter_v2?.ok;
+
+                if (infOk && semOk) {
+                    setRuntimeStatus('status-ok', 'En línea');
+                } else if (infOk || semOk) {
+                    setRuntimeStatus('status-degraded', 'Degradado', JSON.stringify(deps));
+                } else {
+                    setRuntimeStatus('status-down', 'Sin conexión', JSON.stringify(deps));
+                }
+            } catch (_err) {
+                setRuntimeStatus('status-down', 'Sin conexión');
+            }
+        };
+
         // Toggle Widget
         window.toggleWidget = () => {
             const launcher = document.getElementById('chat-launcher');
@@ -174,6 +206,7 @@
 
             if (widget.classList.contains('active')) {
                 launcher.classList.add('hidden');
+                refreshRuntimeStatus();
                 // input.focus(); // Eliminado para evitar que el teclado salte en móviles
             } else {
                 launcher.classList.remove('hidden');
@@ -441,13 +474,28 @@
                     ...runtimeAttribution
                 };
 
+                const controller = new AbortController();
+                const timeoutMs = 25000;
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
-                if (!response.ok) throw new Error(`Server error: ${response.status}`);
+                if (!response.ok) {
+                    let detail = '';
+                    try {
+                        const errBody = await response.json();
+                        detail = errBody?.detail || '';
+                    } catch (_e) {
+                        detail = '';
+                    }
+                    throw new Error(detail || `Server error: ${response.status}`);
+                }
 
                 const data = await response.json();
 
@@ -459,9 +507,18 @@
             } catch (err) {
                 renderer.hideTyping();
                 console.error("Error bridge:", err);
-                pushSystemMessage("No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
+                if (err?.name === 'AbortError') {
+                    pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");
+                } else {
+                    const msg = (err?.message || "").trim();
+                    pushSystemMessage(msg || "No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
+                }
             }
         });
+
+        // Initial + periodic dependency check for header indicator
+        refreshRuntimeStatus();
+        setInterval(refreshRuntimeStatus, 20000);
     </script>
 </body>
 

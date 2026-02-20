@@ -104,3 +104,14 @@ class ActiveModelResponse(BaseModel):
     model_version: int = Field(..., description="Model version")
     prompt_version: int = Field(..., description="Prompt version")
     criteria: List[Dict[str, Any]] = Field(default_factory=list, description="Active criteria with weights and bands")
+
+
+class InternalMemoryResetRequest(BaseModel):
+    client_id: UUID
+    reason: Optional[str] = None
+
+
+class InternalMemoryResetResponse(BaseModel):
+    status: str
+    client_id: UUID
+    conversations_deleted: int

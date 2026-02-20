@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 from app.schemas.chat import ChatRequest, InitRequest, InternalMemoryResetRequest
 from app.schemas.ui import SDUIResponse
 
@@ -29,6 +30,47 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     return {"status": "operational", "service": "realtor-chat-bridge"}
+
+
+@app.get("/health/dependencies")
+async def dependencies_health():
+    """
+    Lightweight dependency health for frontend status indicator.
+    """
+    timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
+    inference_url = os.getenv("INFERENCE_V2_URL", "http://inference-core-v2:8000").rstrip("/") + "/api/v2/health"
+    retriever_url = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000").rstrip("/") + "/api/v2/health"
+
+    result = {
+        "status": "operational",
+        "service": "realtor-chat-bridge",
+        "dependencies": {
+            "inference_core_v2": {"ok": False, "url": inference_url},
+            "semantic_adapter_v2": {"ok": False, "url": retriever_url},
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for name, url in (
+            ("inference_core_v2", inference_url),
+            ("semantic_adapter_v2", retriever_url),
+        ):
+            try:
+                resp = await client.get(url)
+                result["dependencies"][name]["ok"] = resp.status_code == 200
+                if resp.status_code == 200:
+                    try:
+                        result["dependencies"][name]["detail"] = resp.json()
+                    except Exception:
+                        result["dependencies"][name]["detail"] = {"status_code": resp.status_code}
+                else:
+                    result["dependencies"][name]["error"] = f"HTTP {resp.status_code}"
+            except Exception as exc:
+                result["dependencies"][name]["error"] = str(exc)
+
+    all_ok = all(dep.get("ok") for dep in result["dependencies"].values())
+    result["status"] = "operational" if all_ok else "degraded"
+    return result
 
 from app.core.inference_bridge import InferenceClient
 from app.core.memory_reset import MemoryResetClient
@@ -127,6 +169,8 @@ async def chat_interaction(query: ChatRequest):
 
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail=str(e)) from e
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

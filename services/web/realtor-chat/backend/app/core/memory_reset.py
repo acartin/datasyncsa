@@ -11,11 +11,14 @@ logger = logging.getLogger("memory_reset")
 class MemoryResetClient:
     def __init__(self):
         self.reset_url = os.getenv(
-            "INFERENCE_CORE_RESET_URL",
-            "http://inference-core:8003/api/v1/internal/memory/reset",
+            "INFERENCE_V2_RESET_URL",
+            "http://inference-core-v2:8000/api/v2/internal/memory/reset",
         ).rstrip("/")
         self.timeout = float(os.getenv("INFERENCE_TIMEOUT", 60))
         self.internal_token = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
+        self.version = "v2"
+        
+        logger.info(f"🔌 MemoryResetClient conectado a: {self.reset_url} (Version: {self.version})")
 
     async def reset_inference_memory(self, client_id: str, reason: str | None = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"client_id": client_id}

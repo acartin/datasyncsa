@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
     llm_timeout_secs: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
+    chat_history_max_messages: int = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
+    rag_retriever_url: str = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000")
+    rag_retriever_search_path: str = os.getenv("RAG_RETRIEVER_V2_SEARCH_PATH", "/api/v2/search")
+    rag_retriever_timeout_secs: float = float(os.getenv("RAG_RETRIEVER_V2_TIMEOUT_SECS", "10.0"))
+    rag_retriever_retries: int = int(os.getenv("RAG_RETRIEVER_V2_RETRIES", "2"))
+    rag_top_k: int = int(os.getenv("RAG_TOP_K", "3"))
     
     # Background processing
     scoring_bg_enabled: bool = os.getenv("SCORING_BG_ENABLED", "true").lower() == "true"

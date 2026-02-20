@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chat_v2 import ChatV2Request, ChatV2Response, ScoreItemV2, ScorecardV2
 from app.repositories.scoring_repository import ScoringRepository
 from app.services.cache_service import cache_service
+from app.services.hybrid_retriever import HybridRetriever
 from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
@@ -18,7 +19,20 @@ class ScoringOrchestrator:
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         self.repo = ScoringRepository(db_session)
+        self.hybrid_retriever = HybridRetriever()
         self._scoring_engine = None
+        self._llm_client = None
+    
+    @property
+    def llm_client(self):
+        """Lazy initialization of LLM client for chat"""
+        if self._llm_client is None and settings.google_api_key:
+            try:
+                from google import genai
+                self._llm_client = genai.Client(api_key=settings.google_api_key)
+            except ImportError:
+                logger.warning("google-genai not installed")
+        return self._llm_client
     
     @property
     def scoring_engine(self):
@@ -83,6 +97,198 @@ class ScoringOrchestrator:
             raise ValueError(f"No active prompt found for model {model_id} - please configure prompt in database")
         
         return prompt_config
+
+    @staticmethod
+    def _format_conversation_history(messages: List[Dict[str, Any]]) -> str:
+        if not messages:
+            return ""
+        lines: List[str] = []
+        for item in messages:
+            role = (item.get("role") or "unknown").strip().lower()
+            content = (item.get("content") or "").strip()
+            if not content:
+                continue
+            if role == "assistant":
+                speaker = "Asistente"
+            elif role == "user":
+                speaker = "Usuario"
+            else:
+                speaker = role.capitalize() or "Mensaje"
+            lines.append(f"{speaker}: {content}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_vector_context(chunks: List[Dict[str, Any]]) -> str:
+        if not chunks:
+            return "[sin resultados vectoriales]"
+        lines: List[str] = []
+        for idx, chunk in enumerate(chunks, start=1):
+            title = chunk.get("title") or f"chunk_{idx}"
+            score = chunk.get("score")
+            body = (chunk.get("body_content") or "").strip()
+            snippet = body[:500]
+            lines.append(f"[{idx}] {title} | score={score}\n{snippet}")
+        return "\n\n".join(lines)
+
+    @staticmethod
+    def _format_structured_context(structured: Dict[str, Any]) -> str:
+        if not structured:
+            return "[sin contexto estructurado]"
+        return str(structured)
+
+    @staticmethod
+    def _default_vector_category_for_vertical(vertical_slug: str) -> Optional[str]:
+        slug = (vertical_slug or "").strip().lower()
+        if slug in {"realtor", "real_estate", "inmobiliaria"}:
+            return "property"
+        return None
+
+    async def _retrieve_vertical_vector_context(
+        self,
+        request: ChatV2Request,
+        vertical_ctx: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        Semantic retrieval for hybrid RAG, tenant and vertical scoped.
+        """
+        filters = dict(request.filters or {})
+        default_category = self._default_vector_category_for_vertical(vertical_ctx.get("vertical_slug", ""))
+        if default_category and "category" not in filters:
+            filters["category"] = default_category
+
+        return await self.hybrid_retriever.search(
+            query_text=request.query_text,
+            client_id=str(request.client_id),
+            filters=filters,
+            top_k=settings.rag_top_k,
+        )
+
+    async def _retrieve_structured_business_context(
+        self,
+        request: ChatV2Request,
+        vertical_ctx: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Structured SQL context for hybrid RAG (tenant scoped).
+        """
+        if not request.conversation_id:
+            return {
+                "vertical_slug": vertical_ctx.get("vertical_slug"),
+                "vertical_name": vertical_ctx.get("vertical_name"),
+                "conversation_metrics": None,
+                "lead_snapshot": None,
+                "vertical_sql_placeholders": {
+                    "property_inventory": "[placeholder: pending realtor inventory query]",
+                },
+                "realtor_hints": {
+                    "brand_project": (request.user_metadata or {}).get("brand_project"),
+                    "source_property_ref": (request.user_metadata or {}).get("source_property_ref"),
+                },
+            }
+
+        metrics = await self.repo.get_conversation_metrics(
+            conversation_id=request.conversation_id,
+            client_id=request.client_id,
+        )
+        lead_snapshot = None
+        if metrics and metrics.get("lead_id"):
+            lead_snapshot = await self.repo.get_lead_snapshot(
+                lead_id=UUID(metrics["lead_id"]),
+                client_id=request.client_id,
+            )
+
+        return {
+            "vertical_slug": vertical_ctx.get("vertical_slug"),
+            "vertical_name": vertical_ctx.get("vertical_name"),
+            "conversation_metrics": metrics,
+            "lead_snapshot": lead_snapshot,
+            "vertical_sql_placeholders": {
+                "property_inventory": "[placeholder: pending realtor inventory query]",
+            },
+            "realtor_hints": {
+                "brand_project": (request.user_metadata or {}).get("brand_project"),
+                "source_property_ref": (request.user_metadata or {}).get("source_property_ref"),
+            },
+        }
+
+    async def _build_hybrid_context(
+        self,
+        request: ChatV2Request,
+        vertical_ctx: Dict[str, Any],
+        conversation_id: UUID,
+    ) -> Dict[str, Any]:
+        history = await self.repo.get_conversation_messages(
+            conversation_id=conversation_id,
+            client_id=request.client_id,
+            max_messages=settings.chat_history_max_messages,
+        )
+        vector_chunks = await self._retrieve_vertical_vector_context(request, vertical_ctx)
+        structured_facts = await self._retrieve_structured_business_context(request, vertical_ctx)
+        return {
+            "history": history,
+            "vector_chunks": vector_chunks,
+            "structured_facts": structured_facts,
+        }
+    
+    async def _generate_chat_response(
+        self,
+        request: ChatV2Request,
+        vertical_ctx: Dict[str, Any],
+        conversation_id: UUID,
+    ) -> str:
+        """
+        Generate chat response using LLM with client's system prompt.
+        """
+        if not self.llm_client:
+            return "Lo siento, el servicio de IA no está disponible."
+        
+        try:
+            hybrid_ctx = await self._build_hybrid_context(
+                request=request,
+                vertical_ctx=vertical_ctx,
+                conversation_id=conversation_id,
+            )
+            history_text = self._format_conversation_history(hybrid_ctx["history"])
+
+            # Get system prompt from lead_ai_prompts
+            system_prompt = await self.repo.get_client_system_prompt(
+                request.client_id, 
+                slug="primary_chat"
+            )
+            
+            if not system_prompt:
+                system_prompt = """Eres un asistente inmobiliario profesional. 
+Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado."""
+            
+            vector_section = hybrid_ctx["vector_chunks"]
+            structured_section = hybrid_ctx["structured_facts"]
+            composed_user_prompt = (
+                "Contexto conversacional previo:\n"
+                f"{history_text or '[sin historial]'}\n\n"
+                "Contexto vectorial recuperado (RAG vertical/tenant):\n"
+                f"{self._format_vector_context(vector_section)}\n\n"
+                "Contexto estructurado de negocio:\n"
+                f"{self._format_structured_context(structured_section)}\n\n"
+                "Mensaje actual del usuario:\n"
+                f"{request.query_text}"
+            )
+
+            # Generate response using LLM
+            from google.genai import types
+            response = self.llm_client.models.generate_content(
+                model=settings.llm_model,
+                contents=[composed_user_prompt],
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.2,
+                ),
+            )
+            
+            return response.text
+            
+        except Exception as e:
+            logger.error(f"Error generating chat response: {e}")
+            return "Lo siento, tuve un problema procesando tu solicitud."
     
     async def process_chat(self, request: ChatV2Request) -> ChatV2Response:
         """
@@ -105,9 +311,14 @@ class ScoringOrchestrator:
                     f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, business_domain={request.business_domain}"
                 )
             
-            answer = "This is a placeholder response from v2 inference engine."
-            
             conversation_id = request.conversation_id or uuid4()
+            
+            # Generate chat response using hybrid context (history + placeholders for retrieval)
+            answer = await self._generate_chat_response(
+                request=request,
+                vertical_ctx=vertical_ctx,
+                conversation_id=conversation_id,
+            )
             
             existing_lead_id = None
             if request.conversation_id:
@@ -130,12 +341,29 @@ class ScoringOrchestrator:
             
             await self.db_session.commit()
             
+            # Save conversation
+            try:
+                await self.repo.get_or_create_conversation(
+                    lead_id=lead_id,
+                    conversation_id=conversation_id,
+                    platform="webchat"
+                )
+                await self.repo.update_conversation(
+                    conversation_id=conversation_id,
+                    lead_id=lead_id,
+                    user_message=request.query_text,
+                    bot_message=answer
+                )
+            except Exception as e:
+                logger.error(f"Error saving conversation: {e}")
+            
             if not self.scoring_engine:
                 raise ValueError("LLM_ENGINE_NOT_AVAILABLE: Scoring engine requires GOOGLE_API_KEY to be configured")
             
             asyncio.create_task(
                 self._run_scoring_background(
                     lead_id=lead_id,
+                    client_id=request.client_id,
                     model_data=model_data,
                     vertical_ctx=vertical_ctx,
                     conversation_id=conversation_id,
@@ -162,6 +390,7 @@ class ScoringOrchestrator:
     async def _run_scoring_background(
         self,
         lead_id: UUID,
+        client_id: UUID,
         model_data: Dict[str, Any],
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
@@ -183,7 +412,12 @@ class ScoringOrchestrator:
                 try:
                     prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx)
                     
-                    conversation_text = f"Usuario: {query_text}\n"
+                    history = await self.repo.get_conversation_messages(
+                        conversation_id=conversation_id,
+                        client_id=client_id,
+                        max_messages=settings.chat_history_max_messages,
+                    )
+                    conversation_text = self._format_conversation_history(history) or f"Usuario: {query_text}"
                     
                     result = await self.scoring_engine.analyze_conversation(
                         conversation_text=conversation_text,

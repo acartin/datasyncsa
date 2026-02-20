@@ -1,16 +1,33 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from app.models.chat_v2 import ChatV2Request, ChatV2Response, ScorecardResponse, ActiveModelResponse
+from app.models.chat_v2 import (
+    ChatV2Request,
+    ChatV2Response,
+    ScorecardResponse,
+    ActiveModelResponse,
+    InternalMemoryResetRequest,
+    InternalMemoryResetResponse,
+)
 from app.services.scoring_orchestrator import ScoringOrchestrator
 from app.dependencies.database import get_db_session
 from app.services.cache_service import cache_service
+from app.core.config import settings
 import logging
 
 
 router = APIRouter()
 logger = logging.getLogger("inference-core-v2.api")
+
+
+def _assert_internal_token(request: Request):
+    expected = (settings.internal_api_token or "").strip()
+    if not expected:
+        return
+    provided = (request.headers.get("X-Internal-Token") or "").strip()
+    if provided != expected:
+        raise HTTPException(status_code=401, detail="Invalid internal token")
 
 
 @router.post("/chat", response_model=ChatV2Response)
@@ -220,3 +237,26 @@ async def health_check():
     except Exception as e:
         logger.exception("Health check failed")
         raise HTTPException(status_code=503, detail="Service unhealthy")
+
+
+@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+async def reset_client_memory(
+    payload: InternalMemoryResetRequest,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Internal endpoint: clears conversation memory for one client in V2.
+    """
+    _assert_internal_token(request)
+    try:
+        orchestrator = ScoringOrchestrator(db_session)
+        deleted = await orchestrator.repo.delete_conversations_by_client(payload.client_id)
+        return InternalMemoryResetResponse(
+            status="ok",
+            client_id=payload.client_id,
+            conversations_deleted=deleted,
+        )
+    except Exception:
+        logger.exception("Error resetting client memory (v2)")
+        raise HTTPException(status_code=500, detail="Memory reset failed")
