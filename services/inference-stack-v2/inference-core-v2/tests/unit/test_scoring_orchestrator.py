@@ -27,13 +27,15 @@ async def test_get_active_scoring_model_cache_hit(mocker):
     
     # Call method
     vertical_id = 1
+    client_id = uuid4()
     result = await orchestrator.get_active_scoring_model(
+        client_id=client_id,
         vertical_id=vertical_id,
-        business_domain=None
+        scoring_model_id=None,
     )
     
     # Verify cache was called
-    mock_cache.get_active_model.assert_called_once_with(vertical_id, None)
+    mock_cache.get_active_model.assert_called_once_with(client_id)
     assert result is not None
     assert "id" in result
     assert "version" in result
@@ -106,7 +108,6 @@ async def test_process_chat_missing_tenant_vertical_mapping(mocker):
     request = ChatV2Request(
         query_text="Test query",
         client_id=uuid4(),
-        business_domain=None
     )
     
     with pytest.raises(ValueError, match="TENANT_VERTICAL_NOT_CONFIGURED"):

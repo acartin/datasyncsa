@@ -111,7 +111,6 @@ class ScoringRepository:
                 email,
                 phone,
                 lead_type,
-                business_domain,
                 source_id,
                 current_scorecard_id,
                 created_at
@@ -136,7 +135,6 @@ class ScoringRepository:
             "email": row.get("email"),
             "phone": row.get("phone"),
             "lead_type": row.get("lead_type"),
-            "business_domain": row.get("business_domain"),
             "source_id": row.get("source_id"),
             "current_scorecard_id": str(row.get("current_scorecard_id")) if row.get("current_scorecard_id") else None,
             "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
@@ -281,7 +279,7 @@ class ScoringRepository:
     async def get_active_scoring_model(
         self,
         vertical_id: int,
-        business_domain: Optional[str] = None
+        scoring_model_id: Optional[UUID] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Get active scoring model for given scope using raw SQL
@@ -292,26 +290,24 @@ class ScoringRepository:
                 return None
 
             # Query model
-            if business_domain:
+            if scoring_model_id:
                 model_query = text("""
-                    SELECT id, vertical_id, business_domain, name, version, prompt_version, normalization_strategy
+                    SELECT id, vertical_id, name, version, prompt_version, normalization_strategy
                     FROM lead_scoring_models
-                    WHERE vertical_id = :vertical_id
-                      AND business_domain = :business_domain
+                    WHERE id = :model_id
+                      AND vertical_id = :vertical_id
                       AND is_active = true
-                    ORDER BY version DESC
                     LIMIT 1
                 """)
                 result = await self.session.execute(model_query, {
+                    "model_id": str(scoring_model_id),
                     "vertical_id": vertical_id,
-                    "business_domain": business_domain
                 })
             else:
                 model_query = text("""
-                    SELECT id, vertical_id, business_domain, name, version, prompt_version, normalization_strategy
+                    SELECT id, vertical_id, name, version, prompt_version, normalization_strategy
                     FROM lead_scoring_models
                     WHERE vertical_id = :vertical_id
-                      AND business_domain IS NULL
                       AND is_active = true
                     ORDER BY version DESC
                     LIMIT 1
@@ -320,7 +316,11 @@ class ScoringRepository:
             
             row = result.mappings().first()
             if not row:
-                logger.warning(f"No active model found for vertical={vertical_id}, domain={business_domain}")
+                logger.warning(
+                    "No active model found for vertical=%s, scoring_model_id=%s",
+                    vertical_id,
+                    scoring_model_id,
+                )
                 return None
             
             model = dict(row)
@@ -355,7 +355,11 @@ class ScoringRepository:
                 for b in c["bands"]:
                     b["id"] = str(b["id"])
             
-            logger.debug(f"Found active model for vertical={vertical_id}, domain={business_domain}")
+            logger.debug(
+                "Found active model for vertical=%s, scoring_model_id=%s",
+                vertical_id,
+                scoring_model_id,
+            )
             return model
             
         except Exception as e:
@@ -364,13 +368,14 @@ class ScoringRepository:
 
     async def get_client_vertical_context(self, client_id: UUID) -> Optional[Dict[str, Any]]:
         """
-        Resolve tenant vertical context from lead_clients.vertical_id -> lead_client_verticals.
+        Resolve tenant scoring context from lead_clients.vertical_id + scoring_model_id.
         """
         try:
             stmt = text("""
                 SELECT
                     c.id AS client_id,
                     c.vertical_id AS vertical_id,
+                    c.scoring_model_id AS scoring_model_id,
                     v.slug AS vertical_slug,
                     v.name AS vertical_name
                 FROM lead_clients c
@@ -380,11 +385,18 @@ class ScoringRepository:
             result = await self.session.execute(stmt, {"client_id": str(client_id)})
             row = result.mappings().first()
             if not row:
-                return {"client_exists": False, "vertical_id": None, "vertical_slug": None, "vertical_name": None}
+                return {
+                    "client_exists": False,
+                    "vertical_id": None,
+                    "scoring_model_id": None,
+                    "vertical_slug": None,
+                    "vertical_name": None,
+                }
 
             return {
                 "client_exists": True,
                 "vertical_id": row["vertical_id"],
+                "scoring_model_id": row["scoring_model_id"],
                 "vertical_slug": row["vertical_slug"],
                 "vertical_name": row["vertical_name"],
             }
@@ -501,6 +513,7 @@ class ScoringRepository:
     ) -> bool:
         """Update lead with extracted data from scoring"""
         try:
+            cleaned_extraction = self._normalize_extraction_result(extracted_data or {})
             updates = {}
             if extracted_data.get("extracted_name"):
                 updates["full_name"] = extracted_data["extracted_name"]
@@ -508,15 +521,21 @@ class ScoringRepository:
                 updates["email"] = extracted_data["extracted_email"]
             if extracted_data.get("extracted_phone"):
                 updates["phone"] = extracted_data["extracted_phone"]
-            
-            if not updates:
+
+            if not updates and not cleaned_extraction:
                 return False
-            
+
             set_clauses = []
-            params = {"lead_id": str(lead_id)}
+            params = {
+                "lead_id": str(lead_id),
+                "extraction_result": json.dumps(cleaned_extraction),
+            }
             for key, value in updates.items():
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
+            set_clauses.append(
+                "extraction_result = COALESCE(extraction_result, '{}'::jsonb) || CAST(:extraction_result AS jsonb)"
+            )
             
             stmt = text(f"""
                 UPDATE lead_leads
@@ -565,7 +584,6 @@ class ScoringRepository:
         self,
         client_id: UUID,
         lead_type: str,
-        business_domain: Optional[str] = None,
         user_metadata: Optional[Dict[str, Any]] = None,
         conversation_id: Optional[str] = None,
     ) -> UUID:
@@ -596,19 +614,49 @@ class ScoringRepository:
             or metadata.get("extracted_name")
             or f"Lead {str(client_id)[:8]}"
         )
+        email = metadata.get("email") or metadata.get("extracted_email")
+        phone = metadata.get("phone") or metadata.get("extracted_phone")
+        extraction_seed = self._normalize_extraction_result(
+            metadata.get("extracted_data") or metadata
+        )
         source_id = metadata.get("source_id", 14)
 
         insert_stmt = text("""
-            INSERT INTO lead_leads (id, client_id, source_id, full_name, lead_type, business_domain, created_at)
-            VALUES (gen_random_uuid(), :client_id, :source_id, :full_name, :lead_type, :business_domain, NOW())
+            INSERT INTO lead_leads (
+                id,
+                client_id,
+                source_id,
+                full_name,
+                email,
+                phone,
+                lead_type,
+                business_domain,
+                extraction_result,
+                created_at
+            )
+            VALUES (
+                gen_random_uuid(),
+                :client_id,
+                :source_id,
+                :full_name,
+                :email,
+                :phone,
+                :lead_type,
+                :business_domain,
+                CAST(:extraction_result AS jsonb),
+                NOW()
+            )
             RETURNING id
         """)
         result = await self.session.execute(insert_stmt, {
             "client_id": str(client_id),
             "source_id": source_id,
             "full_name": full_name,
+            "email": email,
+            "phone": phone,
             "lead_type": lead_type,
-            "business_domain": business_domain,
+            "business_domain": None,
+            "extraction_result": json.dumps(extraction_seed),
         })
         new_lead_id = result.scalar_one()
         

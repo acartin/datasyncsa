@@ -73,6 +73,8 @@ async function _hydrateStandardGrids(grids) {
             actions: JSON.parse(container.dataset.actions || '[]'),
             header_actions: JSON.parse(container.dataset.headerActions || '[]'),
             enableFilters: container.dataset.enableFilters === 'true',
+            navigate_on_click: container.dataset.navigateOnClick === 'true',
+            navigate_url: container.dataset.navigateUrl || '',
             filterConfig: JSON.parse(container.dataset.filterConfig || '{}'),
             form_schema: (() => {
                 const s = container.dataset.schema;
@@ -162,4 +164,3 @@ function showFeedback(id) {
         setTimeout(() => btn.innerText = original, 2000);
     }
 }
-

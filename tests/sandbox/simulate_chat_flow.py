@@ -17,6 +17,7 @@ Comandos interactivos:
 
 import argparse
 import json
+import os
 import sys
 import time
 from uuid import UUID
@@ -30,6 +31,7 @@ except ImportError:
 
 CLIENT_ID = "66fc0a3b-c8d3-4707-8471-c751c642852d"
 INFERENCE_V2_URL = "http://localhost:8091/api/v2"
+MODEL_ID = "23dbbd82-8ab6-4122-8d38-0528c0fa3cb5"
 
 AUTO_MESSAGES = [
     "Hola, necesito una cita dental",
@@ -42,46 +44,120 @@ AUTO_MESSAGES = [
 
 
 class ChatSimulator:
-    def __init__(self, client_id: str, base_url: str):
+    def __init__(self, client_id: str, base_url: str, model_id: str | None = None, discover_endpoints: bool = False):
         self.client_id = client_id
-        self.base_url = base_url
+        self.model_id = model_id
+        self.base_url = self._normalize_base_url(base_url)
         self.lead_id = None
         self.conversation_id = None
         self.history = []
         self.scorecards = []
         self.session = requests.Session()
+        if discover_endpoints:
+            self.candidate_urls = self._build_candidate_urls(self.base_url)
+        else:
+            self.candidate_urls = [self.base_url]
+
+    @staticmethod
+    def _normalize_base_url(url: str) -> str:
+        normalized = (url or "").strip().rstrip("/")
+        if not normalized:
+            normalized = INFERENCE_V2_URL
+        if normalized.endswith("/api/v2"):
+            return normalized
+        if normalized.endswith("/api/v2/"):
+            return normalized[:-1]
+        if normalized.endswith("/api"):
+            return f"{normalized}/v2"
+        return f"{normalized}/api/v2"
+
+    def _build_candidate_urls(self, explicit_url: str) -> list[str]:
+        env_candidates = [
+            os.getenv("INFERENCE_V2_API"),
+            os.getenv("INFERENCE_V2_URL"),
+        ]
+        defaults = [
+            explicit_url,
+            "http://localhost:8091/api/v2",
+            "http://127.0.0.1:8091/api/v2",
+            "http://inference-core-v2:8000/api/v2",
+        ]
+
+        seen = set()
+        candidates = []
+        for raw in env_candidates + defaults:
+            if not raw:
+                continue
+            normalized = self._normalize_base_url(raw)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            candidates.append(normalized)
+        return candidates
         
     def check_health(self) -> bool:
-        try:
-            resp = self.session.get(f"{self.base_url}/health", timeout=10)
-            if resp.status_code == 200:
+        last_error = None
+        for candidate in self.candidate_urls:
+            try:
+                resp = self.session.get(f"{candidate}/health", timeout=10)
+                if resp.status_code != 200:
+                    last_error = f"HTTP {resp.status_code}"
+                    continue
+
+                self.base_url = candidate
                 data = resp.json()
                 print(f"Servicio: {data.get('service', 'unknown')}")
                 print(f"Version: {data.get('version', 'unknown')}")
                 print(f"Cache: {data.get('cache', 'unknown')}")
+                print(f"Endpoint activo: {self.base_url}")
                 return True
-            return False
-        except Exception as e:
-            print(f"ERROR conectando a {self.base_url}: {e}")
-            return False
+            except Exception as e:
+                last_error = str(e)
+
+        print("ERROR: no se pudo conectar al API v2.")
+        for candidate in self.candidate_urls:
+            print(f"  - {candidate}/health")
+        if last_error:
+            print(f"Ultimo error: {last_error}")
+        print("Tip: exporta INFERENCE_V2_API con la URL correcta, por ejemplo:")
+        print("  INFERENCE_V2_API=http://localhost:8091/api/v2")
+        return False
     
     def get_active_model(self) -> dict:
         try:
-            resp = self.session.get(
-                f"{self.base_url}/scoring/models/active",
-                params={"client_id": self.client_id},
-                timeout=10
-            )
+            params = {"client_id": self.client_id}
+            # Parameter may be ignored by API, but keeps test intent explicit.
+            if self.model_id:
+                params["model_id"] = self.model_id
+
+            resp = self.session.get(f"{self.base_url}/scoring/models/active", params=params, timeout=10)
             if resp.status_code == 200:
                 return resp.json()
         except Exception as e:
             print(f"ERROR obteniendo modelo activo: {e}")
         return None
+
+    def validate_expected_model(self) -> bool:
+        if not self.model_id:
+            return True
+
+        model = self.get_active_model()
+        if not model:
+            print("ERROR: no se pudo resolver modelo activo para validar MODEL_ID.")
+            return False
+
+        active_model_id = str(model.get("modelId") or model.get("model_id") or "").strip().lower()
+        expected_model_id = str(self.model_id).strip().lower()
+        if active_model_id != expected_model_id:
+            print(f"ERROR: MODEL_ID no coincide. Esperado={self.model_id} Activo={model.get('modelId')}")
+            return False
+        return True
     
     def send_chat(self, query_text: str) -> dict:
         payload = {
             "queryText": query_text,
             "clientId": self.client_id,
+            "userMetadata": {"modelId": self.model_id} if self.model_id else {},
         }
         if self.conversation_id:
             payload["conversationId"] = self.conversation_id
@@ -263,6 +339,9 @@ WHERE scorecard_id = '{scorecard_id}';
         if not self.check_health():
             print("ERROR: Servicio no disponible")
             return
+        if not self.validate_expected_model():
+            print("ERROR: Modelo esperado no activo para este cliente")
+            return
         
         print()
         model = self.get_active_model()
@@ -340,6 +419,9 @@ WHERE scorecard_id = '{scorecard_id}';
         if not self.check_health():
             print("ERROR: Servicio no disponible")
             return
+        if not self.validate_expected_model():
+            print("ERROR: Modelo esperado no activo para este cliente")
+            return
         
         print()
         model = self.get_active_model()
@@ -379,6 +461,9 @@ WHERE scorecard_id = '{scorecard_id}';
         
         if not self.check_health():
             print("ERROR: Servicio no disponible")
+            return
+        if not self.validate_expected_model():
+            print("ERROR: Modelo esperado no activo para este cliente")
             return
         
         response = self.send_chat(query)
@@ -431,11 +516,32 @@ def main():
     parser.add_argument("--auto", action="store_true", help="Ejecutar secuencia automatica de mensajes")
     parser.add_argument("--query", type=str, help="Enviar un solo mensaje")
     parser.add_argument("--client-id", type=str, default=CLIENT_ID, help=f"Client ID (default: {CLIENT_ID})")
-    parser.add_argument("--url", type=str, default=INFERENCE_V2_URL, help=f"URL del API v2 (default: {INFERENCE_V2_URL})")
+    parser.add_argument(
+        "--model-id",
+        type=str,
+        default=os.getenv("MODEL_ID", MODEL_ID),
+        help=f"Model ID esperado (default: env MODEL_ID o {MODEL_ID})",
+    )
+    parser.add_argument(
+        "--url",
+        type=str,
+        default=os.getenv("INFERENCE_V2_API", INFERENCE_V2_URL),
+        help=f"URL del API v2 (default: env INFERENCE_V2_API o {INFERENCE_V2_URL})",
+    )
+    parser.add_argument(
+        "--discover-endpoints",
+        action="store_true",
+        help="Intentar endpoints alternativos (solo para diagnostico). Por defecto usa modo estricto.",
+    )
     
     args = parser.parse_args()
     
-    simulator = ChatSimulator(args.client_id, args.url)
+    simulator = ChatSimulator(
+        args.client_id,
+        args.url,
+        model_id=args.model_id,
+        discover_endpoints=args.discover_endpoints
+    )
     
     if args.query:
         simulator.run_single(args.query)

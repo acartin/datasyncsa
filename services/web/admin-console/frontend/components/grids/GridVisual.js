@@ -14,6 +14,8 @@ export function LinkGridVisual(component) {
                     data-schema='${JSON.stringify(props.schema || props.form_schema || [])}'
                     data-filters='${JSON.stringify(filters)}'
                     data-enable-filters="${props.enableFilters ? 'true' : 'false'}"
+                    data-navigate-on-click="${props.navigate_on_click ? 'true' : 'false'}"
+                    data-navigate-url="${props.navigate_url || ''}"
                     data-filter-config='${JSON.stringify(props.filterConfig || {})}'
                     data-polling="${props.polling || ''}"
                     data-row-key="${props.row_key || ''}"

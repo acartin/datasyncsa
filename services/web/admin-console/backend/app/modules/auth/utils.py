@@ -10,7 +10,19 @@ def get_current_role_slug(user: User) -> str:
         return "admin"
 
     if user.tenants and len(user.tenants) > 0:
-        # Check against nested eager loaded role
-        if user.tenants[0].role:
-             return user.tenants[0].role.slug
+        slugs = []
+        for tenant in user.tenants:
+            role = getattr(tenant, "role", None)
+            slug = getattr(role, "slug", None)
+            if slug:
+                slugs.append(slug)
+
+        if slugs:
+            # Deterministic precedence for multi-tenant users.
+            # Keep system-user first so internal tooling (e.g. Verticales) is stable.
+            role_priority = ["system-user", "system-admin", "admin", "client-admin", "client-user"]
+            for preferred in role_priority:
+                if preferred in slugs:
+                    return preferred
+            return sorted(slugs)[0]
     return "guest"

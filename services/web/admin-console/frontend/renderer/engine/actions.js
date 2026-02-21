@@ -55,6 +55,105 @@ export async function submitModalForm(event, formId, actionUrl, method = 'POST')
         payload[name] = items;
     });
 
+    // Keep existing password on edit forms when the field is intentionally left blank.
+    if (typeof payload.password === 'string' && payload.password.trim() === '') {
+        delete payload.password;
+    }
+
+    const resolveBandsCriterionId = () => {
+        const current = String(payload.criterion_id || '').trim();
+        if (current && !current.includes('{')) return current;
+
+        const activeCrudModal = document.querySelector('.modal.show[data-context-b64]');
+        if (activeCrudModal && activeCrudModal.dataset.contextB64) {
+            try {
+                const context = JSON.parse(safeAtob(activeCrudModal.dataset.contextB64) || '{}');
+                const ctxCriterionId = String(context.context_criterion_id || '').trim();
+                if (ctxCriterionId) return ctxCriterionId;
+            } catch (e) {
+                // ignore and continue with URL fallback
+            }
+        }
+
+        const gridInsideModal = activeCrudModal?.querySelector('.js-grid-visual');
+        const dataUrl = gridInsideModal?.dataset?.url || '';
+        if (dataUrl) {
+            try {
+                const parsed = new URL(dataUrl, window.location.origin);
+                const byQuery = String(parsed.searchParams.get('criterion_id') || '').trim();
+                if (byQuery) return byQuery;
+            } catch (e) {
+                // ignore invalid URL and return empty
+            }
+        }
+
+        return '';
+    };
+
+    if (actionUrl === '/system/verticals/bands') {
+        payload.criterion_id = resolveBandsCriterionId();
+    }
+
+    const validateBandPayload = async () => {
+        if (actionUrl !== '/system/verticals/bands' || method.toUpperCase() !== 'POST') return true;
+
+        const criterionId = String(payload.criterion_id || '').trim();
+        const bandKey = String(payload.band_key || '').trim().toLowerCase();
+        const minScore = Number(payload.min_score);
+        const maxScore = Number(payload.max_score);
+
+        if (!criterionId) {
+            Swal.fire({ title: "Error", text: "criterion_id es requerido para crear banda.", icon: "error" });
+            return false;
+        }
+        if (!Number.isFinite(minScore) || !Number.isFinite(maxScore)) {
+            Swal.fire({ title: "Error", text: "Min Score y Max Score deben ser numéricos.", icon: "error" });
+            return false;
+        }
+        if (minScore > maxScore) {
+            Swal.fire({ title: "Error", text: "Min Score no puede ser mayor que Max Score.", icon: "error" });
+            return false;
+        }
+
+        try {
+            const res = await fetch(
+                `${API_BASE_URL}/system/verticals/bands/data?criterion_id=${encodeURIComponent(criterionId)}`,
+                { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } }
+            );
+            if (!res.ok) return true;
+            const existing = await res.json();
+            if (!Array.isArray(existing)) return true;
+
+            const keyConflict = existing.some((b) => String(b.band_key || '').trim().toLowerCase() === bandKey);
+            if (keyConflict) {
+                Swal.fire({ title: "Error", text: "Band Key ya existe para este criterio.", icon: "error" });
+                return false;
+            }
+
+            const overlap = existing.some((b) => {
+                const bMin = Number(b.min_score);
+                const bMax = Number(b.max_score);
+                if (!Number.isFinite(bMin) || !Number.isFinite(bMax)) return false;
+                return minScore <= bMax && maxScore >= bMin;
+            });
+
+            if (overlap) {
+                Swal.fire({
+                    title: "Error",
+                    text: "El rango se cruza con una banda existente en este criterio.",
+                    icon: "error"
+                });
+                return false;
+            }
+        } catch (e) {
+            // If validation check fails, continue and let backend be source of truth.
+        }
+
+        return true;
+    };
+
+    if (!(await validateBandPayload())) return;
+
     // 2. Decide if we MUST use multipart (only if files are present)
     const hasFiles = form.querySelectorAll('input[type="file"]').length > 0;
 
@@ -189,14 +288,20 @@ export function handleGenericAction(btn) {
 export async function openGenericModal(schema, url, method, title, data = {}) {
     const formFields = renderFormFromSchema(schema, data);
     const modalId = `modal-${Math.random().toString(36).substr(2, 9)}`;
-    const modalHtml = LinkModalForm(modalId, title, formFields, url, method);
+    const isLargeTextForm = Array.isArray(schema) && schema.some((field) =>
+        field &&
+        field.type === 'textarea' &&
+        (field.name === 'prompt_template' || Number(field.rows || 0) >= 10)
+    );
+    const dialogClass = isLargeTextForm ? 'modal-xl modal-dialog-scrollable' : '';
+    const dialogStyle = isLargeTextForm ? 'max-width: min(1600px, 96vw);' : '';
+    const modalHtml = LinkModalForm(modalId, title, formFields, url, method, dialogClass, dialogStyle);
 
-    const modalContainer = document.createElement('div');
-    modalContainer.innerHTML = modalHtml;
-    document.body.appendChild(modalContainer);
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 
     const modalEl = document.getElementById(modalId);
     const modal = new bootstrap.Modal(modalEl);
+    modalEl.removeAttribute('inert');
     modal.show();
 
     modalEl.addEventListener('hide.bs.modal', () => {
@@ -204,32 +309,82 @@ export async function openGenericModal(schema, url, method, title, data = {}) {
         if (activeEl && modalEl.contains(activeEl) && typeof activeEl.blur === 'function') {
             activeEl.blur();
         }
+        modalEl.setAttribute('inert', '');
     });
 
-    modalEl.addEventListener('hidden.bs.modal', () => { modalContainer.remove(); });
+    modalEl.addEventListener('hidden.bs.modal', () => { modalEl.remove(); });
 
     // Hydrate selects in the modal
     const selects = modalEl.querySelectorAll('select[data-source]');
     for (const select of selects) {
         await hydrateSelect(select);
     }
+    bindDependentSelects(modalEl);
 }
 
 /**
  * Specialized Hydration for Selects
  */
+function resolveSourceUrl(select) {
+    const template = select.dataset.source || '';
+    if (!template.includes('{')) return template;
+    const form = select.closest('form');
+    let missingDependency = false;
+    const resolved = template.replace(/\{([^}]+)\}/g, (_match, fieldName) => {
+        if (!form) return '';
+        const sourceField = form.querySelector(`[name="${fieldName}"]`);
+        if (!sourceField) {
+            missingDependency = true;
+            return '';
+        }
+        const rawValue = sourceField.type === 'checkbox'
+            ? (sourceField.checked ? 'true' : 'false')
+            : (sourceField.value || sourceField.dataset.value || '');
+        const value = String(rawValue).trim();
+        if (!value) {
+            missingDependency = true;
+            return '';
+        }
+        return encodeURIComponent(value || '');
+    });
+    return missingDependency ? '' : resolved;
+}
+
+function bindDependentSelects(modalEl) {
+    const dependentSelects = modalEl.querySelectorAll('select[data-source][data-depends-on]');
+    dependentSelects.forEach((depSelect) => {
+        const dependsOn = depSelect.dataset.dependsOn;
+        if (!dependsOn) return;
+        const sourceField = modalEl.querySelector(`[name="${dependsOn}"]`);
+        if (!sourceField) return;
+        sourceField.addEventListener('change', async () => {
+            depSelect.dataset.value = '';
+            await hydrateSelect(depSelect);
+        });
+    });
+}
+
 export async function hydrateSelect(select) {
-    const url = select.dataset.source;
+    const url = resolveSourceUrl(select);
+    const initialValue = select.dataset.value || '';
+    const placeholder = select.querySelector('option[value=""]')
+        ? select.querySelector('option[value=""]').innerText
+        : 'Select...';
+    select.innerHTML = `<option value="">${placeholder}</option>`;
     if (!url) return;
-    const initialValue = select.dataset.value;
 
     try {
         const res = await fetch(`${API_BASE_URL}${url}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
-        const items = await res.json();
-        const placeholder = select.querySelector('option[value=""]') ? select.querySelector('option[value=""]').innerText : 'Select...';
-        select.innerHTML = `<option value="">${placeholder}</option>`;
+        if (!res.ok) {
+            console.error(`Select Hydration HTTP Error (${res.status})`, { url });
+            return;
+        }
+        const payload = await res.json();
+        const items = Array.isArray(payload)
+            ? payload
+            : (Array.isArray(payload?.items) ? payload.items : []);
 
         items.forEach(item => {
             const selected = (String(item.id) === String(initialValue)) ? 'selected' : '';
@@ -284,6 +439,126 @@ export async function handleEditAction(event, id, urlPattern, schemaStr, modalTi
     }
 }
 
+export async function handleCreateAction(event, actionUrl, schemaStr, modalTitle = "Nuevo registro", prefillB64 = "") {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    let schema = [];
+    if (schemaStr) {
+        try {
+            const decoded = safeAtob(schemaStr);
+            schema = JSON.parse(decoded || '[]');
+        } catch (e) {
+            try { schema = JSON.parse(schemaStr || '[]'); } catch (e2) { schema = []; }
+        }
+    }
+
+    let defaults = {};
+    if (prefillB64) {
+        try {
+            defaults = JSON.parse(safeAtob(prefillB64) || '{}');
+        } catch (e) {
+            defaults = {};
+        }
+    }
+
+    // Resolve any deferred context token coming from nested modal-grid-crud actions.
+    const activeCrudModal = document.querySelector('.modal.show[data-context-b64]');
+    if (activeCrudModal && activeCrudModal.dataset.contextB64) {
+        let context = {};
+        try {
+            context = JSON.parse(safeAtob(activeCrudModal.dataset.contextB64) || '{}');
+        } catch (e) {
+            context = {};
+        }
+
+        Object.entries(defaults).forEach(([key, value]) => {
+            if (typeof value !== 'string') return;
+            defaults[key] = value.replace(/\{([^}]+)\}/g, (_, token) => String(context[token] ?? ''));
+        });
+    }
+
+    openGenericModal(schema, actionUrl, 'POST', modalTitle, defaults);
+}
+
+export function openCrudGridModal(event, title = "Gestión", configB64 = "") {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    let config = {};
+    try {
+        config = JSON.parse(safeAtob(configB64) || '{}');
+    } catch (e) {
+        try { config = JSON.parse(atob(configB64)); } catch (e2) { config = {}; }
+    }
+
+    const modalId = `modal-crud-${Math.random().toString(36).substr(2, 9)}`;
+    const gridId = `grid-${Math.random().toString(36).substr(2, 9)}`;
+    const toAttr = (value, fallback) => (value ?? fallback ?? '').replace(/'/g, '&#39;');
+    const toJsonAttr = (value, fallback) => JSON.stringify(value ?? fallback ?? []).replace(/'/g, '&#39;');
+
+    const gridHtml = `
+        <div id="${gridId}"
+            class="js-grid-visual"
+            data-url="${toAttr(config.data_url, '')}"
+            data-columns='${toJsonAttr(config.columns, [])}'
+            data-actions='${toJsonAttr(config.actions, [])}'
+            data-header-actions='${toJsonAttr(config.header_actions, [])}'
+            data-schema='${toJsonAttr(config.schema, [])}'
+            data-enable-filters="${config.enableFilters ? 'true' : 'false'}"
+            data-filter-config='${toJsonAttr(config.filterConfig, {})}'
+            data-polling=""
+            data-row-key="${toAttr(config.row_key, '')}"
+            data-polling-compare-fields='${toJsonAttr(config.polling_compare_fields, [])}'
+            data-rows-b64="">
+        </div>
+    `;
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="if(document.activeElement&&typeof document.activeElement.blur==='function'){document.activeElement.blur();}"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${gridHtml}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal" onclick="if(document.activeElement&&typeof document.activeElement.blur==='function'){document.activeElement.blur();}">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modalEl = document.getElementById(modalId);
+    const modal = new bootstrap.Modal(modalEl);
+    modalEl.dataset.contextB64 = safeBtoa(JSON.stringify(config.context || {}));
+    modalEl.removeAttribute('inert');
+    modal.show();
+
+    modalEl.addEventListener('shown.bs.modal', () => {
+        if (window.hydrateGrids) window.hydrateGrids();
+    });
+
+    modalEl.addEventListener('hide.bs.modal', () => {
+        const activeEl = document.activeElement;
+        if (activeEl && modalEl.contains(activeEl) && typeof activeEl.blur === 'function') {
+            activeEl.blur();
+        }
+        modalEl.setAttribute('inert', '');
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        if (window.gridInstances && window.gridInstances[gridId]) {
+            delete window.gridInstances[gridId];
+        }
+        modalEl.remove();
+    });
+}
+
 /**
  * Global helpers for Repeater
  */
@@ -312,6 +587,8 @@ window.addRepeaterItem = async (name, source) => {
 window.submitModalForm = submitModalForm;
 window.deleteItem = deleteItem;
 window.handleEditAction = handleEditAction;
+window.handleCreateAction = handleCreateAction;
+window.openCrudGridModal = openCrudGridModal;
 window.handleGenericAction = handleGenericAction;
 window.hydrateSelect = hydrateSelect;
 window.openGenericModal = openGenericModal;

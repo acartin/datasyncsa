@@ -6,7 +6,8 @@
 import { renderContent, renderComponent } from './engine/registry.js';
 export { renderContent, renderComponent };
 import { hydrateGrids } from './engine/hydration.js';
-import './engine/actions.js?v=98'; // Attaches handlers to window
+import './engine/actions.js'; // Attaches handlers to window
+const RUNTIME_VERSION = (window.AppConfig && window.AppConfig.APP_VERSION) ? window.AppConfig.APP_VERSION : '1';
 
 import { LinkAppShell } from '../components/layout/AppShell.js';
 import { LinkSidebar } from '../components/layout/Sidebar.js';
@@ -14,17 +15,22 @@ import { LinkNavbar } from '../components/layout/Navbar.js';
 import { LinkProjectBanner } from '../components/layout/ProjectBanner.js';
 
 const API_BASE_URL = window.AppConfig.API_BASE_URL;
-const RENDERER_VERSION = "98";
+const RENDERER_VERSION = RUNTIME_VERSION;
 console.log(`[Renderer] v${RENDERER_VERSION} Modular Initializing... (REGISTRY FIX)`);
 
 window.appState = { currentPath: null };
 window.navigateTo = navigateTo; // Expose for inline clicks
+window.hydrateGrids = hydrateGrids;
 
 async function init() {
     const appRoot = document.getElementById('app-root');
     try {
         const token = localStorage.getItem('access_token');
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const headers = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
         // Timeout Promise
         const timeout = new Promise((_, reject) =>
@@ -38,7 +44,7 @@ async function init() {
         ]);
 
         if (response.status === 401) {
-            window.location.href = 'login.html';
+            window.location.href = '/login.html';
             return;
         }
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -104,9 +110,20 @@ export async function navigateTo(href, pushState = true) {
 
     try {
         const token = localStorage.getItem('access_token');
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const headers = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
         const response = await fetch(`${API_BASE_URL}${href}`, { headers });
         if (!response.ok) throw new Error(`View not found (${response.status})`);
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.toLowerCase().includes('application/json')) {
+            throw new Error(`Invalid view payload (expected JSON). status=${response.status} content-type=${contentType} url=${response.url}`);
+        }
 
         const viewData = await response.json();
         if (viewData.debug_data) {
@@ -192,5 +209,9 @@ function updateHeaderProfile() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
 window.navigateTo = navigateTo; // For global access if needed

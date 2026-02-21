@@ -12,6 +12,13 @@ from fastapi_users.password import PasswordHelper
 password_helper = PasswordHelper()
 
 class UsersService:
+    @staticmethod
+    def _clean_password(raw_password: Optional[str]) -> Optional[str]:
+        if raw_password is None:
+            return None
+        cleaned = raw_password.strip()
+        return cleaned if cleaned else None
+
     async def list_users(self) -> List[UserRow]:
         query = text("""
             SELECT 
@@ -19,9 +26,25 @@ class UsersService:
                 r.name as role_name, r.slug as role_slug, r.id as role_id,
                 lc.name as client_name, lc.id as client_id
             FROM auth_users u
-            LEFT JOIN auth_client_user acu ON u.id = acu.user_id
-            LEFT JOIN auth_roles r ON acu.role_id = r.id
-            LEFT JOIN lead_clients lc ON acu.client_id = lc.id
+            LEFT JOIN LATERAL (
+                SELECT acu.client_id, acu.role_id
+                FROM auth_client_user acu
+                LEFT JOIN auth_roles ar ON ar.id = acu.role_id
+                WHERE acu.user_id = u.id
+                ORDER BY
+                    CASE ar.slug
+                        WHEN 'system-user' THEN 1
+                        WHEN 'system-admin' THEN 2
+                        WHEN 'admin' THEN 3
+                        WHEN 'client-admin' THEN 4
+                        WHEN 'client-user' THEN 5
+                        ELSE 99
+                    END,
+                    acu.id ASC
+                LIMIT 1
+            ) principal_link ON TRUE
+            LEFT JOIN auth_roles r ON principal_link.role_id = r.id
+            LEFT JOIN lead_clients lc ON principal_link.client_id = lc.id
             ORDER BY u.email ASC
         """)
         async with engine.connect() as conn:
@@ -36,9 +59,25 @@ class UsersService:
                 r.name as role_name, r.slug as role_slug, r.id as role_id,
                 lc.name as client_name, lc.id as client_id
             FROM auth_users u
-            LEFT JOIN auth_client_user acu ON u.id = acu.user_id
-            LEFT JOIN auth_roles r ON acu.role_id = r.id
-            LEFT JOIN lead_clients lc ON acu.client_id = lc.id
+            LEFT JOIN LATERAL (
+                SELECT acu.client_id, acu.role_id
+                FROM auth_client_user acu
+                LEFT JOIN auth_roles ar ON ar.id = acu.role_id
+                WHERE acu.user_id = u.id
+                ORDER BY
+                    CASE ar.slug
+                        WHEN 'system-user' THEN 1
+                        WHEN 'system-admin' THEN 2
+                        WHEN 'admin' THEN 3
+                        WHEN 'client-admin' THEN 4
+                        WHEN 'client-user' THEN 5
+                        ELSE 99
+                    END,
+                    acu.id ASC
+                LIMIT 1
+            ) principal_link ON TRUE
+            LEFT JOIN auth_roles r ON principal_link.role_id = r.id
+            LEFT JOIN lead_clients lc ON principal_link.client_id = lc.id
             WHERE u.id = :id
         """)
         async with engine.connect() as conn:
@@ -47,7 +86,8 @@ class UsersService:
             return UserRow.model_validate(row) if row else None
 
     async def create_user(self, user: UserCreate) -> UserRow:
-        hashed_password = password_helper.hash(user.password)
+        cleaned_password = self._clean_password(user.password)
+        hashed_password = password_helper.hash(cleaned_password or user.password)
         new_user_id = uuid.uuid4()
         
         async with engine.begin() as conn:
@@ -88,16 +128,26 @@ class UsersService:
                     existing = await conn_retry.execute(text("SELECT id, contact_id, is_active FROM auth_users WHERE email = :email"), {"email": user.email})
                     row = existing.fetchone()
                     if row and row.contact_id == user.contact_id:
-                        # 1. Reactivate and Update password/name
-                        await conn_retry.execute(text("""
-                            UPDATE auth_users 
-                            SET hashed_password = :password, is_active = true, name = :name
-                            WHERE id = :id
-                        """), {
-                            "id": row.id,
-                            "password": hashed_password,
-                            "name": user.name
-                        })
+                        # 1. Reactivate and update name; only update password when provided.
+                        if cleaned_password:
+                            await conn_retry.execute(text("""
+                                UPDATE auth_users 
+                                SET hashed_password = :password, is_active = true, name = :name
+                                WHERE id = :id
+                            """), {
+                                "id": row.id,
+                                "password": hashed_password,
+                                "name": user.name
+                            })
+                        else:
+                            await conn_retry.execute(text("""
+                                UPDATE auth_users 
+                                SET is_active = true, name = :name
+                                WHERE id = :id
+                            """), {
+                                "id": row.id,
+                                "name": user.name
+                            })
 
                         # 2. Ensure Client Link exists (or update it)
                         if user.client_id and user.role_id:
@@ -143,9 +193,10 @@ class UsersService:
         if user_update.name is not None:
             updates.append("name = :name")
             params["name"] = user_update.name
-        if user_update.password is not None:
+        cleaned_password = self._clean_password(user_update.password)
+        if cleaned_password is not None:
             updates.append("hashed_password = :password")
-            params["password"] = password_helper.hash(user_update.password)
+            params["password"] = password_helper.hash(cleaned_password)
         if user_update.is_active is not None:
             updates.append("is_active = :active")
             params["active"] = user_update.is_active

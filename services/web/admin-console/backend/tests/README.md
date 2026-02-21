@@ -26,10 +26,13 @@ Use:
 
 `backend/tests/smoke/test_smoke_tenant_isolation.py`
 
+`backend/tests/smoke/test_smoke_system_user_menu.py`
+
 Run from container:
 
 ```bash
 docker compose exec -T admin-console-api python tests/smoke/test_smoke_tenant_isolation.py
+docker compose exec -T admin-console-api python tests/smoke/test_smoke_system_user_menu.py
 ```
 
 Environment variables supported by the script:
@@ -40,6 +43,9 @@ Environment variables supported by the script:
 - `COCA_ADMIN_PASSWORD` default `holalola`
 - `PEPSI_ADMIN_EMAIL` default `pepsi-admin@pepsi.com`
 - `PEPSI_ADMIN_PASSWORD` default `holalola`
+- `SYSTEM_USER_EMAIL` required for `test_smoke_system_user_menu.py`
+- `SYSTEM_USER_PASSWORD` required for `test_smoke_system_user_menu.py`
+- `EXPECTED_MENU_LINKS` optional comma-separated list for strict menu assertions (example: `/base,/system/users`)
 
 ## One-command Dev Regression
 - Script: `backend/scripts/run_dev_regression.sh`

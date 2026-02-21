@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 from app.modules.auth.config import current_active_user
 from app.modules.auth.models import User
@@ -24,6 +24,46 @@ def _get_tenant_ids(user: User) -> List[UUID]:
     return [tenant.client_id for tenant in user.tenants if getattr(tenant, "client_id", None)]
 
 
+def _get_primary_client_id(user: User) -> Optional[UUID]:
+    """
+    Resolve a primary tenant client_id for vertical-aware scoring config.
+    """
+    tenant_ids = _get_tenant_ids(user)
+    if tenant_ids:
+        return tenant_ids[0]
+    return getattr(user, "client_id", None)
+
+
+async def _resolve_vertical_schema_for_user(user: User) -> Tuple[Optional[ScoringSchemaV2], str, str]:
+    """
+    Returns (schema, vertical_slug, vertical_name) for current tenant context.
+    """
+    client_id = _get_primary_client_id(user)
+    if not client_id:
+        return None, "generic", "Generic"
+
+    vertical_ctx = await lead_v2_service.get_client_vertical_context(client_id)
+    if not vertical_ctx or not vertical_ctx.get("vertical_id"):
+        return None, "generic", "Generic"
+
+    schema = await lead_v2_service.get_scoring_schema_for_vertical(
+        int(vertical_ctx["vertical_id"])
+    )
+    vertical_slug = (vertical_ctx.get("vertical_slug") or "generic").strip()
+    vertical_name = (vertical_ctx.get("vertical_name") or vertical_slug or "Generic").strip()
+    return schema, vertical_slug, vertical_name
+
+
+def _grid_props_to_renderer_config(config: DynamicGridConfig) -> dict:
+    """
+    Adapt backend snake_case contract to the custom grid renderer contract.
+    """
+    payload = config.model_dump()
+    payload["enableFilters"] = payload.pop("enable_filters", False)
+    payload["filterConfig"] = payload.pop("filter_config", {})
+    return payload
+
+
 @router.get("/", response_model=WebIAFirstResponse)
 async def get_leads_grid_v2(
     user: User = Depends(current_active_user),
@@ -39,22 +79,18 @@ async def get_leads_grid_v2(
         from app.modules.leads.router import get_my_leads as get_legacy_my_leads
         return await get_legacy_my_leads(user)
     
-    # Fetch leads data with v2 scoring
     leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
-    
-    # Determine lead type for schema (use first lead's type or default)
-    target_lead_type = lead_type or "realtor"
-    if leads and not target_lead_type:
-        target_lead_type = leads[0].get('lead_type', 'realtor')
-    
-    # Get scoring schema for this lead type
-    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-        target_lead_type, 
-        user.client_id if hasattr(user, 'client_id') else None
-    )
-    
-    # Build dynamic grid configuration
-    grid_config = _build_dynamic_grid_config(schema, target_lead_type)
+    schema, vertical_slug, vertical_name = await _resolve_vertical_schema_for_user(user)
+
+    # Compatibility fallback for old lead_type filter
+    if lead_type and not schema:
+        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+            lead_type, _get_primary_client_id(user)
+        )
+        vertical_slug = lead_type
+        vertical_name = lead_type.capitalize()
+
+    grid_config = _build_dynamic_grid_config(schema, vertical_slug, lead_type)
     
     # Transform leads to grid rows
     rows = _transform_leads_to_dynamic_rows(leads, schema)
@@ -65,7 +101,7 @@ async def get_leads_grid_v2(
             {
                 "type": "typography",
                 "tag": "h2",
-                "text": f"Leads - {target_lead_type.capitalize()}",
+                "text": f"Leads - {vertical_name}",
                 "class": "mb-4"
             },
             {
@@ -75,7 +111,7 @@ async def get_leads_grid_v2(
                     {
                         "type": "custom-leads-grid",
                         "label": "Panel de Leads (v2)",
-                        "properties": grid_config.model_dump()
+                        "properties": _grid_props_to_renderer_config(grid_config)
                     }
                 ]
             }
@@ -97,19 +133,12 @@ async def list_leads_data_v2(
     Returns raw data for leads with v2 scoring.
     """
     leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
-    
-    # Determine lead type for schema
-    target_lead_type = lead_type or "realtor"
-    if leads and not target_lead_type:
-        target_lead_type = leads[0].get('lead_type', 'realtor')
-    
-    # Get scoring schema
-    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-        target_lead_type,
-        user.client_id if hasattr(user, 'client_id') else None
-    )
-    
-    # Transform leads
+    schema, _, _ = await _resolve_vertical_schema_for_user(user)
+    if lead_type and not schema:
+        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+            lead_type, _get_primary_client_id(user)
+        )
+
     return _transform_leads_to_dynamic_rows(leads, schema)
 
 
@@ -135,12 +164,19 @@ async def get_lead_detail_v2(
     # Get scoring values
     scoring_values = lead_v2_service.transform_to_scoring_values(lead)
     
-    # Get scoring schema for this lead's type
-    lead_type = lead.get('lead_type', 'realtor')
-    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-        lead_type,
-        user.client_id if hasattr(user, 'client_id') else None
-    )
+    schema = None
+    if lead.get("client_id"):
+        vertical_ctx = await lead_v2_service.get_client_vertical_context(lead["client_id"])
+        if vertical_ctx and vertical_ctx.get("vertical_id"):
+            schema = await lead_v2_service.get_scoring_schema_for_vertical(
+                int(vertical_ctx["vertical_id"])
+            )
+    if not schema:
+        lead_type = lead.get("lead_type", "generic")
+        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
+            lead_type,
+            _get_primary_client_id(user),
+        )
     
     # Build detail components with dynamic scoring
     components = _build_lead_detail_components(lead, scoring_values, schema)
@@ -188,7 +224,7 @@ async def get_scoring_schema(
     """
     schema = await lead_v2_service.get_scoring_schema_for_lead_type(
         lead_type,
-        user.client_id if hasattr(user, 'client_id') else None
+        _get_primary_client_id(user)
     )
     
     if not schema:
@@ -200,7 +236,11 @@ async def get_scoring_schema(
     return schema
 
 
-def _build_dynamic_grid_config(schema: Optional[ScoringSchemaV2], lead_type: str) -> DynamicGridConfig:
+def _build_dynamic_grid_config(
+    schema: Optional[ScoringSchemaV2],
+    vertical_slug: str,
+    lead_type_filter: Optional[str] = None,
+) -> DynamicGridConfig:
     """
     Build dynamic grid configuration based on scoring schema.
     """
@@ -254,8 +294,10 @@ def _build_dynamic_grid_config(schema: Optional[ScoringSchemaV2], lead_type: str
     ])
     
     return DynamicGridConfig(
-        grid_id=f"leads-v2-{lead_type}",
-        data_url=f"/leads_v2/data?lead_type={lead_type}",
+        grid_id=f"leads-v2-{vertical_slug}",
+        data_url=(
+            f"/leads_v2/data?lead_type={lead_type_filter}" if lead_type_filter else "/leads_v2/data"
+        ),
         enable_filters=True,
         columns=columns,
         filter_config={
@@ -288,6 +330,7 @@ def _transform_leads_to_dynamic_rows(leads: List[dict], schema: Optional[Scoring
                 "score": lead['score_total'] or 0,
                 "color": lead.get('prio_color') or "thermal-none"
             },
+            "full_name": lead['full_name'] or "",
             "email": lead['email'] or "-",
             "phone": lead['phone'] or "-",
             "created": lead['created_at'].strftime("%Y-%m-%d") if lead['created_at'] else "-"

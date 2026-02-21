@@ -15,7 +15,7 @@ MENU_MISSION_CONTROL = {"id": "mission-control", "label": "Home", "icon": "ri-ho
 # Dashboard solo para vendedores (Seller Workspace)
 MENU_SELLER_WORKSPACE = {"id": "seller-workspace", "label": "Mi Dashboard", "icon": "ri-dashboard-line", "link": "/dashboard/seller"}
 
-# Submenú Sistema
+# Submenú Sistema (general)
 MENU_SYSTEM = {
     "id": "sys", 
     "label": "Sistema", 
@@ -23,6 +23,32 @@ MENU_SYSTEM = {
     "subItems": [
         {"id": "users", "label": "Usuarios", "link": "/system/users"},
         {"id": "roles", "label": "Roles", "link": "/system/roles"},
+        {"id": "public-docs", "label": "Documentos Públicos", "link": "/system/public-docs"},
+        {"id": "countries", "label": "Países (Global)", "link": "/countries"}
+    ]
+}
+
+# Submenú Sistema para rol técnico interno (system-user)
+MENU_SYSTEM_SYSTEM_USER = {
+    "id": "sys",
+    "label": "Sistema",
+    "icon": "ri-settings-line",
+    "subItems": [
+        {"id": "users", "label": "Usuarios", "link": "/system/users"},
+        {"id": "roles", "label": "Roles", "link": "/system/roles"},
+        {"id": "verticals", "label": "Verticales", "link": "/system/verticals"},
+        {"id": "public-docs", "label": "Documentos Públicos", "link": "/system/public-docs"},
+        {"id": "countries", "label": "Países (Global)", "link": "/countries"}
+    ]
+}
+
+MENU_SYSTEM_CORE = {
+    "id": "sys",
+    "label": "Sistema",
+    "icon": "ri-settings-line",
+    "subItems": [
+        {"id": "users", "label": "Usuarios", "link": "/system/users"},
+        {"id": "verticals", "label": "Verticales", "link": "/system/verticals"},
         {"id": "public-docs", "label": "Documentos Públicos", "link": "/system/public-docs"},
         {"id": "countries", "label": "Países (Global)", "link": "/countries"}
     ]
@@ -36,18 +62,26 @@ ROLE_MENUS = {
     # 1. Super Admin (TÚ)
     "admin": [
         MENU_DASHBOARD,
-        MENU_CLIENTS,    # Gestión de Inquilinos
+        MENU_CLIENTS,
         MENU_PROMPTS,
-        MENU_SYSTEM
+        MENU_SYSTEM_CORE
+    ],
+
+    # 1.b System Admin (alias operativo de administrador global)
+    "system-admin": [
+        MENU_DASHBOARD,
+        MENU_CLIENTS,
+        MENU_PROMPTS,
+        MENU_SYSTEM_CORE
     ],
 
     # 2. System User (Datasync)
     # Rol técnico interno, ve estado del sistema pero no clientes
     "system-user": [
         MENU_DASHBOARD,
-        {"id": "sys-status", "label": "Estado Servidores", "icon": "ri-server-line", "link": "/status"},
-        {"id": "logs", "label": "Audit Logs", "icon": "ri-file-list-3-line", "link": "/logs"},
-        MENU_SYSTEM
+        MENU_CLIENTS,
+        MENU_PROMPTS,
+        MENU_SYSTEM_CORE
     ],
     
     # 3. Client Admin (Coca Cola Boss)

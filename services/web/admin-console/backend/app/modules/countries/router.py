@@ -5,8 +5,8 @@ from .service import service
 from typing import List
 from app.modules.auth.dependencies import RoleChecker
 
-# Lock down the entire module to Admins only
-router = APIRouter(dependencies=[Depends(RoleChecker(["admin"]))])
+# Lock down the entire module to Admin and System User
+router = APIRouter(dependencies=[Depends(RoleChecker(["admin", "system-user"]))])
 
 # --- SERVER DRIVEN UI (SDUI) ---
 

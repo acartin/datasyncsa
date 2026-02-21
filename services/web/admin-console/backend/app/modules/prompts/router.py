@@ -15,7 +15,7 @@ from app.modules.shared.sdui import create_modal_action, delete_action, encode_s
 router = APIRouter(
     prefix="/prompts",
     tags=["AI Prompts"],
-    dependencies=[Depends(RoleChecker(["admin", "client-admin"]))]
+    dependencies=[Depends(RoleChecker(["admin", "system-user", "client-admin"]))]
 )
 
 # --- Helper: Context Extraction ---
@@ -60,7 +60,7 @@ def _build_prompt_form_fields(current_role: str) -> list[dict]:
             "default": True,
         },
     ]
-    if current_role == "admin":
+    if current_role in ("admin", "system-user"):
         form_fields.insert(
             0,
             {
@@ -82,7 +82,7 @@ async def get_ui_schema(user: User = Depends(current_active_user)):
     
     # Define Filters (only for Global Admins)
     filters = []
-    if current_role == "admin":
+    if current_role in ("admin", "system-user"):
         filters.append({
             "key": "client_id",
             "label": "Filtrar por Cliente",
@@ -151,7 +151,7 @@ async def list_data(
     target_client_id = None
 
     # Global Admins: Can select ANY client_id (or None for All)
-    if current_role == "admin":
+    if current_role in ("admin", "system-user"):
          target_client_id = str(client_id) if client_id else None
     else:
     # Regular Users: Locked to their Tenant
@@ -162,7 +162,7 @@ async def list_data(
 @router.get("/{item_id}", response_model=PromptRow)
 async def get_item(item_id: UUID, user: User = Depends(current_active_user)):
     current_role = get_current_role_slug(user)
-    owner_client_id = str(get_current_client_id(user)) if current_role != "admin" else None
+    owner_client_id = str(get_current_client_id(user)) if current_role not in ("admin", "system-user") else None
     item = await service.get_prompt(owner_client_id, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -174,7 +174,7 @@ async def create_item(item: PromptCreate, user: User = Depends(current_active_us
     current_role = get_current_role_slug(user)
 
     # If Admin sends client_id, use it. Otherwise infer.
-    if current_role == "admin" and item.client_id:
+    if current_role in ("admin", "system-user") and item.client_id:
         target_client_id = str(item.client_id)
     else:
         target_client_id = str(get_current_client_id(user))
@@ -192,7 +192,7 @@ async def update_item(item_id: UUID, item: PromptUpdate, user: User = Depends(cu
     # If they are editing, the service handles finding it. 
     # But we should allow them to CHANGE the client_id if they want (re-assignment)
     
-    owner_client_id = str(get_current_client_id(user)) if current_role != "admin" else None
+    owner_client_id = str(get_current_client_id(user)) if current_role not in ("admin", "system-user") else None
     
     updated = await service.update_prompt(owner_client_id, item_id, item)
     if not updated:
@@ -202,7 +202,7 @@ async def update_item(item_id: UUID, item: PromptUpdate, user: User = Depends(cu
 @router.delete("/{item_id}")
 async def delete_item(item_id: UUID, user: User = Depends(current_active_user)):
     current_role = get_current_role_slug(user)
-    owner_client_id = str(get_current_client_id(user)) if current_role != "admin" else None
+    owner_client_id = str(get_current_client_id(user)) if current_role not in ("admin", "system-user") else None
     
     success = await service.delete_prompt(owner_client_id, item_id)
     if not success:

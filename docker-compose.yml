@@ -205,6 +205,7 @@ services:
       - ./services/web/admin-console/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       - API_HOST=${ENV_PREFIX}-web-admin-console-api
+      - APP_VERSION=${APP_VERSION}
     depends_on:
       - admin-console-api
     networks:

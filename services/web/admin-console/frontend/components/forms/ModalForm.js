@@ -1,12 +1,14 @@
 
-export function LinkModalForm(id, title, formHtml, saveActionUrl, method = 'POST') {
+export function LinkModalForm(id, title, formHtml, saveActionUrl, method = 'POST', dialogClass = '', dialogStyle = '') {
+    const dialogClassAttr = dialogClass ? ` ${dialogClass}` : '';
+    const dialogStyleAttr = dialogStyle ? ` style="${dialogStyle}"` : '';
     return `
     <div class="modal fade" id="${id}" tabindex="-1" aria-labelledby="${id}Label" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog${dialogClassAttr}"${dialogStyleAttr}>
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="${id}Label">${title}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="if(document.activeElement&&typeof document.activeElement.blur==='function'){document.activeElement.blur();}"></button>
                 </div>
                 <div class="modal-body">
                     <form id="${id}-form" action="${saveActionUrl}" method="${method}" enctype="multipart/form-data" onsubmit="return false;">
@@ -14,7 +16,7 @@ export function LinkModalForm(id, title, formHtml, saveActionUrl, method = 'POST
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal" onclick="if(document.activeElement&&typeof document.activeElement.blur==='function'){document.activeElement.blur();}">Close</button>
                     <button type="button" class="btn btn-primary" onclick="window.submitModalForm(event, '${id}-form', '${saveActionUrl}', '${method}')">Save Changes</button>
                 </div>
             </div>
@@ -67,12 +69,23 @@ export function renderInput(label, name, value = '', type = 'text', required = f
     }
 
     if (type === 'textarea') {
+        let textValue = value;
+        if (textValue && typeof textValue === 'object') {
+            try {
+                textValue = JSON.stringify(textValue, null, 2);
+            } catch (e) {
+                textValue = String(textValue);
+            }
+        } else if (textValue === null || textValue === undefined) {
+            textValue = '';
+        }
+
         const readonlyAttr = validation.readonly ? 'readonly' : '';
         return `
             <div class="mb-3">
                 <label for="${name}" class="form-label">${label}</label>
                 <textarea class="form-control" id="${name}" name="${name}" rows="${validation.rows || 3}" 
-                    ${isRequired} ${minLength} ${maxLength} ${readonlyAttr}>${value}</textarea>
+                    ${isRequired} ${minLength} ${maxLength} ${readonlyAttr}>${textValue}</textarea>
             </div>
         `;
     }
@@ -98,15 +111,17 @@ export function renderInput(label, name, value = '', type = 'text', required = f
     if (type === 'select') {
         const sourceUrl = validation.source || '';
         const optionsHtml = (validation.options || []).map(opt => `<option value="${opt.value}" ${opt.value == value ? 'selected' : ''}>${opt.label}</option>`).join('');
+        const dependsOn = validation.depends_on || '';
 
         // If source is provided, we mark it for hydration
         const dataSourceAttr = sourceUrl ? `data-source="${sourceUrl}"` : '';
         const dataValueAttr = value ? `data-value="${value}"` : '';
+        const dataDependsOnAttr = dependsOn ? `data-depends-on="${dependsOn}"` : '';
 
         return `
             <div class="mb-3">
                 <label for="${name}" class="form-label">${label}</label>
-                <select class="form-select" id="${name}" name="${name}" ${isRequired} ${dataSourceAttr} ${dataValueAttr}>
+                <select class="form-select" id="${name}" name="${name}" ${isRequired} ${dataSourceAttr} ${dataValueAttr} ${dataDependsOnAttr}>
                     <option value="">Select...</option>
                     ${optionsHtml}
                 </select>
@@ -227,6 +242,7 @@ export function renderFormFromSchema(schema, data = {}) {
             rows: field.rows,
             source: field.source,
             options: field.options,
+            depends_on: field.depends_on,
             fields: field.fields,  // For group type
             layout: field.layout,  // For group type
             accept: field.accept,  // For file type

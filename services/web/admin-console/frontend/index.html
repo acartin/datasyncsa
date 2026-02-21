@@ -184,6 +184,15 @@
         .js-grid-leads-control .gridjs-table {
             border-collapse: collapse !important;
         }
+
+        /* Selected row state for all TableGrid instances (light + dark themes) */
+        .js-grid-visual .table tbody tr.grid-row-selected {
+            background-color: color-mix(in srgb, var(--vz-primary), transparent 86%) !important;
+        }
+
+        html[data-bs-theme="dark"] .js-grid-visual .table tbody tr.grid-row-selected {
+            background-color: color-mix(in srgb, var(--vz-primary), transparent 75%) !important;
+        }
     </style>
 </head>
 
@@ -217,10 +226,18 @@
     <script>
         // Simple Auth Guard
         if (!localStorage.getItem('access_token')) {
-            window.location.href = 'login.html';
+            window.location.href = '/login.html';
         }
     </script>
-    <script type="module" src="/renderer/main.js?v=98"></script>
+    <script>
+        (function () {
+            const version = (window.AppConfig && window.AppConfig.APP_VERSION) ? window.AppConfig.APP_VERSION : '1';
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = `/renderer/main.js?v=${encodeURIComponent(version)}`;
+            document.body.appendChild(script);
+        })();
+    </script>
 </body>
 
 </html>

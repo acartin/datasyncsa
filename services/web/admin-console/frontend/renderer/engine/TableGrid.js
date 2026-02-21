@@ -86,12 +86,17 @@ export class TableGrid extends GridBase {
         `;
 
         // 2. Render Body
-        const tbodyHtml = rows.map(row => `
-            <tr style="cursor: pointer;" onclick="window.gridInstances['${this.container.id}'].handleRowDoubleClick('${row.id}', event)">
+        const tbodyHtml = rows.map(row => {
+            const rowId = row.id ?? '';
+            const isSelected = String(this.selectedRowId ?? '') === String(rowId);
+            const selectedClass = isSelected ? 'grid-row-selected' : '';
+            return `
+            <tr class="${selectedClass}" style="cursor: pointer;" onclick="window.gridInstances['${this.container.id}'].handleRowClick('${rowId}', event)" ondblclick="window.gridInstances['${this.container.id}'].handleRowDoubleClick('${rowId}', event)">
                 ${this.config.columns.map(col => `<td>${this.renderCell(row, col)}</td>`).join('')}
                 ${this.actions.length > 0 ? `<td>${this.renderActions(row)}</td>` : ''}
             </tr>
-        `).join('');
+        `;
+        }).join('');
 
         // Apply to DOM
         const table = this.container.querySelector('table');
@@ -110,21 +115,43 @@ export class TableGrid extends GridBase {
         // Clean to avoid duplicates on re-render
         container.innerHTML = '';
 
+        const resolveTokens = (value, rowLike = {}) => {
+            if (typeof value !== 'string') return value;
+            let resolved = value;
+            Object.entries(rowLike || {}).forEach(([rk, rv]) => {
+                resolved = resolved.replace(new RegExp(`\\{${rk}\\}`, 'g'), String(rv ?? ''));
+            });
+            return resolved;
+        };
+
+        const encodeB64 = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj || {}))));
+
+        const contextTokens = this.config.context || {};
+
         const buttons = this.headerActions.map(act => {
             const schemaToPass = resolveSchemaB64(act, {
                 formSchema: this.config.form_schema,
                 fallbackSchema: this.schemaStr
             });
 
-            // If action is modal-form creation, url usually doesn't need ID replacement
             const url = resolveActionUrl(act);
             const modalTitle = act.modal_title || act.label;
             const color = act.color || 'primary';
             const icon = act.icon || 'ri-add-line';
 
-            // We reuse handleEditAction but passing empty ID ('') or handled differently?
-            // Usually handleEditAction does: renderModalForm(title, schema, url, id)
-            // If id is missing, renderModalForm treats it as Create (POST).
+            if (act.action === 'modal-form-create') {
+                const prefill = {};
+                Object.entries(act.prefill || {}).forEach(([key, value]) => {
+                    prefill[key] = resolveTokens(value, contextTokens);
+                });
+                const prefillB64 = encodeB64(prefill);
+                return `
+                    <button class="btn btn-${color} btn-sm waves-effect waves-light" 
+                        onclick="window.handleCreateAction(event, '${url}', '${schemaToPass}', '${modalTitle}', '${prefillB64}')">
+                        <i class="${icon} me-1 align-bottom"></i> ${act.label}
+                    </button>
+                `;
+            }
 
             return `
                 <button class="btn btn-${color} btn-sm waves-effect waves-light" 
@@ -171,6 +198,31 @@ export class TableGrid extends GridBase {
     // Logic ported from StandardGrid.js but returning generic HTML string, not gridjs.html()
     renderActions(row) {
         const rowId = row.id; // Convention: all rows must have ID
+        const resolveTokens = (value, rowLike = {}) => {
+            if (typeof value !== 'string') return value;
+            let resolved = value;
+            Object.entries(rowLike || {}).forEach(([rk, rv]) => {
+                resolved = resolved.replace(new RegExp(`\\{${rk}\\}`, 'g'), String(rv ?? ''));
+            });
+            return resolved;
+        };
+        const encodeB64 = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj || {}))));
+        const decodeB64Json = (payload) => {
+            try {
+                return JSON.parse(decodeURIComponent(escape(atob(payload))));
+            } catch (e) {
+                try { return JSON.parse(atob(payload)); } catch (e2) { return {}; }
+            }
+        };
+        const deepResolveTokens = (node, rowLike = {}) => {
+            if (Array.isArray(node)) return node.map(v => deepResolveTokens(v, rowLike));
+            if (node && typeof node === 'object') {
+                const out = {};
+                Object.entries(node).forEach(([k, v]) => { out[k] = deepResolveTokens(v, rowLike); });
+                return out;
+            }
+            return resolveTokens(node, rowLike);
+        };
 
         const dropdownItems = this.actions.map(act => {
             if (act.action === 'modal-form' || act.action === 'edit') {
@@ -181,6 +233,46 @@ export class TableGrid extends GridBase {
                 const url = resolveActionUrl(act, row);
 
                 return `<li><a class="dropdown-item" href="javascript:void(0)" onclick="window.handleEditAction(event, '${rowId}', '${url}', '${schemaToPass}')">
+                    <i class="${act.icon} align-bottom me-2 text-muted"></i> ${act.label}
+                </a></li>`;
+            }
+            if (act.action === 'modal-form-create') {
+                const schemaToPass = resolveSchemaB64(act, {
+                    formSchema: this.config.form_schema,
+                    fallbackSchema: this.schemaStr
+                });
+                const url = resolveActionUrl(act, row);
+                const modalTitle = act.modal_title || act.label || 'Nuevo registro';
+                const prefill = {};
+                Object.entries(act.prefill || {}).forEach(([key, value]) => {
+                    if (typeof value !== 'string') {
+                        prefill[key] = value;
+                        return;
+                    }
+                    let resolved = value;
+                    Object.entries(row).forEach(([rk, rv]) => {
+                        resolved = resolved.replace(new RegExp(`\\{${rk}\\}`, 'g'), String(rv ?? ''));
+                    });
+                    prefill[key] = resolved;
+                });
+                const prefillB64 = btoa(unescape(encodeURIComponent(JSON.stringify(prefill))));
+                return `<li><a class="dropdown-item" href="javascript:void(0)" onclick="window.handleCreateAction(event, '${url}', '${schemaToPass}', '${modalTitle}', '${prefillB64}')">
+                    <i class="${act.icon} align-bottom me-2 text-muted"></i> ${act.label}
+                </a></li>`;
+            }
+            if (act.action === 'modal-grid-crud') {
+                const rawConfig = decodeB64Json(act.config_b64 || '');
+                const contextRow = {
+                    context_criterion_id: row.id,
+                    context_criterion_key: row.criterion_key,
+                    context_model_id: row.model_id ?? row.id,
+                    context_model_name: row.model_name ?? row.name
+                };
+                const resolvedConfig = deepResolveTokens(rawConfig, contextRow);
+                resolvedConfig.context = contextRow;
+                const configB64 = encodeB64(resolvedConfig);
+                const modalTitle = resolveTokens(act.modal_title || act.label || 'Gestión', contextRow).replace(/'/g, "\\'");
+                return `<li><a class="dropdown-item" href="javascript:void(0)" onclick="window.openCrudGridModal(event, '${modalTitle}', '${configB64}')">
                     <i class="${act.icon} align-bottom me-2 text-muted"></i> ${act.label}
                 </a></li>`;
             }

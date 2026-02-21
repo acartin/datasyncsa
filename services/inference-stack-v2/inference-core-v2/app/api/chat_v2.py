@@ -43,8 +43,6 @@ async def chat_v2_endpoint(
     Requerido:
     - client_id: Tenant para resolver vertical y modelo de scoring
     
-    Opcional:
-    - business_domain: Dominio de negocio para granularidad adicional
     """
     try:
         # Initialize orchestrator
@@ -60,7 +58,7 @@ async def chat_v2_endpoint(
         logger.warning(f"Validation error in /api/v2/chat: {error}")
         if error == "CLIENT_NOT_FOUND":
             raise HTTPException(status_code=404, detail=error)
-        if error in ("TENANT_VERTICAL_NOT_CONFIGURED",):
+        if error in ("TENANT_VERTICAL_NOT_CONFIGURED", "TENANT_SCORING_MODEL_NOT_CONFIGURED"):
             raise HTTPException(status_code=422, detail=error)
         if error.startswith("NO_ACTIVE_VERTICAL_SCORING_MODEL"):
             raise HTTPException(status_code=404, detail=error)
@@ -126,7 +124,6 @@ async def get_scorecard(
 @router.get("/scoring/models/active", response_model=ActiveModelResponse)
 async def get_active_scoring_model(
     client_id: UUID = Query(..., description="Tenant/client identifier"),
-    business_domain: str = None,
     db_session: AsyncSession = Depends(get_db_session)
 ):
     """Get active scoring model configuration for tenant scope"""
@@ -134,9 +131,11 @@ async def get_active_scoring_model(
         orchestrator = ScoringOrchestrator(db_session)
         vertical_ctx = await orchestrator.resolve_vertical_for_client(client_id)
         vertical_id = int(vertical_ctx["vertical_id"])
+        scoring_model_id = vertical_ctx.get("scoring_model_id")
         model_data = await orchestrator.get_active_scoring_model(
+            client_id=client_id,
             vertical_id=vertical_id,
-            business_domain=business_domain
+            scoring_model_id=scoring_model_id,
         )
         
         if not model_data:
@@ -144,7 +143,7 @@ async def get_active_scoring_model(
                 status_code=404,
                 detail=(
                     "No active scoring model found for "
-                    f"vertical_id={vertical_id}, business_domain={business_domain}"
+                    f"vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
                 ),
             )
         
@@ -159,7 +158,7 @@ async def get_active_scoring_model(
         error = str(e)
         if error == "CLIENT_NOT_FOUND":
             raise HTTPException(status_code=404, detail=error)
-        if error in ("TENANT_VERTICAL_NOT_CONFIGURED",):
+        if error in ("TENANT_VERTICAL_NOT_CONFIGURED", "TENANT_SCORING_MODEL_NOT_CONFIGURED"):
             raise HTTPException(status_code=422, detail=error)
         raise HTTPException(status_code=400, detail=error)
     except HTTPException:
@@ -171,35 +170,17 @@ async def get_active_scoring_model(
 
 @router.post("/cache/invalidate")
 async def invalidate_cache(
-    vertical_id: int = None,
-    business_domain: str = None
+    client_id: UUID = None,
 ):
     """Invalidate cache entries (internal use)"""
     try:
-        # Validate input combinations
-        if vertical_id and business_domain is None:
-            # Invalidate by vertical
-            success = await cache_service.invalidate_active_model(
-                vertical_id=vertical_id,
-                business_domain=None,
-            )
-
+        if client_id:
+            success = await cache_service.invalidate_active_model(client_id=client_id)
             if success:
                 return {"status": "success", "message": "Cache invalidated"}
             raise HTTPException(status_code=500, detail="Cache invalidation failed")
 
-        if vertical_id and business_domain is not None:
-            # Invalidate specific model cache
-            success = await cache_service.invalidate_active_model(
-                vertical_id=vertical_id,
-                business_domain=business_domain
-            )
-            
-            if success:
-                return {"status": "success", "message": "Cache invalidated"}
-            else:
-                raise HTTPException(status_code=500, detail="Cache invalidation failed")
-        if not vertical_id and not business_domain:
+        if not client_id:
             # Invalidate all cache
             success = await cache_service.invalidate_all_models()
             
@@ -207,11 +188,8 @@ async def invalidate_cache(
                 return {"status": "success", "message": "All cache invalidated"}
             raise HTTPException(status_code=500, detail="Cache invalidation failed")
 
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid parameters. Provide either: 1) vertical_id only, or 2) vertical_id + business_domain, or 3) none to invalidate all",
-        )
-        
+        raise HTTPException(status_code=400, detail="Invalid parameters")
+
     except HTTPException:
         raise
     except Exception as e:

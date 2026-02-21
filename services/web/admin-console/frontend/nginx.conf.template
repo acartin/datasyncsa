@@ -6,34 +6,39 @@ server {
 
     root /usr/share/nginx/html;
     index index.html index.htm;
+    error_page 418 =200 /index.html;
+
+    # Runtime frontend config (cache/version + API base) driven by env vars.
+    location = /config.js {
+        default_type application/javascript;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate";
+        return 200 "const runtimeOrigin = window.location.origin;
+const runtimeBaseUrlOverride = localStorage.getItem('admin_api_base_url');
+const legacyPortOverride = localStorage.getItem('admin_api_port');
+if (legacyPortOverride) { localStorage.removeItem('admin_api_port'); }
+const apiBaseUrl = runtimeBaseUrlOverride || runtimeOrigin;
+const appVersion = '${APP_VERSION}';
+window.AppConfig = {
+  API_BASE_URL: apiBaseUrl,
+  APP_VERSION: appVersion && appVersion.trim() ? appVersion.trim() : '1'
+};
+";
+    }
 
     # Proxy API routes to backend (BFF)
-    location ~ ^/(health|app-init|dashboard|leads|campaigns|ai-library|clients|countries|prompts|auth|users|roles|contacts|grid-presets|brand-config)(/|$) {
+    location ~ ^/(health|app-init|base|dashboard|system|leads|leads_v2|campaigns|ai-library|clients|countries|prompts|auth|users|roles|contacts|grid-presets|brand-config)(/|$) {
+        # Only direct document navigation should fallback to SPA shell.
+        # XHR/fetch for SDUI JSON must always hit backend.
+        if ($http_sec_fetch_dest = "document") {
+            return 418;
+        }
+
         proxy_pass http://${API_HOST}:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Authorization $http_authorization;
-    }
-
-    # SPA refresh support for direct route entry.
-    # Without this, refreshing /ai-library may hit backend route proxy and return non-HTML responses.
-    location = /ai-library {
-        try_files /index.html =404;
-    }
-
-    location = /ai-library/ {
-        try_files /index.html =404;
-    }
-
-    # Without this, refreshing /prompts may hit backend route proxy and return 401/JSON.
-    location = /prompts {
-        try_files /index.html =404;
-    }
-
-    location = /prompts/ {
-        try_files /index.html =404;
     }
 
     location / {

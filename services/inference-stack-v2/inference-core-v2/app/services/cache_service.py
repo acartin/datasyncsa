@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict
+from uuid import UUID
 import redis.asyncio as redis
 from app.core.config import settings
 
@@ -47,13 +48,12 @@ class CacheService:
         parts = [self.prefix, key_type] + [str(arg) for arg in args]
         return ":".join(parts)
     
-    async def get_active_model(self, vertical_id: int, business_domain: Optional[str]) -> Optional[Dict[str, Any]]:
+    async def get_active_model(self, client_id: UUID) -> Optional[Dict[str, Any]]:
         """
         Get active scoring model from cache
         
         Args:
-            vertical_id: Vertical ID
-            business_domain: Optional business domain
+            client_id: Tenant/client ID
         
         Returns:
             Cached model configuration or None if not cached
@@ -63,8 +63,7 @@ class CacheService:
         
         cache_key = self._build_key(
             "active_model",
-            str(vertical_id),
-            business_domain if business_domain else "none"
+            str(client_id),
         )
         
         try:
@@ -80,16 +79,14 @@ class CacheService:
     
     async def set_active_model(
         self, 
-        vertical_id: int,
-        business_domain: Optional[str],
+        client_id: UUID,
         model_data: Dict[str, Any]
     ) -> bool:
         """
         Cache active scoring model configuration
         
         Args:
-            vertical_id: Vertical ID
-            business_domain: Optional business domain
+            client_id: Tenant/client ID
             model_data: Model configuration to cache
         
         Returns:
@@ -100,8 +97,7 @@ class CacheService:
         
         cache_key = self._build_key(
             "active_model",
-            str(vertical_id),
-            business_domain if business_domain else "none"
+            str(client_id),
         )
         
         try:
@@ -118,15 +114,13 @@ class CacheService:
     
     async def invalidate_active_model(
         self, 
-        vertical_id: int,
-        business_domain: Optional[str]
+        client_id: UUID,
     ) -> bool:
         """
         Invalidate cached active model
         
         Args:
-            vertical_id: Vertical ID
-            business_domain: Optional business domain
+            client_id: Tenant/client ID
         
         Returns:
             True if invalidated successfully
@@ -136,8 +130,7 @@ class CacheService:
         
         cache_key = self._build_key(
             "active_model",
-            str(vertical_id),
-            business_domain if business_domain else "none"
+            str(client_id),
         )
         
         try:

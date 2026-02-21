@@ -1,12 +1,35 @@
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from sqlalchemy import text, func
+from sqlalchemy import text
 from app.dal.database import engine
 from app.config.settings import settings
 from app.contracts.scoring_schema import ScoringSchemaV2, ScoringValuesV2, ScoreItemValueV2
 
 
 class LeadsV2Service:
+    async def get_client_vertical_context(self, client_id: UUID) -> Optional[Dict[str, Any]]:
+        """
+        Resolve tenant vertical context from lead_clients.vertical_id -> lead_client_verticals.
+        """
+        query_str = text(
+            """
+            SELECT
+                c.id AS client_id,
+                c.vertical_id AS vertical_id,
+                v.slug AS vertical_slug,
+                v.name AS vertical_name
+            FROM lead_clients c
+            LEFT JOIN lead_client_verticals v ON v.id = c.vertical_id
+            WHERE c.id = :client_id
+            """
+        )
+        async with engine.connect() as conn:
+            result = await conn.execute(query_str, {"client_id": client_id})
+            row = result.mappings().first()
+            if not row:
+                return None
+            return dict(row)
+
     async def get_my_leads_with_scoring_v2(self, user_id: UUID, lead_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetch leads with dynamic scoring v2 (using lead_scorecards/items).
@@ -192,65 +215,130 @@ class LeadsV2Service:
         from app.modules.leads.service import service as legacy_service
         return await legacy_service.get_lead_by_id(lead_id, user_id, is_superuser, tenant_ids)
     
-    async def get_scoring_schema_for_lead_type(self, lead_type: str, client_id: Optional[UUID] = None) -> Optional[ScoringSchemaV2]:
+    async def get_scoring_schema_for_vertical(
+        self,
+        vertical_id: int,
+    ) -> Optional[ScoringSchemaV2]:
         """
-        Get active scoring schema for a lead type.
+        Resolve active scoring schema by vertical (v2 source of truth).
         """
-        query_str = text("""
-            SELECT 
-                lsm.id as model_id, lsm.lead_type, lsm.version as model_version, 
-                lsm.prompt_version, lsm.normalization_strategy,
-                json_agg(
-                    json_build_object(
-                        'criterion_key', lsc.criterion_key,
-                        'label', lsc.label,
-                        'weight', lsc.weight,
-                        'min_score', lsc.min_score,
-                        'max_score', lsc.max_score,
-                        'display_order', lsc.display_order,
-                        'bands', COALESCE(
-                            json_agg(
-                                json_build_object(
-                                    'band_key', lsb.band_key,
-                                    'label', lsb.label,
-                                    'min_score', lsb.min_score,
-                                    'max_score', lsb.max_score,
-                                    'icon', lsb.icon,
-                                    'color', lsb.color
-                                )
-                            ) FILTER (WHERE lsb.id IS NOT NULL), '[]'::json
-                        )
-                    )
-                ) as criteria
-            FROM lead_scoring_models lsm
-            LEFT JOIN lead_scoring_criteria lsc ON lsm.id = lsc.model_id AND lsc.is_active = true
-            LEFT JOIN lead_scoring_bands lsb ON lsc.id = lsb.criterion_id
-            WHERE lsm.lead_type = :lead_type 
-            AND lsm.is_active = true
-            AND (:client_id IS NULL OR lsm.client_id = :client_id OR lsm.client_id IS NULL)
-            GROUP BY lsm.id, lsm.lead_type, lsm.version, lsm.prompt_version, lsm.normalization_strategy
-            ORDER BY 
-                CASE WHEN lsm.client_id = :client_id THEN 1 ELSE 2 END,
-                lsm.created_at DESC
+        if not vertical_id:
+            return None
+
+        model_query = text(
+            """
+            SELECT
+                m.id AS model_id,
+                m.version AS model_version,
+                m.prompt_version,
+                m.normalization_strategy,
+                v.slug AS vertical_slug
+            FROM lead_scoring_models m
+            LEFT JOIN lead_client_verticals v ON v.id = m.vertical_id
+            WHERE m.vertical_id = :vertical_id
+              AND m.is_active = true
+            ORDER BY m.version DESC
             LIMIT 1
-        """)
-        
+            """
+        )
+        model_params = {"vertical_id": vertical_id}
+
         async with engine.connect() as conn:
-            result = await conn.execute(query_str, {"lead_type": lead_type, "client_id": client_id})
-            row = result.fetchone()
-            
-            if not row:
+            model_result = await conn.execute(model_query, model_params)
+            model_row = model_result.mappings().first()
+            if not model_row:
                 return None
-            
-            data = dict(row._mapping)
-            return ScoringSchemaV2(
-                lead_type=data['lead_type'],
-                model_id=data['model_id'],
-                model_version=data['model_version'],
-                prompt_version=data['prompt_version'],
-                normalization_strategy=data['normalization_strategy'],
-                criteria=data['criteria'] or []
+
+            model_id = model_row["model_id"]
+            criteria_query = text(
+                """
+                SELECT
+                    c.id AS criterion_id,
+                    c.criterion_key,
+                    c.label,
+                    c.weight,
+                    c.min_score,
+                    c.max_score,
+                    c.display_order
+                FROM lead_scoring_criteria c
+                WHERE c.model_id = :model_id
+                  AND c.is_active = true
+                ORDER BY c.display_order
+                """
             )
+            criteria_result = await conn.execute(criteria_query, {"model_id": model_id})
+            criteria_rows = criteria_result.mappings().all()
+
+            criteria_payload: List[Dict[str, Any]] = []
+            bands_query = text(
+                """
+                SELECT
+                    b.band_key,
+                    b.label,
+                    b.min_score,
+                    b.max_score,
+                    b.icon,
+                    b.color
+                FROM lead_scoring_bands b
+                WHERE b.criterion_id = :criterion_id
+                ORDER BY b.min_score
+                """
+            )
+            for criterion in criteria_rows:
+                band_result = await conn.execute(
+                    bands_query, {"criterion_id": criterion["criterion_id"]}
+                )
+                bands = [dict(band) for band in band_result.mappings().all()]
+                criteria_payload.append(
+                    {
+                        "criterion_key": criterion["criterion_key"],
+                        "label": criterion["label"],
+                        "weight": criterion["weight"],
+                        "min_score": criterion["min_score"],
+                        "max_score": criterion["max_score"],
+                        "display_order": criterion["display_order"],
+                        "bands": bands,
+                    }
+                )
+
+        return ScoringSchemaV2(
+            lead_type=(model_row.get("vertical_slug") or "generic"),
+            model_id=model_row["model_id"],
+            model_version=model_row["model_version"],
+            prompt_version=model_row["prompt_version"],
+            normalization_strategy=model_row["normalization_strategy"],
+            criteria=criteria_payload,
+        )
+
+    async def get_scoring_schema_for_lead_type(
+        self, lead_type: str, client_id: Optional[UUID] = None
+    ) -> Optional[ScoringSchemaV2]:
+        """
+        Backward-compatible resolver by lead_type.
+        Prefers tenant vertical context when client_id is provided.
+        """
+        if client_id:
+            vertical_ctx = await self.get_client_vertical_context(client_id)
+            if vertical_ctx and vertical_ctx.get("vertical_id"):
+                return await self.get_scoring_schema_for_vertical(
+                    int(vertical_ctx["vertical_id"])
+                )
+
+        vertical_query = text(
+            """
+            SELECT id
+            FROM lead_client_verticals
+            WHERE lower(slug) = lower(:lead_type)
+               OR lower(replace(name, ' ', '_')) = lower(:lead_type)
+            LIMIT 1
+            """
+        )
+        async with engine.connect() as conn:
+            vertical_result = await conn.execute(vertical_query, {"lead_type": lead_type})
+            vertical_row = vertical_result.mappings().first()
+            if not vertical_row:
+                return None
+            return await self.get_scoring_schema_for_vertical(int(vertical_row["id"]))
     
     def transform_to_scoring_values(self, lead_data: Dict[str, Any]) -> ScoringValuesV2:
         """

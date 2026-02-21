@@ -1,5 +1,7 @@
 export function LinkCustomGridContainer(component) {
     const props = component.properties || {};
+    const enableFilters = props.enableFilters ?? props.enable_filters ?? false;
+    const filterConfig = props.filterConfig ?? props.filter_config ?? {};
     return `
         <div id="grid-custom-${Math.random().toString(36).substr(2, 9)}"
              class="card h-100 shadow-sm"
@@ -8,8 +10,8 @@ export function LinkCustomGridContainer(component) {
              data-url="${props.data_url}"
              data-columns='${JSON.stringify(props.columns || [])}'
              data-actions='${JSON.stringify(props.actions || [])}'
-             data-enable-filters="${props.enableFilters ? 'true' : 'false'}"
-             data-filter-config='${JSON.stringify(props.filterConfig || {})}'>
+             data-enable-filters="${enableFilters ? 'true' : 'false'}"
+             data-filter-config='${JSON.stringify(filterConfig)}'>
              <div class="card-body p-3">
                 <!-- Engine will hydrate here -->
                 <div class="d-flex justify-content-center align-items-center" style="height: 200px;">

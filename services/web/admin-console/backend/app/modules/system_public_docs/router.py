@@ -61,7 +61,7 @@ async def _get_datasyncsa_client_id_or_403(user: User) -> str:
 
 
 @router.get("", response_model=WebIAFirstResponse)
-async def get_public_docs_view(user: User = Depends(RoleChecker(["admin"]))):
+async def get_public_docs_view(user: User = Depends(RoleChecker(["admin", "system-user"]))):
     await _get_datasyncsa_client_id_or_403(user)
     return {
         "layout": "dashboard-standard",
@@ -152,7 +152,7 @@ async def get_public_docs_view(user: User = Depends(RoleChecker(["admin"]))):
 
 
 @router.get("/data", response_model=List[dict])
-async def get_public_docs_data(user: User = Depends(RoleChecker(["admin"]))):
+async def get_public_docs_data(user: User = Depends(RoleChecker(["admin", "system-user"]))):
     client_id = await _get_datasyncsa_client_id_or_403(user)
     async with httpx.AsyncClient() as client:
         try:
@@ -174,7 +174,7 @@ async def get_public_docs_data(user: User = Depends(RoleChecker(["admin"]))):
 async def upload_public_doc(
     file: UploadFile = File(...),
     category: Optional[str] = Form(None),
-    user: User = Depends(RoleChecker(["admin"])),
+    user: User = Depends(RoleChecker(["admin", "system-user"])),
 ):
     client_id = await _get_datasyncsa_client_id_or_403(user)
     content_id = f"public_doc_{uuid.uuid4()}"
@@ -209,7 +209,7 @@ async def upload_public_doc(
 
 
 @router.delete("/{content_id}")
-async def delete_public_doc(content_id: str, user: User = Depends(RoleChecker(["admin"]))):
+async def delete_public_doc(content_id: str, user: User = Depends(RoleChecker(["admin", "system-user"]))):
     client_id = await _get_datasyncsa_client_id_or_403(user)
     async with httpx.AsyncClient() as client:
         try:

@@ -47,21 +47,29 @@ class ScoringOrchestrator:
     
     async def get_active_scoring_model(
         self,
+        client_id: UUID,
         vertical_id: int,
-        business_domain: Optional[str] = None
+        scoring_model_id: Optional[UUID] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get active scoring model with caching"""
-        cached = await cache_service.get_active_model(vertical_id, business_domain)
+        cached = await cache_service.get_active_model(client_id)
         if cached:
-            logger.debug(f"Cache hit for active model: vertical={vertical_id}")
+            logger.debug(f"Cache hit for active model: client_id={client_id}")
             return cached
         
-        model_data = await self.repo.get_active_scoring_model(vertical_id, business_domain)
+        model_data = await self.repo.get_active_scoring_model(
+            vertical_id=vertical_id,
+            scoring_model_id=scoring_model_id,
+        )
         if not model_data:
-            logger.warning(f"No active model found: vertical={vertical_id}, domain={business_domain}")
+            logger.warning(
+                "No active model found: vertical=%s, scoring_model_id=%s",
+                vertical_id,
+                scoring_model_id,
+            )
             return None
         
-        await cache_service.set_active_model(vertical_id, business_domain, model_data)
+        await cache_service.set_active_model(client_id, model_data)
         return model_data
 
     async def resolve_vertical_for_client(self, client_id: UUID) -> Dict[str, Any]:
@@ -71,6 +79,8 @@ class ScoringOrchestrator:
             raise ValueError("CLIENT_NOT_FOUND")
         if vertical_ctx.get("vertical_id") is None:
             raise ValueError("TENANT_VERTICAL_NOT_CONFIGURED")
+        if vertical_ctx.get("scoring_model_id") is None:
+            raise ValueError("TENANT_SCORING_MODEL_NOT_CONFIGURED")
         return vertical_ctx
 
     @staticmethod
@@ -299,16 +309,18 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
         try:
             vertical_ctx = await self.resolve_vertical_for_client(request.client_id)
             vertical_id = int(vertical_ctx["vertical_id"])
+            scoring_model_id = UUID(str(vertical_ctx["scoring_model_id"]))
             lead_type = self.derive_lead_type_from_vertical(vertical_ctx)
 
             model_data = await self.get_active_scoring_model(
+                client_id=request.client_id,
                 vertical_id=vertical_id,
-                business_domain=request.business_domain
+                scoring_model_id=scoring_model_id,
             )
             
             if not model_data:
                 raise ValueError(
-                    f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, business_domain={request.business_domain}"
+                    f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
                 )
             
             conversation_id = request.conversation_id or uuid4()
@@ -334,7 +346,6 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                 lead_id = await self.repo.get_or_create_lead(
                     client_id=request.client_id,
                     lead_type=lead_type,
-                    business_domain=request.business_domain,
                     user_metadata=request.user_metadata or {},
                     conversation_id=str(conversation_id),
                 )
@@ -368,7 +379,6 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                     vertical_ctx=vertical_ctx,
                     conversation_id=conversation_id,
                     query_text=request.query_text,
-                    business_domain=request.business_domain,
                     lead_type=lead_type
                 )
             )
@@ -395,7 +405,6 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
         query_text: str,
-        business_domain: Optional[str] = None,
         lead_type: Optional[str] = None
     ):
         """Run scoring in background with retries"""
@@ -425,7 +434,6 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                             **model_data,
                             "vertical_name": vertical_ctx.get("vertical_name", "leads"),
                             "vertical_slug": vertical_ctx.get("vertical_slug", ""),
-                            "business_domain": business_domain,
                             "lead_type": lead_type,
                         },
                         prompt_config=prompt_config

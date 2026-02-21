@@ -18,7 +18,7 @@ from app.modules.shared.sdui import (
 router = APIRouter(prefix="/system/users", tags=["Users Management"])
 
 @router.get("", response_model=WebIAFirstResponse)
-async def get_ui_schema(user: User = Depends(RoleChecker(["admin"]))):
+async def get_ui_schema(user: User = Depends(RoleChecker(["admin", "system-user"]))):
     # Base64 encoded schemas for the frontend actions
     form_fields = [
         {"name": "email", "label": "Email", "type": "text", "required": True},
@@ -96,7 +96,7 @@ async def get_ui_schema(user: User = Depends(RoleChecker(["admin"]))):
     }
 
 @router.get("/data", response_model=List[UserRow])
-async def list_data(user: User = Depends(RoleChecker(["admin"]))):
+async def list_data(user: User = Depends(RoleChecker(["admin", "system-user"]))):
     return await service.list_users()
 
 @router.get("/roles/simple-list")
@@ -104,21 +104,21 @@ async def list_roles(user: User = Depends(current_active_user)):
     return await service.list_roles()
 
 @router.get("/{item_id}", response_model=UserRow)
-async def get_item(item_id: UUID, user: User = Depends(RoleChecker(["admin"]))):
+async def get_item(item_id: UUID, user: User = Depends(RoleChecker(["admin", "system-user"]))):
     item = await service.get_user(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="User not found")
     return item
 
 @router.post("", response_model=UserRow)
-async def create_item(item: UserCreate, user: User = Depends(RoleChecker(["admin"]))):
+async def create_item(item: UserCreate, user: User = Depends(RoleChecker(["admin", "system-user"]))):
     return await service.create_user(item)
 
 @router.put("/{item_id}", response_model=UserRow)
-async def update_item(item_id: UUID, item: UserUpdate, user: User = Depends(RoleChecker(["admin"]))):
+async def update_item(item_id: UUID, item: UserUpdate, user: User = Depends(RoleChecker(["admin", "system-user"]))):
     return await service.update_user(item_id, item)
 
 @router.delete("/{item_id}")
-async def delete_item(item_id: UUID, user: User = Depends(RoleChecker(["admin"]))):
+async def delete_item(item_id: UUID, user: User = Depends(RoleChecker(["admin", "system-user"]))):
     await service.delete_user(item_id)
     return {"status": "success"}

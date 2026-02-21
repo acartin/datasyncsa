@@ -18,6 +18,7 @@ from app.modules.roles.router import router as roles_router
 from app.modules.contacts.router import router as contacts_router
 from app.modules.leads.router import router as leads_router
 from app.modules.leads_v2.router import router as leads_v2_router
+from app.modules.leads_v2.admin_scoring_router import router as admin_scoring_router
 from app.modules.campaigns.router import router as campaigns_router
 from app.modules.ai_library.router import router as ai_library_router
 from app.modules.system_public_docs.router import router as system_public_docs_router
@@ -62,6 +63,7 @@ app.include_router(manager_workspace_router, prefix="/dashboard")
 app.include_router(seller_workspace_router, prefix="/dashboard")
 app.include_router(leads_router, prefix="/leads", tags=["Leads Operations"])
 app.include_router(leads_v2_router, prefix="/leads_v2", tags=["Leads v2 Operations"])
+app.include_router(admin_scoring_router)
 app.include_router(campaigns_router, prefix="/campaigns", tags=["Campaigns Operations"])
 app.include_router(ai_library_router, prefix="/ai-library", tags=["AI Library Management"])
 app.include_router(system_public_docs_router)

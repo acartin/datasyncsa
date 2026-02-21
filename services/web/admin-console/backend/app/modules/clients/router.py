@@ -15,8 +15,8 @@ import logging
 from sqlalchemy import text
 from app.dal.database import engine
 
-# Security: Admin and Client Admins (System Users) can access
-router = APIRouter(dependencies=[Depends(RoleChecker(["admin", "client-admin"]))])
+# Security: Admin, System User and Client Admin can access
+router = APIRouter(dependencies=[Depends(RoleChecker(["admin", "system-user", "client-admin"]))])
 logger = logging.getLogger(__name__)
 
 CLIENT_FORM_FIELDS = [
@@ -27,6 +27,21 @@ CLIENT_FORM_FIELDS = [
         "type": "select",
         "source": "/countries/data",
         "required": True,
+    },
+    {
+        "name": "vertical_id",
+        "label": "Vertical",
+        "type": "select",
+        "source": "/clients/verticals/options",
+        "required": True,
+    },
+    {
+        "name": "scoring_model_id",
+        "label": "Modelo de Scoring",
+        "type": "select",
+        "source": "/clients/scoring-models/options?vertical_id={vertical_id}",
+        "required": False,
+        "depends_on": "vertical_id",
     },
 ]
 
@@ -54,13 +69,16 @@ async def get_clients_view(current_user: AuthUser = Depends(current_active_user)
                         "columns": [
                             {"id": "name", "label": "Nombre del Cliente", "type": "text", "sortable": True},
                             {"id": "country_name", "label": "País", "type": "text", "sortable": True},
+                            {"id": "vertical_name", "label": "Vertical", "type": "text", "sortable": True},
+                            {"id": "scoring_model_name", "label": "Modelo", "type": "text", "sortable": True},
                             {"id": "id", "label": "ID", "type": "text", "sortable": True, "hidden": True}
                         ],
                         "enableFilters": True,
                         "filterConfig": {
                             "searchFields": ["name", "country_name"],
                             "filterableColumns": [
-                                {"id": "country_name", "label": "País", "icon": "ri-earth-line"}
+                                {"id": "country_name", "label": "País", "icon": "ri-earth-line"},
+                                {"id": "vertical_name", "label": "Vertical", "icon": "ri-stack-line"}
                             ]
                         },
                         "form_schema": [
@@ -132,6 +150,16 @@ async def list_clients_data():
 async def list_simple_clients():
     """Returns a simple ID/Name list for dropdowns."""
     return await service.list_simple()
+
+@router.get("/clients/scoring-models/options")
+async def list_scoring_models_options(vertical_id: Optional[int] = Query(None)):
+    """Returns scoring model options filtered by vertical."""
+    return await service.list_scoring_model_options(vertical_id)
+
+@router.get("/clients/verticals/options")
+async def list_verticals_options():
+    """Returns vertical options for clients CRUD."""
+    return await service.list_vertical_options()
 
 @router.post("/clients", response_model=ClientRow)
 async def create_client(client: ClientCreate):

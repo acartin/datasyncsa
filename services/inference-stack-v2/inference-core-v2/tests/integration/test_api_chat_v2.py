@@ -54,7 +54,6 @@ async def test_chat_v2_endpoint_success(client, mocker):
     request_data = {
         "queryText": "Test query",
         "clientId": str(uuid4()),
-        "businessDomain": "residential"
     }
     
     response = client.post("/api/v2/chat", json=request_data)
@@ -73,7 +72,7 @@ async def test_get_active_model_endpoint(client, mocker):
     mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
     mock_instance = mocker.AsyncMock()
     mock_orchestrator.return_value = mock_instance
-    mock_instance.resolve_vertical_for_client.return_value = {"vertical_id": 1}
+    mock_instance.resolve_vertical_for_client.return_value = {"vertical_id": 1, "scoring_model_id": str(uuid4())}
     
     # Mock model data
     mock_model_data = {
@@ -107,7 +106,7 @@ async def test_get_active_model_endpoint_not_found(client, mocker):
     mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
     mock_instance = mocker.AsyncMock()
     mock_orchestrator.return_value = mock_instance
-    mock_instance.resolve_vertical_for_client.return_value = {"vertical_id": 1}
+    mock_instance.resolve_vertical_for_client.return_value = {"vertical_id": 1, "scoring_model_id": str(uuid4())}
     
     mock_instance.get_active_scoring_model.return_value = None
     
@@ -144,7 +143,7 @@ async def test_cache_invalidation(client, mocker):
     mock_cache.invalidate_active_model = mocker.AsyncMock(return_value=True)
     
     # Test specific invalidation
-    response = client.post("/api/v2/cache/invalidate?vertical_id=1")
+    response = client.post(f"/api/v2/cache/invalidate?client_id={uuid4()}")
     
     assert response.status_code == 200
     assert response.json()["status"] == "success"
@@ -160,8 +159,8 @@ async def test_cache_invalidation(client, mocker):
 @pytest.mark.asyncio
 async def test_invalid_cache_invalidation(client):
     """Test cache invalidation with invalid parameters"""
-    # Invalid combination: business_domain without vertical_id
-    response = client.post("/api/v2/cache/invalidate?business_domain=test")
+    # Invalid combination: unsupported params
+    response = client.post("/api/v2/cache/invalidate?vertical_id=1")
     
     assert response.status_code == 400
     assert "invalid parameters" in response.json()["detail"].lower()

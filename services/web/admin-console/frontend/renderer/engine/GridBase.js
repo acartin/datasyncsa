@@ -25,6 +25,7 @@ export class GridBase {
         this.sortState = { colId: null, direction: 'asc' };
         this.pollingInterval = null;
         this.lastDataSignature = null;
+        this.selectedRowId = null;
 
         // 1. Registry
         this.registerInstance();
@@ -246,6 +247,36 @@ export class GridBase {
     }
 
     // Interaction Handlers
+    handleRowClick(rowId, event) {
+        if (!rowId) return;
+
+        if (event && (
+            event.target.closest('button') ||
+            event.target.closest('a') ||
+            event.target.closest('.dropdown') ||
+            event.target.closest('input')
+        )) {
+            return;
+        }
+
+        this.selectedRowId = rowId;
+        this.render();
+
+        if (this.config.navigate_on_click) {
+            const row = this.data.find((item) => String(item?.id ?? '') === String(rowId));
+            if (row) {
+                const navigateAction = this.config.actions?.find((a) => a.action === 'navigate');
+                const navigateUrlTemplate = this.config.navigate_url;
+                const url = navigateUrlTemplate
+                    ? resolveActionUrl({ action_url: navigateUrlTemplate }, row)
+                    : (navigateAction ? resolveActionUrl(navigateAction, row) : '');
+                if (url && window.navigateTo) {
+                    window.navigateTo(url);
+                }
+            }
+        }
+    }
+
     handleRowDoubleClick(rowId, event) {
         if (!rowId) return;
 

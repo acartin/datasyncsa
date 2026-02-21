@@ -20,7 +20,6 @@ class ChatV2Request(BaseModel):
         max_length=32,
         description="Deprecated. lead_type is resolved from tenant vertical configuration.",
     )
-    business_domain: Optional[str] = Field(None, max_length=64, description="Optional business domain for additional granularity")
     filters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional filters like category or source")
     conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID if applicable")
     user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional context about the user")
