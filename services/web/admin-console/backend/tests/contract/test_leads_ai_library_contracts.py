@@ -38,7 +38,10 @@ def test_leads_me_view_contract(client, monkeypatch):
     )
     lead_id = uuid.uuid4()
 
-    async def _fake_get_my_leads(_user_id):
+    async def _fake_get_my_leads(*, user_id, is_superuser, tenant_ids):
+        assert user_id == user.id
+        assert is_superuser is False
+        assert tenant_ids == [user.tenants[0].client_id]
         return [_sample_lead(lead_id)]
 
     monkeypatch.setattr(leads_router_module.lead_service, "get_my_leads", _fake_get_my_leads)

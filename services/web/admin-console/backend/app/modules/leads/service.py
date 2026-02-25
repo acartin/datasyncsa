@@ -4,10 +4,24 @@ from sqlalchemy import text
 from app.dal.database import engine
 
 class LeadService:
-    async def get_my_leads(self, user_id: UUID) -> List[dict]:
+    async def get_my_leads(
+        self,
+        user_id: UUID,
+        is_superuser: bool = False,
+        tenant_ids: Optional[List[UUID]] = None,
+    ) -> List[dict]:
         """
-        Fetches the list of leads assigned to a specific user for grid display.
+        Fetches leads for grid display based on user scope.
         """
+        access_filter = ""
+        params = {"uid": user_id}
+        if not is_superuser:
+            if tenant_ids:
+                access_filter = "AND (l.assigned_user_id = :uid OR l.client_id = ANY(:tenant_ids))"
+                params["tenant_ids"] = tenant_ids
+            else:
+                access_filter = "AND l.assigned_user_id = :uid"
+
         query_str = text("""
             SELECT 
                 l.id, l.full_name, l.email, l.phone, l.score_total, l.created_at,
@@ -30,12 +44,13 @@ class LeadService:
             LEFT JOIN lead_scoring_definitions d_inf ON l.info_def_id = d_inf.id
             LEFT JOIN lead_scoring_definitions d_prio ON l.priority_def_id = d_prio.id
             LEFT JOIN lead_scoring_definitions d_wf ON d_wf.criterion = 'workflow' AND d_wf.is_active = true
-            WHERE l.assigned_user_id = :uid AND l.deleted_at IS NULL
+            WHERE l.deleted_at IS NULL
+            """ + access_filter + """
             ORDER BY l.score_total DESC, l.created_at DESC
         """)
         
         async with engine.connect() as conn:
-            result = await conn.execute(query_str, {"uid": user_id})
+            result = await conn.execute(query_str, params)
             rows = result.all()
             return [dict(row._mapping) for row in rows]
 

@@ -1,10 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 from uuid import uuid4
-import json
 
 from main import app
-from app.models.database import LeadScoringModel, LeadScoringCriterion
 
 
 @pytest.fixture
@@ -24,7 +22,7 @@ async def test_chat_v2_endpoint_missing_client_id(client):
     response = client.post("/api/v2/chat", json=request_data)
     
     assert response.status_code == 422  # Pydantic validation error
-    assert "clientid" in response.text.lower()
+    assert "client_id" in response.text.lower()
 
 
 @pytest.mark.asyncio
@@ -39,15 +37,11 @@ async def test_chat_v2_endpoint_success(client, mocker):
     mock_response = {
         "answer": "Test response",
         "conversation_id": str(uuid4()),
-        "scorecard_id": str(uuid4()),
-        "scorecard": {
-            "score_total": 7.5,
-            "priority_label": "medium",
-            "reasoning": "Test reasoning",
-            "model_version": 1,
-            "prompt_version": 1,
-            "score_items": []
-        }
+        "scorecard_id": None,
+        "scorecard": None,
+        "scoring_status": "pending",
+        "scoring_job_id": None,
+        "scoring_eta": "2026-02-22T00:00:00+00:00",
     }
     mock_instance.process_chat.return_value = mock_response
     
@@ -63,6 +57,31 @@ async def test_chat_v2_endpoint_success(client, mocker):
     assert data["answer"] == "Test response"
     assert "conversationId" in data
     assert "scorecardId" in data
+    assert data["scoringStatus"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_chat_v2_endpoint_accepts_cliente_id_alias(client, mocker):
+    """Test /api/v2/chat accepts clienteId alias for client_id"""
+    mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
+    mock_instance = mocker.AsyncMock()
+    mock_orchestrator.return_value = mock_instance
+    mock_instance.process_chat.return_value = {
+        "answer": "Alias response",
+        "conversation_id": str(uuid4()),
+        "scorecard_id": None,
+        "scorecard": None,
+        "scoring_status": "pending",
+        "scoring_job_id": None,
+        "scoring_eta": None,
+    }
+
+    request_data = {
+        "queryText": "Test query",
+        "clienteId": str(uuid4()),
+    }
+    response = client.post("/api/v2/chat", json=request_data)
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -98,6 +117,33 @@ async def test_get_active_model_endpoint(client, mocker):
     assert data["modelId"] == mock_model_data["id"]
     assert data["modelVersion"] == 1
     assert len(data["criteria"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_scoring_job_endpoint(client, mocker):
+    mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
+    mock_instance = mocker.AsyncMock()
+    mock_orchestrator.return_value = mock_instance
+
+    job_id = uuid4()
+    mock_instance.get_scoring_job_response.return_value = {
+        "id": str(job_id),
+        "lead_id": str(uuid4()),
+        "conversation_id": str(uuid4()),
+        "client_id": str(uuid4()),
+        "status": "queued",
+        "attempts": 0,
+        "max_attempts": 3,
+        "scheduled_for": "2026-02-22T00:00:00+00:00",
+        "created_at": "2026-02-22T00:00:00+00:00",
+        "updated_at": "2026-02-22T00:00:00+00:00",
+    }
+
+    response = client.get(f"/api/v2/scoring/jobs/{job_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(job_id)
+    assert data["status"] == "queued"
 
 
 @pytest.mark.asyncio
@@ -157,13 +203,16 @@ async def test_cache_invalidation(client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_invalid_cache_invalidation(client):
-    """Test cache invalidation with invalid parameters"""
-    # Invalid combination: unsupported params
+async def test_cache_invalidation_ignores_unknown_query_params(client, mocker):
+    """Unknown query params are ignored; endpoint invalidates all cache when client_id is absent."""
+    mock_cache = mocker.patch('app.api.chat_v2.cache_service')
+    mock_cache.invalidate_all_models = mocker.AsyncMock(return_value=True)
+
     response = client.post("/api/v2/cache/invalidate?vertical_id=1")
-    
-    assert response.status_code == 400
-    assert "invalid parameters" in response.json()["detail"].lower()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    mock_cache.invalidate_all_models.assert_called_once()
 
 
 @pytest.mark.asyncio

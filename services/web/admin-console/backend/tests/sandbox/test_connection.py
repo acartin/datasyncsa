@@ -8,7 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 from app.dal.database import engine
 from sqlalchemy import text
 
-async def test():
+async def _run_connection_check():
     try:
         print(f"Testing connection to: {engine.url}")
         async with engine.connect() as conn:
@@ -17,5 +17,10 @@ async def test():
     except Exception as e:
         print(f"Connection Failed: {e}")
 
+
+def test():
+    asyncio.run(_run_connection_check())
+
+
 if __name__ == "__main__":
-    asyncio.run(test())
+    asyncio.run(_run_connection_check())

@@ -66,8 +66,8 @@ class GridFilters {
     renderFilterBar() {
         const html = `
             <div class="filter-bar mb-3">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-5">
+                <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center grid-filter-topbar">
+                    <div class="grid-filter-search flex-grow-1" style="min-width: 260px;">
                         <div class="search-box position-relative">
                             <input type="text" 
                                    class="form-control search ps-5" 
@@ -76,8 +76,9 @@ class GridFilters {
                             <i class="ri-search-line search-icon position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
                         </div>
                     </div>
-                    <div class="col-md-7 text-end d-flex justify-content-end align-items-center">
-                        <div class="dropdown me-2">
+                    <div class="grid-filter-actions">
+                        <div class="d-flex flex-wrap justify-content-md-end justify-content-start align-items-center gap-2">
+                        <div class="dropdown">
                             <button class="btn btn-ghost-secondary btn-sm fs-13 fw-normal dropdown-toggle text-body" type="button" data-bs-toggle="dropdown">
                                 <i class="icon"></i> Vistas
                             </button>
@@ -127,7 +128,7 @@ class GridFilters {
                             <i class="icon"></i> Filtros
                         </button>
                         ${this.hasActiveFilters() ? `
-                        <button class="btn btn-ghost-danger btn-sm ms-2 fs-13 fw-normal text-danger" 
+                        <button class="btn btn-ghost-danger btn-sm fs-13 fw-normal text-danger" 
                                 onclick="window.gridInstances['${this.grid.container.id}'].filters.clearAllFilters()">
                             <i class="icon"></i> Limpiar
                         </button>
@@ -135,6 +136,7 @@ class GridFilters {
 
                         <!-- Header Actions (Injected via SDUI) -->
                         ${this.renderHeaderActionsHtml()}
+                        </div>
                     </div>
                 </div>
                 <div id="active-filters-${this.grid.container.id}" class="mt-2"></div>
@@ -169,9 +171,8 @@ class GridFilters {
             const color = act.color || 'primary'; // Create actions usually primary
             const icon = act.icon || 'ri-add-line';
 
-            // Add ms-2 to separate from other buttons if needed
             return `
-                <button class="btn btn-${color} btn-sm fs-13 fw-normal ms-2 shadow-sm" 
+                <button class="btn btn-${color} btn-sm fs-13 fw-normal shadow-sm" 
                     onclick="window.handleEditAction(event, '', '${url}', '${schemaToPass}', '${modalTitle}')">
                     <i class="icon ${icon} me-1 align-bottom"></i> ${act.label}
                 </button>

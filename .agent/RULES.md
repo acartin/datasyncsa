@@ -2,6 +2,14 @@
 
 ## 1. Fuente de Verdad de Contexto
 
+Precondición obligatoria al iniciar **cada nueva sesión** (humano o IA):
+
+1. Ejecutar `bash .agent/regenerar_contexto.sh`
+2. Confirmar actualización de:
+   - `.agent/BRAIN_MAP.md`
+   - `.agent/AI_CONTEXT_PACK.md`
+3. Recién después iniciar análisis/implementación.
+
 Orden obligatorio de lectura para cualquier IA o colaborador:
 
 1. `.agent/RULES.md` (este archivo)
@@ -84,25 +92,26 @@ Regla:
 
 ## 9. Testing Mínimo por Cambio
 
-Si tocas cada área, corre como mínimo:
+Si tocas cada área, corre como mínimo en el contenedor **backend/API** correspondiente (nunca en `*-web`):
 
-Admin Console backend:
+Admin Console backend (`admin-console-api`):
 - `docker compose exec -T admin-console-api pytest -q tests`
 
-Realtor Chat backend:
+Realtor Chat backend (`realtor-api`):
 - `docker compose exec -T realtor-api pytest -q tests`
+- si `pytest` no está instalado en la imagen: `docker compose exec -T realtor-api pip install -r /app/requirements-dev.txt`
 
-Inference Core v1:
-- `docker compose exec -T inference-core pytest -q tests`
-
-Semantic Adapter:
-- `docker compose exec -T semantic-adapter pytest -q tests`
-
-Inference Core v2:
+Inference Core v2 (`inference-core-v2`):
 - `docker compose exec -T inference-core-v2 env PYTHONPATH=/app pytest -q tests`
 
-ETL Docs:
+Semantic Adapter v2 (`semantic-adapter-v2`):
+- `docker compose exec -T semantic-adapter-v2 pytest -q tests`
+
+ETL Docs (`etl-docs`):
 - `docker compose exec -T etl-docs pytest -q tests`
+
+Inference Core v1 (`inference-core`, solo si ese servicio existe en el compose activo):
+- `docker compose exec -T inference-core pytest -q tests`
 
 Si no se ejecutan pruebas:
 - documentar explícitamente qué no se validó y por qué.
@@ -121,11 +130,16 @@ Rechazar cambios que incurran en alguno:
 
 ## 11. Convención de Trabajo con IA
 
-Antes de pedir cambios grandes:
+Antes de empezar cualquier trabajo en una nueva sesión:
 
 1. Regenerar contexto: `bash .agent/regenerar_contexto.sh`
 2. Verificar que `.agent/BRAIN_MAP.md` esté actualizado.
-3. Entregar a la IA: `.agent/RULES.md` + `.agent/BRAIN_MAP.md` + `.agent/AI_CONTEXT_PACK.md`.
+3. Verificar que `.agent/AI_CONTEXT_PACK.md` esté actualizado.
+4. Entregar a la IA: `.agent/RULES.md` + `.agent/BRAIN_MAP.md` + `.agent/AI_CONTEXT_PACK.md`.
+
+Regla:
+- No arrancar implementación, debugging ni code review sin haber ejecutado los pasos 1-3 en esa sesión.
+- Excepción permitida: incidente operativo urgente; regularizar la regeneración al cierre y dejar constancia.
 
 Para tareas de alto impacto, incluir además:
 - archivo objetivo

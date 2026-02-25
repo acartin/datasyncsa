@@ -38,10 +38,19 @@ async function init() {
         );
 
         // Race fetch against timeout
-        const response = await Promise.race([
-            fetch(`${API_BASE_URL}/app-init`, { headers }),
+        const requestAppInit = (url) => fetch(url, { headers, cache: 'no-store' });
+        let response = await Promise.race([
+            requestAppInit(`${API_BASE_URL}/app-init`),
             timeout
         ]);
+
+        // Defensive retry to avoid intermittent stale/unauthorized responses on hard reload.
+        if (response.status === 401 && token) {
+            response = await Promise.race([
+                requestAppInit(`${API_BASE_URL}/app-init?_ts=${Date.now()}`),
+                timeout
+            ]);
+        }
 
         if (response.status === 401) {
             window.location.href = '/login.html';
@@ -64,7 +73,7 @@ async function init() {
             updateHeaderProfile();
             setupNavigation();
 
-            const currentPath = window.location.pathname;
+            const currentPath = `${window.location.pathname}${window.location.search || ''}`;
             if (currentPath && currentPath !== '/' && currentPath !== '/index.html') {
                 navigateTo(currentPath);
             } else {
@@ -117,10 +126,31 @@ export async function navigateTo(href, pushState = true) {
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
-        const response = await fetch(`${API_BASE_URL}${href}`, { headers });
+        const toggleTrailingSlash = (path) => {
+            const [pathname, query = ''] = String(path).split('?');
+            if (!pathname || pathname === '/') return path;
+            const toggled = pathname.endsWith('/') ? pathname.slice(0, -1) : `${pathname}/`;
+            return query ? `${toggled}?${query}` : toggled;
+        };
+
+        let resolvedHref = href;
+        let response = await fetch(`${API_BASE_URL}${resolvedHref}`, { headers, cache: 'no-store' });
         if (!response.ok) throw new Error(`View not found (${response.status})`);
 
-        const contentType = response.headers.get('content-type') || '';
+        let contentType = response.headers.get('content-type') || '';
+        if (!contentType.toLowerCase().includes('application/json')) {
+            const altHref = toggleTrailingSlash(resolvedHref);
+            if (altHref !== resolvedHref) {
+                const altResponse = await fetch(`${API_BASE_URL}${altHref}`, { headers, cache: 'no-store' });
+                const altContentType = altResponse.headers.get('content-type') || '';
+                if (altResponse.ok && altContentType.toLowerCase().includes('application/json')) {
+                    resolvedHref = altHref;
+                    response = altResponse;
+                    contentType = altContentType;
+                }
+            }
+        }
+
         if (!contentType.toLowerCase().includes('application/json')) {
             throw new Error(`Invalid view payload (expected JSON). status=${response.status} content-type=${contentType} url=${response.url}`);
         }
@@ -147,7 +177,7 @@ export async function navigateTo(href, pushState = true) {
 
         hydrateGrids();
 
-        if (pushState) history.pushState(null, '', href);
+        if (pushState) history.pushState(null, '', resolvedHref);
         document.body.classList.remove('vertical-sidebar-enable');
     } catch (error) {
         console.error('Navigation Error:', error);

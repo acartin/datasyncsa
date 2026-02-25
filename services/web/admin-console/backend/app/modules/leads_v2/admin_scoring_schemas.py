@@ -62,6 +62,7 @@ class ScoringCriterionRow(BaseModel):
     min_score: float
     max_score: float
     display_order: int
+    icon: Optional[str] = None
     is_active: bool
 
 
@@ -73,17 +74,18 @@ class ScoringCriterionCreate(BaseModel):
     min_score: float = 0.0
     max_score: float = 10.0
     display_order: int = Field(default=0, ge=0)
+    icon: Optional[str] = Field(default=None, max_length=128)
     is_active: bool = True
 
 
 class ScoringCriterionUpdate(BaseModel):
     model_id: Optional[UUID] = None
-    criterion_key: Optional[str] = Field(default=None, min_length=2, max_length=64)
     label: Optional[str] = Field(default=None, min_length=2, max_length=128)
     weight: Optional[float] = Field(default=None, ge=0.0)
     min_score: Optional[float] = None
     max_score: Optional[float] = None
     display_order: Optional[int] = Field(default=None, ge=0)
+    icon: Optional[str] = Field(default=None, max_length=128)
     is_active: Optional[bool] = None
 
 

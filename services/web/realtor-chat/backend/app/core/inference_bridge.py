@@ -119,5 +119,12 @@ class InferenceClient:
         
         if data.get("scorecardId") or data.get("scorecard_id"):
             normalized["scorecard_id"] = str(data.get("scorecardId") or data.get("scorecard_id"))
+
+        if data.get("scoringStatus") or data.get("scoring_status"):
+            normalized["scoring_status"] = str(data.get("scoringStatus") or data.get("scoring_status"))
+        if data.get("scoringJobId") or data.get("scoring_job_id"):
+            normalized["scoring_job_id"] = str(data.get("scoringJobId") or data.get("scoring_job_id"))
+        if data.get("scoringEta") or data.get("scoring_eta"):
+            normalized["scoring_eta"] = str(data.get("scoringEta") or data.get("scoring_eta"))
         
         return normalized

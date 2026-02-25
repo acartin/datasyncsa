@@ -1,24 +1,35 @@
 import logging
 import asyncio
+import re
+import time
 from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
+from decimal import Decimal
+from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat_v2 import ChatV2Request, ChatV2Response, ScoreItemV2, ScorecardV2
 from app.repositories.scoring_repository import ScoringRepository
 from app.services.cache_service import cache_service
 from app.services.hybrid_retriever import HybridRetriever
+from app.services.scoring_job_service import ScoringJobService
 from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
 
+DEFAULT_CHAT_SYSTEM_PROMPT = """Eres un asistente inmobiliario profesional. 
+Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado."""
+
 
 class ScoringOrchestrator:
     """Orchestrator for v2 chat and scoring"""
+    _conversation_locks: Dict[str, asyncio.Lock] = {}
+    _scheduled_scoring_tasks: Dict[str, asyncio.Task] = {}
     
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         self.repo = ScoringRepository(db_session)
+        self.job_service = ScoringJobService(self.repo)
         self.hybrid_retriever = HybridRetriever()
         self._scoring_engine = None
         self._llm_client = None
@@ -83,16 +94,6 @@ class ScoringOrchestrator:
             raise ValueError("TENANT_SCORING_MODEL_NOT_CONFIGURED")
         return vertical_ctx
 
-    @staticmethod
-    def derive_lead_type_from_vertical(vertical_ctx: Dict[str, Any]) -> str:
-        """Derive a lead_type string for lead_leads from vertical metadata."""
-        slug = (vertical_ctx.get("vertical_slug") or "").strip().lower()
-        if slug:
-            return slug[:32]
-        name = (vertical_ctx.get("vertical_name") or "generic").strip().lower()
-        normalized = name.replace(" ", "_").replace("-", "_")
-        return normalized[:32] if normalized else "generic"
-    
     async def get_or_create_prompt(
         self,
         model_data: Dict[str, Any],
@@ -107,6 +108,101 @@ class ScoringOrchestrator:
             raise ValueError(f"No active prompt found for model {model_id} - please configure prompt in database")
         
         return prompt_config
+
+    async def _resolve_runtime_context(
+        self,
+        request: ChatV2Request,
+        conversation_id: UUID,
+    ) -> Dict[str, Any]:
+        """
+        Resolve full runtime context for a chat turn.
+        Prefers conversation snapshot when available.
+        """
+        snapshot = None
+        if request.conversation_id:
+            snapshot = await self.repo.get_conversation_context_snapshot(
+                conversation_id=conversation_id,
+                client_id=request.client_id,
+            )
+
+        if snapshot:
+            vertical_ctx = snapshot.get("vertical_ctx") or {}
+            model_data = snapshot.get("model_data") or {}
+            prompt_config = snapshot.get("scoring_prompt") or {}
+            client_prompt_text = snapshot.get("client_prompt_text")
+            if vertical_ctx and model_data and prompt_config:
+                return {
+                    "vertical_ctx": vertical_ctx,
+                    "model_data": model_data,
+                    "prompt_config": prompt_config,
+                    "client_prompt_text": client_prompt_text,
+                    "from_snapshot": True,
+                }
+
+        vertical_ctx = await self.resolve_vertical_for_client(request.client_id)
+        vertical_id = int(vertical_ctx["vertical_id"])
+        scoring_model_id = UUID(str(vertical_ctx["scoring_model_id"]))
+
+        model_data = await self.get_active_scoring_model(
+            client_id=request.client_id,
+            vertical_id=vertical_id,
+            scoring_model_id=scoring_model_id,
+        )
+        if not model_data:
+            raise ValueError(
+                f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
+            )
+
+        prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx)
+        client_prompt_text = await self.repo.get_client_system_prompt(
+            request.client_id,
+            slug="primary_chat",
+        )
+
+        return {
+            "vertical_ctx": vertical_ctx,
+            "model_data": model_data,
+            "prompt_config": prompt_config,
+            "client_prompt_text": client_prompt_text,
+            "from_snapshot": False,
+        }
+
+    @staticmethod
+    def _json_safe(value: Any) -> Any:
+        if isinstance(value, UUID):
+            return str(value)
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {str(k): ScoringOrchestrator._json_safe(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [ScoringOrchestrator._json_safe(v) for v in value]
+        return value
+
+    @classmethod
+    def _get_conversation_lock(cls, conversation_id: UUID) -> asyncio.Lock:
+        key = str(conversation_id)
+        lock = cls._conversation_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            cls._conversation_locks[key] = lock
+        return lock
+
+    @staticmethod
+    def _build_conversation_context_snapshot(
+        vertical_ctx: Dict[str, Any],
+        model_data: Dict[str, Any],
+        prompt_config: Dict[str, Any],
+        client_prompt_text: Optional[str],
+    ) -> Dict[str, Any]:
+        return {
+            "vertical_ctx": ScoringOrchestrator._json_safe(vertical_ctx or {}),
+            "model_data": ScoringOrchestrator._json_safe(model_data or {}),
+            "scoring_prompt": ScoringOrchestrator._json_safe(prompt_config or {}),
+            "client_prompt_text": client_prompt_text,
+        }
 
     @staticmethod
     def _format_conversation_history(messages: List[Dict[str, Any]]) -> str:
@@ -126,6 +222,117 @@ class ScoringOrchestrator:
                 speaker = role.capitalize() or "Mensaje"
             lines.append(f"{speaker}: {content}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_user_only_history(messages: List[Dict[str, Any]]) -> str:
+        """
+        Build scoring context strictly from user turns to avoid assistant leakage.
+        """
+        if not messages:
+            return ""
+        lines: List[str] = []
+        for item in messages:
+            role = (item.get("role") or "").strip().lower()
+            if role != "user":
+                continue
+            content = (item.get("content") or "").strip()
+            if not content:
+                continue
+            lines.append(f"Usuario: {content}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _extract_contact_seed_from_text(query_text: str) -> Dict[str, Any]:
+        """
+        Fast path extraction to persist core contact fields even if async scoring fails.
+        """
+        text = (query_text or "").strip()
+        if not text:
+            return {}
+
+        extracted: Dict[str, Any] = {}
+
+        email_match = re.search(
+            r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+            text,
+            re.IGNORECASE,
+        )
+        if email_match:
+            extracted["extracted_email"] = email_match.group(0)
+
+        phone_match = re.search(
+            r"\b(?:\+?\d{1,3}[-\s]?)?(?:\d{4}[-\s]?\d{4})\b",
+            text,
+        )
+        if phone_match:
+            extracted["extracted_phone"] = phone_match.group(0).strip()
+
+        name_match = re.search(
+            r"\b(?:me llamo|soy)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s+[A-Za-zÁÉÍÓÚáéíóúÑñ]+){0,4})",
+            text,
+            re.IGNORECASE,
+        )
+        if name_match:
+            candidate = " ".join(name_match.group(1).split()).strip()
+            if len(candidate) >= 4:
+                extracted["extracted_name"] = candidate
+
+        return extracted
+
+    async def _is_stale_scoring_task(
+        self,
+        repo: ScoringRepository,
+        conversation_id: UUID,
+        client_id: UUID,
+        lead_id: UUID,
+        expected_lead_messages: Optional[int],
+    ) -> bool:
+        if expected_lead_messages is None:
+            return False
+
+        counters = await repo.get_conversation_message_counters(
+            conversation_id=conversation_id,
+            client_id=client_id,
+        )
+        latest_lead_messages = (counters or {}).get("lead_messages")
+        if latest_lead_messages and latest_lead_messages > expected_lead_messages:
+            logger.info(
+                "Skipping stale scoring task for lead %s conversation %s (expected_turn=%s latest_turn=%s)",
+                lead_id,
+                conversation_id,
+                expected_lead_messages,
+                latest_lead_messages,
+            )
+            return True
+        return False
+
+    @classmethod
+    def _schedule_scoring_after_idle(
+        cls,
+        *,
+        coroutine_factory,
+        conversation_id: UUID,
+        idle_delay_secs: float,
+    ) -> None:
+        key = str(conversation_id)
+        existing = cls._scheduled_scoring_tasks.get(key)
+        if existing and not existing.done():
+            existing.cancel()
+
+        async def _runner() -> None:
+            try:
+                await asyncio.sleep(max(0.0, idle_delay_secs))
+                await coroutine_factory()
+            except asyncio.CancelledError:
+                logger.debug("Cancelled scheduled scoring task for conversation %s", conversation_id)
+                raise
+            finally:
+                current = cls._scheduled_scoring_tasks.get(key)
+                if current is asyncio.current_task():
+                    cls._scheduled_scoring_tasks.pop(key, None)
+
+        task = asyncio.create_task(_runner())
+        cls._scheduled_scoring_tasks[key] = task
 
     @staticmethod
     def _format_vector_context(chunks: List[Dict[str, Any]]) -> str:
@@ -245,10 +452,12 @@ class ScoringOrchestrator:
         request: ChatV2Request,
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
+        system_prompt: Optional[str] = None,
     ) -> str:
         """
         Generate chat response using LLM with client's system prompt.
         """
+        start_total = time.perf_counter()
         if not self.llm_client:
             return "Lo siento, el servicio de IA no está disponible."
         
@@ -260,31 +469,45 @@ class ScoringOrchestrator:
             )
             history_text = self._format_conversation_history(hybrid_ctx["history"])
 
-            # Get system prompt from lead_ai_prompts
-            system_prompt = await self.repo.get_client_system_prompt(
-                request.client_id, 
-                slug="primary_chat"
-            )
+            # Get system prompt from lead_ai_prompts unless snapshot provided one.
+            if not system_prompt:
+                system_prompt = await self.repo.get_client_system_prompt(
+                    request.client_id,
+                    slug="primary_chat"
+                )
             
             if not system_prompt:
-                system_prompt = """Eres un asistente inmobiliario profesional. 
-Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado."""
+                system_prompt = DEFAULT_CHAT_SYSTEM_PROMPT
             
             vector_section = hybrid_ctx["vector_chunks"]
             structured_section = hybrid_ctx["structured_facts"]
+            vector_context_text = self._format_vector_context(vector_section)
+            structured_context_text = self._format_structured_context(structured_section)
             composed_user_prompt = (
                 "Contexto conversacional previo:\n"
                 f"{history_text or '[sin historial]'}\n\n"
                 "Contexto vectorial recuperado (RAG vertical/tenant):\n"
-                f"{self._format_vector_context(vector_section)}\n\n"
+                f"{vector_context_text}\n\n"
                 "Contexto estructurado de negocio:\n"
-                f"{self._format_structured_context(structured_section)}\n\n"
+                f"{structured_context_text}\n\n"
                 "Mensaje actual del usuario:\n"
                 f"{request.query_text}"
+            )
+            logger.info(
+                "CHAT_INPUT conversation_id=%s history_chars=%s vector_chunks=%s vector_chars=%s structured_facts=%s structured_chars=%s system_prompt_chars=%s user_prompt_chars=%s",
+                conversation_id,
+                len(history_text or ""),
+                len(vector_section or []),
+                len(vector_context_text or ""),
+                len(structured_section or []),
+                len(structured_context_text or ""),
+                len(system_prompt or ""),
+                len(composed_user_prompt or ""),
             )
 
             # Generate response using LLM
             from google.genai import types
+            llm_start = time.perf_counter()
             response = self.llm_client.models.generate_content(
                 model=settings.llm_model,
                 contents=[composed_user_prompt],
@@ -293,7 +516,15 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                     temperature=0.2,
                 ),
             )
-            
+            llm_ms = (time.perf_counter() - llm_start) * 1000.0
+            total_ms = (time.perf_counter() - start_total) * 1000.0
+            logger.info(
+                "CHAT_OUTPUT conversation_id=%s llm_duration_ms=%.1f total_duration_ms=%.1f response_chars=%s",
+                conversation_id,
+                llm_ms,
+                total_ms,
+                len(response.text or ""),
+            )
             return response.text
             
         except Exception as e:
@@ -307,29 +538,21 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
         Scoring runs in background and does not block the response.
         """
         try:
-            vertical_ctx = await self.resolve_vertical_for_client(request.client_id)
-            vertical_id = int(vertical_ctx["vertical_id"])
-            scoring_model_id = UUID(str(vertical_ctx["scoring_model_id"]))
-            lead_type = self.derive_lead_type_from_vertical(vertical_ctx)
-
-            model_data = await self.get_active_scoring_model(
-                client_id=request.client_id,
-                vertical_id=vertical_id,
-                scoring_model_id=scoring_model_id,
-            )
-            
-            if not model_data:
-                raise ValueError(
-                    f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
-                )
-            
             conversation_id = request.conversation_id or uuid4()
+            runtime_ctx = await self._resolve_runtime_context(request, conversation_id)
+            vertical_ctx = runtime_ctx["vertical_ctx"]
+            model_data = runtime_ctx["model_data"]
+            prompt_config = runtime_ctx["prompt_config"]
+            client_prompt_text = runtime_ctx.get("client_prompt_text")
+            if not client_prompt_text:
+                client_prompt_text = DEFAULT_CHAT_SYSTEM_PROMPT
             
             # Generate chat response using hybrid context (history + placeholders for retrieval)
             answer = await self._generate_chat_response(
                 request=request,
                 vertical_ctx=vertical_ctx,
                 conversation_id=conversation_id,
+                system_prompt=client_prompt_text,
             )
             
             existing_lead_id = None
@@ -345,7 +568,6 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
             else:
                 lead_id = await self.repo.get_or_create_lead(
                     client_id=request.client_id,
-                    lead_type=lead_type,
                     user_metadata=request.user_metadata or {},
                     conversation_id=str(conversation_id),
                 )
@@ -353,13 +575,25 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
             await self.db_session.commit()
             
             # Save conversation
+            conversation_counters: Optional[Dict[str, int]] = None
             try:
                 await self.repo.get_or_create_conversation(
                     lead_id=lead_id,
                     conversation_id=conversation_id,
                     platform="webchat"
                 )
-                await self.repo.update_conversation(
+                snapshot_payload = self._build_conversation_context_snapshot(
+                    vertical_ctx=vertical_ctx,
+                    model_data=model_data,
+                    prompt_config=prompt_config,
+                    client_prompt_text=client_prompt_text,
+                )
+                await self.repo.set_conversation_context_snapshot(
+                    conversation_id=conversation_id,
+                    lead_id=lead_id,
+                    snapshot=snapshot_payload,
+                )
+                conversation_counters = await self.repo.update_conversation(
                     conversation_id=conversation_id,
                     lead_id=lead_id,
                     user_message=request.query_text,
@@ -367,21 +601,70 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                 )
             except Exception as e:
                 logger.error(f"Error saving conversation: {e}")
-            
-            if not self.scoring_engine:
-                raise ValueError("LLM_ENGINE_NOT_AVAILABLE: Scoring engine requires GOOGLE_API_KEY to be configured")
-            
-            asyncio.create_task(
-                self._run_scoring_background(
-                    lead_id=lead_id,
-                    client_id=request.client_id,
-                    model_data=model_data,
-                    vertical_ctx=vertical_ctx,
-                    conversation_id=conversation_id,
-                    query_text=request.query_text,
-                    lead_type=lead_type
+
+            # Persist contact data early from user message so name/email/phone are not
+            # blocked by async scoring failures/timeouts.
+            try:
+                contact_seed = self._extract_contact_seed_from_text(request.query_text)
+                if contact_seed:
+                    updated = await self.repo.update_lead_from_extraction(
+                        lead_id=lead_id,
+                        extracted_data=contact_seed,
+                    )
+                    if updated:
+                        await self.db_session.commit()
+            except Exception:
+                logger.exception(
+                    "Failed to persist early contact seed for lead %s conversation %s",
+                    lead_id,
+                    conversation_id,
                 )
-            )
+
+            scoring_status: Optional[str] = "disabled"
+            scoring_job_id: Optional[UUID] = None
+            scoring_eta: Optional[str] = None
+
+            if settings.scoring_bg_enabled and settings.google_api_key:
+                try:
+                    expected_lead_messages = (
+                        conversation_counters.get("lead_messages")
+                        if conversation_counters
+                        else None
+                    )
+                    model_id = UUID(str(model_data.get("id"))) if model_data.get("id") else None
+                    prompt_id = UUID(str(prompt_config.get("id"))) if prompt_config.get("id") else None
+                    job_data = await self.job_service.enqueue_post_chat_scoring(
+                        lead_id=lead_id,
+                        conversation_id=conversation_id,
+                        client_id=request.client_id,
+                        expected_lead_messages=expected_lead_messages,
+                        model_id=model_id,
+                        prompt_id=prompt_id,
+                    )
+                    scoring_status = "pending"
+                    if job_data.get("id"):
+                        scoring_job_id = UUID(str(job_data["id"]))
+                    scoring_eta = job_data.get("scheduled_for")
+                except Exception:
+                    scoring_status = "error"
+                    logger.exception(
+                        "Failed to enqueue scoring job for lead %s conversation %s",
+                        lead_id,
+                        conversation_id,
+                    )
+            elif not settings.scoring_bg_enabled:
+                logger.info(
+                    "Background scoring disabled by config for lead %s conversation %s",
+                    lead_id,
+                    conversation_id,
+                )
+            else:
+                logger.warning(
+                    "Scoring engine unavailable; chat returned without scoring for lead %s conversation %s",
+                    lead_id,
+                    conversation_id,
+                )
+
             scorecard_id = None
             scorecard = None
 
@@ -390,79 +673,117 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                 conversation_id=conversation_id,
                 lead_id=lead_id,
                 scorecard_id=scorecard_id,
-                scorecard=scorecard
+                scorecard=scorecard,
+                scoring_status=scoring_status,
+                scoring_job_id=scoring_job_id,
+                scoring_eta=scoring_eta,
             )
             
         except Exception as e:
             logger.error(f"Error processing chat request: {e}")
             raise
+
+    async def get_scoring_job_response(self, job_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get scoring job state by id."""
+        return await self.job_service.get_job(job_id)
     
     async def _run_scoring_background(
         self,
         lead_id: UUID,
         client_id: UUID,
         model_data: Dict[str, Any],
+        prompt_config: Dict[str, Any],
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
         query_text: str,
-        lead_type: Optional[str] = None
+        expected_lead_messages: Optional[int] = None,
     ):
         """Run scoring in background with retries"""
         from app.dependencies.database import AsyncSessionLocal
         
         max_retries = settings.scoring_max_retries
         retry_delay = settings.scoring_retry_delay_secs
+        # Conversation rows store both user+assistant turns. Scoring uses only user turns,
+        # so fetch 2x window to preserve the intended amount of user context.
+        scoring_history_window = max(settings.chat_history_max_messages * 2, settings.chat_history_max_messages)
         
         async with AsyncSessionLocal() as db_session:
-            self.db_session = db_session
-            self.repo = ScoringRepository(db_session)
-            
-            for attempt in range(1, max_retries + 1):
-                try:
-                    prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx)
-                    
-                    history = await self.repo.get_conversation_messages(
-                        conversation_id=conversation_id,
-                        client_id=client_id,
-                        max_messages=settings.chat_history_max_messages,
-                    )
-                    conversation_text = self._format_conversation_history(history) or f"Usuario: {query_text}"
-                    
-                    result = await self.scoring_engine.analyze_conversation(
-                        conversation_text=conversation_text,
-                        model_config={
-                            **model_data,
-                            "vertical_name": vertical_ctx.get("vertical_name", "leads"),
-                            "vertical_slug": vertical_ctx.get("vertical_slug", ""),
-                            "lead_type": lead_type,
-                        },
-                        prompt_config=prompt_config
-                    )
-                    
-                    scorecard_data = self._build_scorecard_from_result(
-                        model_data=model_data,
-                        result=result
-                    )
-                    
-                    await self._create_scorecard_with_engine(
-                        lead_id=lead_id,
-                        model_data=model_data,
-                        scorecard_data=scorecard_data,
-                        prompt_config=prompt_config,
-                        result=result,
-                        conversation_id=conversation_id
-                    )
-                    
-                    logger.info(f"Background scoring completed for lead {lead_id}")
-                    return
-                    
-                except Exception as e:
-                    logger.error(f"Background scoring attempt {attempt}/{max_retries} failed: {e}")
-                    
-                    if attempt < max_retries:
-                        await asyncio.sleep(retry_delay * attempt)
-                    else:
-                        logger.error(f"All background scoring attempts failed for lead {lead_id}")
+            local_repo = ScoringRepository(db_session)
+
+            lock = self._get_conversation_lock(conversation_id)
+            async with lock:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        # Re-check staleness inside lock to avoid write races.
+                        if await self._is_stale_scoring_task(
+                            repo=local_repo,
+                            conversation_id=conversation_id,
+                            client_id=client_id,
+                            lead_id=lead_id,
+                            expected_lead_messages=expected_lead_messages,
+                        ):
+                            return
+
+                        history = await local_repo.get_conversation_messages(
+                            conversation_id=conversation_id,
+                            client_id=client_id,
+                            max_messages=scoring_history_window,
+                        )
+                        if not history:
+                            history = await local_repo.get_latest_lead_messages(
+                                lead_id=lead_id,
+                                max_messages=scoring_history_window,
+                            )
+                            if history:
+                                logger.warning(
+                                    "Conversation history fallback-by-lead used for lead %s conversation %s",
+                                    lead_id,
+                                    conversation_id,
+                                )
+                        logger.info(
+                            "Scoring history size=%s for lead %s conversation %s",
+                            len(history),
+                            lead_id,
+                            conversation_id,
+                        )
+                        conversation_text = self._format_user_only_history(history) or f"Usuario: {query_text}"
+
+                        result = await self.scoring_engine.analyze_conversation(
+                            conversation_text=conversation_text,
+                            model_config={
+                                **model_data,
+                                "vertical_name": vertical_ctx.get("vertical_name", "leads"),
+                                "vertical_slug": vertical_ctx.get("vertical_slug", ""),
+                            },
+                            prompt_config=prompt_config
+                        )
+
+                        scorecard_data = self._build_scorecard_from_result(
+                            model_data=model_data,
+                            result=result
+                        )
+
+                        await self._create_scorecard_with_engine(
+                            repo=local_repo,
+                            db_session=db_session,
+                            lead_id=lead_id,
+                            model_data=model_data,
+                            scorecard_data=scorecard_data,
+                            prompt_config=prompt_config,
+                            result=result,
+                            conversation_id=conversation_id
+                        )
+
+                        logger.info(f"Background scoring completed for lead {lead_id}")
+                        return
+
+                    except Exception as e:
+                        logger.error(f"Background scoring attempt {attempt}/{max_retries} failed: {e}")
+
+                        if attempt < max_retries:
+                            await asyncio.sleep(retry_delay * attempt)
+                        else:
+                            logger.error(f"All background scoring attempts failed for lead {lead_id}")
     
     def _build_scorecard_from_result(
         self,
@@ -479,7 +800,7 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
         
         for criterion in model_data.get("criteria", []):
             criterion_key = criterion.get("criterion_key")
-            score = scores.get(criterion_key, 5.0)
+            score = scores.get(criterion_key, 0.0)
             
             min_score = float(criterion.get("min_score", 0))
             max_score = float(criterion.get("max_score", 10))
@@ -527,6 +848,8 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
     
     async def _create_scorecard_with_engine(
         self,
+        repo: ScoringRepository,
+        db_session: AsyncSession,
         lead_id: UUID,
         model_data: Dict[str, Any],
         scorecard_data: ScorecardV2,
@@ -545,8 +868,9 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
             
             prompt_snapshot = result.get("prompt_snapshot", "")
             extraction_result = result.get("extraction_result", {})
+            slot_state = result.get("slot_state") or {}
             
-            scorecard_id = await self.repo.upsert_scorecard(
+            scorecard_id = await repo.upsert_scorecard(
                 lead_id=lead_id,
                 model_id=model_id,
                 model_version=scorecard_data.model_version,
@@ -562,8 +886,14 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                     "scoring_metadata": {
                         "normalization_strategy": model_data.get("normalization_strategy"),
                         "criteria_count": len(scorecard_data.score_items),
-                        "engine": "gemini"
-                    }
+                        "engine": "gemini+deterministic_slots",
+                    },
+                    "slot_state": slot_state,
+                    "llm_meta": {
+                        "json_valid": result.get("json_valid"),
+                        "response_chars": result.get("response_chars"),
+                        "fallback_used": result.get("fallback_used"),
+                    },
                 }
             )
             
@@ -587,16 +917,16 @@ Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado.
                 
                 score_items_data.append(item_data)
             
-            await self.repo.create_score_items(scorecard_id, score_items_data)
-            await self.repo.update_lead_current_scorecard(lead_id, scorecard_id)
-            await self.repo.update_lead_from_extraction(lead_id, extraction_result)
-            await self.db_session.commit()
+            await repo.create_score_items(scorecard_id, score_items_data)
+            await repo.update_lead_current_scorecard(lead_id, scorecard_id)
+            await repo.update_lead_from_extraction(lead_id, extraction_result)
+            await db_session.commit()
             
             return scorecard_id
             
         except Exception as e:
             logger.error(f"Error creating scorecard with engine: {e}")
-            await self.db_session.rollback()
+            await db_session.rollback()
             raise
     
     async def _create_scorecard_sync(

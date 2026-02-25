@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 from typing import Dict, Any, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 from pydantic.alias_generators import to_camel
@@ -18,7 +18,6 @@ import os
 # Configuration
 INFERENCE_V2_URL = os.getenv("INFERENCE_V2_URL", "http://localhost:8000")
 INFERENCE_V2_API_PREFIX = os.getenv("INFERENCE_V2_API_PREFIX", "/api/v2")
-LEAD_TYPE = "realtor"  # Fixed lead_type for realtor bridge
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
@@ -48,7 +47,11 @@ class RealtorChatRequest(BaseModel):
         max_length=4000,
         validation_alias=AliasChoices("query_text", "queryText", "text"),
     )
-    client_id: UUID = Field(..., description="Tenant/client identifier")
+    client_id: UUID = Field(
+        ...,
+        description="Tenant/client identifier",
+        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
+    )
     filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
     conversation_id: Optional[UUID] = Field(None)
     user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -93,6 +96,9 @@ class RealtorChatResponse(BaseModel):
     sources: list[SourceDocument] = Field(default_factory=list)
     conversation_id: UUID
     lead_scoring: Optional[LeadScoringResult] = None
+    scoring_status: Optional[str] = None
+    scoring_job_id: Optional[UUID] = None
+    scoring_eta: Optional[str] = None
 
 
 class AsyncHTTPClient:
@@ -138,25 +144,6 @@ class AsyncHTTPClient:
         
         raise httpx.RequestError("Max retries exceeded")
     
-    async def get_scorecards(self, lead_id: UUID) -> Optional[Dict[str, Any]]:
-        """Get latest scorecard for a lead"""
-        try:
-            url = f"{self.base_url}/leads/{lead_id}/scorecards/latest"
-            response = await self.client.get(url)
-            
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 404:
-                return None
-            else:
-                logger.warning(f"Failed to get scorecard: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error getting scorecard: {e}")
-            return None
-
-
 def map_v2_scorecard_to_legacy(scorecard: Dict[str, Any]) -> LeadScoringResult:
     """
     Map v2 scorecard to legacy scoring format
@@ -221,7 +208,7 @@ async def chat_endpoint(request: RealtorChatRequest):
     """
     Realtor chat endpoint with backward compatibility
     
-    Forwards to inference-core-v2 with fixed lead_type="realtor"
+    Forwards to inference-core-v2
     Maps v2 scoring results to legacy format for frontend compatibility
     """
     start_time = time.time()
@@ -231,7 +218,6 @@ async def chat_endpoint(request: RealtorChatRequest):
         v2_payload = {
             "queryText": request.query_text,
             "clientId": str(request.client_id),
-            "leadType": LEAD_TYPE,  # Fixed for realtor bridge
             "businessDomain": None,  # Optional for future use
             "conversationId": str(request.conversation_id) if request.conversation_id else None,
             "userMetadata": request.user_metadata,
@@ -268,23 +254,28 @@ async def chat_endpoint(request: RealtorChatRequest):
             
             # Get legacy scoring if available
             legacy_scoring = None
-            lead_id = None
-            
-            scorecard_id = pick(v2_response, "scorecardId", "scorecard_id")
-            raw_lead_id = pick(v2_response, "leadId", "lead_id")
-            if scorecard_id and raw_lead_id:
-                lead_id = UUID(raw_lead_id)
-                
-                # Fetch scorecard details for mapping
-                scorecard = await http_client.get_scorecards(lead_id)
-                if scorecard:
-                    legacy_scoring = map_v2_scorecard_to_legacy(scorecard)
+            scorecard_payload = v2_response.get("scorecard")
+            if scorecard_payload:
+                legacy_scoring = map_v2_scorecard_to_legacy(scorecard_payload)
+
+            scoring_status = pick(v2_response, "scoringStatus", "scoring_status")
+            scoring_eta = pick(v2_response, "scoringEta", "scoring_eta")
+            scoring_job_id = None
+            raw_scoring_job_id = pick(v2_response, "scoringJobId", "scoring_job_id")
+            if raw_scoring_job_id:
+                try:
+                    scoring_job_id = UUID(str(raw_scoring_job_id))
+                except ValueError:
+                    logger.warning("Invalid scoring_job_id in v2 response: %s", raw_scoring_job_id)
             
             # Build realtor response
             realtor_response = RealtorChatResponse(
                 answer=v2_response["answer"],
                 conversation_id=UUID(pick(v2_response, "conversationId", "conversation_id")),
-                lead_scoring=legacy_scoring
+                lead_scoring=legacy_scoring,
+                scoring_status=scoring_status,
+                scoring_job_id=scoring_job_id,
+                scoring_eta=scoring_eta,
             )
             
             # Note: Sources would need to be populated from v2_response if available
@@ -293,6 +284,7 @@ async def chat_endpoint(request: RealtorChatRequest):
             logger.info(
                 f"Realtor chat processed: client={request.client_id}, "
                 f"conversation={realtor_response.conversation_id}, "
+                f"scoring_status={realtor_response.scoring_status}, "
                 f"processing_time={int((time.time() - start_time) * 1000)}ms"
             )
             
@@ -330,7 +322,7 @@ async def health_check():
             "status": "healthy",
             "service": "realtor-bridge-v2",
             "inference_v2_status": inference_status,
-            "lead_type": LEAD_TYPE
+            "vertical": "real-estate"
         }
     
     except Exception as e:
@@ -345,7 +337,7 @@ async def root():
         "service": "realtor-bridge-v2",
         "version": "2.0.0",
         "description": "Adapts realtor chat requests to inference-core-v2",
-        "lead_type": LEAD_TYPE,
+        "vertical": "real-estate",
         "endpoints": {
             "POST /chat": "Realtor chat with backward-compatible scoring",
             "GET /health": "Health check with dependency status"

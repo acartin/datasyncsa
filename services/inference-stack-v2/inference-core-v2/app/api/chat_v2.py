@@ -5,6 +5,7 @@ from uuid import UUID
 from app.models.chat_v2 import (
     ChatV2Request,
     ChatV2Response,
+    ScoringJobResponse,
     ScorecardResponse,
     ActiveModelResponse,
     InternalMemoryResetRequest,
@@ -118,6 +119,25 @@ async def get_scorecard(
         raise
     except Exception as e:
         logger.exception(f"Error getting scorecard {scorecard_id} for lead {lead_id}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
+async def get_scoring_job(
+    job_id: UUID,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Get async scoring job status."""
+    try:
+        orchestrator = ScoringOrchestrator(db_session)
+        job = await orchestrator.get_scoring_job_response(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Scoring job not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error getting scoring job %s", job_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

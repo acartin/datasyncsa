@@ -72,6 +72,21 @@ def _criterion_form_schema(model_id: Optional[UUID] = None) -> list[dict]:
         model_field,
         {"name": "criterion_key", "label": "Criterion Key", "type": "text", "required": True},
         {"name": "label", "label": "Label", "type": "text", "required": True},
+        {"name": "icon", "label": "Icon (Remix: ri-...)", "type": "text", "required": False},
+        {"name": "weight", "label": "Weight", "type": "number", "required": True, "value": 1},
+        {"name": "min_score", "label": "Min Score", "type": "number", "required": True, "value": 0},
+        {"name": "max_score", "label": "Max Score", "type": "number", "required": True, "value": 10},
+        {"name": "display_order", "label": "Display Order", "type": "number", "required": True, "value": 0},
+        {"name": "is_active", "label": "Activo", "type": "switch", "value": True},
+    ]
+
+
+def _criterion_update_form_schema() -> list[dict]:
+    # criterion_key is an immutable business identifier per model; editing it causes uniqueness conflicts.
+    return [
+        {"name": "model_id", "label": "Modelo", "type": "hidden", "required": True},
+        {"name": "label", "label": "Label", "type": "text", "required": True},
+        {"name": "icon", "label": "Icon (Remix: ri-...)", "type": "text", "required": False},
         {"name": "weight", "label": "Weight", "type": "number", "required": True, "value": 1},
         {"name": "min_score", "label": "Min Score", "type": "number", "required": True, "value": 0},
         {"name": "max_score", "label": "Max Score", "type": "number", "required": True, "value": 10},
@@ -181,13 +196,13 @@ async def get_verticals_scoring_admin_ui(
 
     vertical_schema = _vertical_form_schema()
     model_schema = _model_form_schema()
-    criterion_schema = _criterion_form_schema()
+    criterion_update_schema = _criterion_update_form_schema()
     model_create_schema = _model_form_schema(vertical_id=vertical_id) if selected_vertical else model_schema
-    criterion_create_schema = _criterion_form_schema(model_id=model_id) if selected_model else criterion_schema
+    criterion_create_schema = _criterion_form_schema(model_id=model_id) if selected_model else _criterion_form_schema()
 
     vertical_schema_b64 = encode_schema_b64(vertical_schema)
     model_schema_b64 = encode_schema_b64(model_schema)
-    criterion_schema_b64 = encode_schema_b64(criterion_schema)
+    criterion_update_schema_b64 = encode_schema_b64(criterion_update_schema)
     model_create_schema_b64 = encode_schema_b64(model_create_schema)
     criterion_create_schema_b64 = encode_schema_b64(criterion_create_schema)
     prompt_modal_schema = [
@@ -196,7 +211,11 @@ async def get_verticals_scoring_admin_ui(
         {"name": "prompt_template", "label": "Prompt Template", "type": "textarea", "required": True, "rows": 20},
         {"name": "is_active", "label": "Activo", "type": "switch", "value": True},
     ]
+    band_modal_schema = _band_form_schema()
+    band_modal_create_schema = _band_form_schema(force_hidden=True)
     prompt_modal_schema_b64 = encode_schema_b64(prompt_modal_schema)
+    band_modal_schema_b64 = encode_schema_b64(band_modal_schema)
+    band_modal_create_schema_b64 = encode_schema_b64(band_modal_create_schema)
     prompt_modal_config_b64 = _encode_b64_json(
         {
             "data_url": "/system/verticals/prompts/data?model_id={context_model_id}",
@@ -221,6 +240,39 @@ async def get_verticals_scoring_admin_ui(
                 )
             ],
             "schema": prompt_modal_schema,
+        }
+    )
+    band_modal_config_b64 = _encode_b64_json(
+        {
+            "data_url": "/system/verticals/bands/data?criterion_id={context_criterion_id}",
+            "columns": [
+                {"id": "band_key", "label": "Band Key", "sortable": True},
+                {"id": "label", "label": "Label", "sortable": True},
+                {"id": "min_score", "label": "Min", "sortable": True},
+                {"id": "max_score", "label": "Max", "sortable": True},
+                {"id": "icon", "label": "Icon", "sortable": True},
+                {"id": "color", "label": "Color", "type": "color", "sortable": True},
+                {"id": "is_active", "label": "Activo", "type": "badge", "badge_map": {"true": "success", "false": "secondary"}},
+            ],
+            "enableFilters": True,
+            "filterConfig": {"searchFields": ["band_key", "label"]},
+            "actions": [
+                edit_action("/system/verticals/bands/{id}", band_modal_schema_b64),
+                delete_action("/system/verticals/bands/{id}"),
+            ],
+            "header_actions": [
+                {
+                    "label": "Nueva Banda",
+                    "action": "modal-form-create",
+                    "action_url": "/system/verticals/bands",
+                    "modal_title": "Nueva Banda",
+                    "color": "success",
+                    "icon": "ri-add-line",
+                    "schema": band_modal_create_schema_b64,
+                    "prefill": {"criterion_id": "{context_criterion_id}"},
+                }
+            ],
+            "schema": band_modal_schema,
         }
     )
 
@@ -398,6 +450,7 @@ async def get_verticals_scoring_admin_ui(
                     "columns": [
                         {"id": "criterion_key", "label": "Key", "sortable": True},
                         {"id": "label", "label": "Label", "sortable": True},
+                        {"id": "icon", "label": "Icon", "type": "icon", "sortable": True},
                         {"id": "weight", "label": "Weight", "sortable": True},
                         {"id": "display_order", "label": "Order", "sortable": True},
                         {"id": "is_active", "label": "Activo", "type": "badge", "badge_map": {"true": "success", "false": "secondary"}},
@@ -405,8 +458,15 @@ async def get_verticals_scoring_admin_ui(
                     "enableFilters": True,
                     "filterConfig": {"searchFields": ["criterion_key", "label"]},
                     "actions": [
-                        edit_action("/system/verticals/criteria/{id}", criterion_schema_b64),
+                        edit_action("/system/verticals/criteria/{id}", criterion_update_schema_b64),
                         delete_action("/system/verticals/criteria/{id}"),
+                        {
+                            "label": "Bandas",
+                            "icon": "ri-stack-line",
+                            "action": "modal-grid-crud",
+                            "modal_title": "Bandas de {context_criterion_key}",
+                            "config_b64": band_modal_config_b64,
+                        },
                     ],
                     "header_actions": [
                         create_modal_action(

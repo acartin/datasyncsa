@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
     llm_timeout_secs: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
+    scoring_llm_timeout_secs: int = int(os.getenv("SCORING_LLM_TIMEOUT_SECS") or "60")
     chat_history_max_messages: int = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
     rag_retriever_url: str = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000")
     rag_retriever_search_path: str = os.getenv("RAG_RETRIEVER_V2_SEARCH_PATH", "/api/v2/search")
@@ -40,6 +41,17 @@ class Settings(BaseSettings):
     scoring_bg_enabled: bool = os.getenv("SCORING_BG_ENABLED", "true").lower() == "true"
     scoring_max_retries: int = int(os.getenv("SCORING_MAX_RETRIES", "3"))
     scoring_retry_delay_secs: int = int(os.getenv("SCORING_RETRY_DELAY_SECS", "5"))
+    scoring_idle_close_secs: float = float(
+        os.getenv("SCORING_IDLE_CLOSE_SECS") or os.getenv("SCORING_IDLE_DELAY_SECS") or "15.0"
+    )
+    # Backward-compatible alias used by existing code paths.
+    scoring_idle_delay_secs: float = scoring_idle_close_secs
+    scoring_worker_poll_secs: float = float(os.getenv("SCORING_WORKER_POLL_SECS") or "2.0")
+    scoring_job_max_attempts: int = int(os.getenv("SCORING_JOB_MAX_ATTEMPTS") or "3")
+    scoring_job_lock_ttl_secs: int = int(os.getenv("SCORING_JOB_LOCK_TTL_SECS") or "120")
+    scoring_allow_heuristic_fallback: bool = (
+        (os.getenv("SCORING_ALLOW_HEURISTIC_FALLBACK") or "false").lower() == "true"
+    )
     
     # Security
     internal_api_token: Optional[str] = os.getenv("INTERNAL_API_TOKEN")

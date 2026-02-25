@@ -21,7 +21,7 @@ class TestScoringSchemaContracts:
     def test_scoring_schema_v2_basic_shape(self):
         """Test basic shape of ScoringSchemaV2."""
         schema = ScoringSchemaV2(
-            lead_type="realtor",
+            vertical_slug="real-estate",
             model_id=uuid4(),
             model_version=1,
             prompt_version=1,
@@ -29,7 +29,7 @@ class TestScoringSchemaContracts:
             normalization_strategy="weighted_sum"
         )
         
-        assert schema.lead_type == "realtor"
+        assert schema.vertical_slug == "real-estate"
         assert isinstance(schema.model_id, UUID)
         assert schema.model_version == 1
         assert schema.prompt_version == 1
@@ -157,7 +157,7 @@ class TestScoringSchemaContracts:
         
         config = DynamicGridConfig(
             grid_id="leads-v2-realtor",
-            data_url="/leads_v2/data?lead_type=realtor",
+            data_url="/leads_v2/data",
             enable_filters=True,
             columns=columns,
             filter_config={
@@ -173,7 +173,7 @@ class TestScoringSchemaContracts:
         )
         
         assert config.grid_id == "leads-v2-realtor"
-        assert config.data_url == "/leads_v2/data?lead_type=realtor"
+        assert config.data_url == "/leads_v2/data"
         assert config.enable_filters is True
         assert len(config.columns) == 2
         assert config.columns[0].id == "identity"
@@ -206,7 +206,7 @@ class TestScoringSchemaContracts:
         # Model version must be > 0
         with pytest.raises(ValueError):
             ScoringSchemaV2(
-                lead_type="test",
+                vertical_slug="test",
                 model_id=uuid4(),
                 model_version=0,  # Invalid: <= 0
                 prompt_version=1,
@@ -251,7 +251,7 @@ class TestContractCompatibility:
     def test_scoring_schema_serialization(self):
         """Test that scoring schema can be serialized/deserialized."""
         schema = ScoringSchemaV2(
-            lead_type="medical",
+            vertical_slug="healthcare",
             model_id=uuid4(),
             model_version=2,
             prompt_version=1,
@@ -283,7 +283,7 @@ class TestContractCompatibility:
         # Deserialize back
         schema_restored = ScoringSchemaV2(**schema_dict)
         
-        assert schema_restored.lead_type == schema.lead_type
+        assert schema_restored.vertical_slug == schema.vertical_slug
         assert schema_restored.model_version == schema.model_version
         assert len(schema_restored.criteria) == len(schema.criteria)
         assert schema_restored.criteria[0].criterion_key == schema.criteria[0].criterion_key

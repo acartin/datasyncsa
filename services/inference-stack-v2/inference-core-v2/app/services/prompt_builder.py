@@ -7,6 +7,8 @@ Builds prompts dynamically from database configuration (criteria, bands, extract
 import logging
 from typing import Dict, Any, List, Optional
 
+from app.services.prompt_linter import PromptLinter
+
 logger = logging.getLogger("inference-core-v2.prompt_builder")
 
 
@@ -14,7 +16,7 @@ class PromptBuilder:
     """Builds dynamic prompts for scoring based on model configuration"""
     
     def __init__(self, custom_template: str):
-        self.system_template = custom_template
+        self.system_template = PromptLinter.normalize_template(custom_template)
     
     def build_prompt(
         self,
@@ -23,7 +25,6 @@ class PromptBuilder:
         bands: List[Dict[str, Any]],
         extraction_fields: Optional[List[Dict[str, Any]]] = None,
         business_domain: Optional[str] = None,
-        lead_type: Optional[str] = None,
         locale: Optional[str] = None,
         timestamp_utc: Optional[str] = None
     ) -> str:
@@ -36,7 +37,6 @@ class PromptBuilder:
             bands: List of bands from lead_scoring_bands (grouped by criterion)
             extraction_fields: Optional list of fields to extract from extraction_schema
             business_domain: Optional business domain for context
-            lead_type: Optional lead type
             locale: Optional locale
             timestamp_utc: Optional timestamp
         
@@ -56,11 +56,6 @@ class PromptBuilder:
             format_kwargs["business_domain"] = business_domain
         else:
             format_kwargs["business_domain"] = "null"
-            
-        if lead_type is not None:
-            format_kwargs["lead_type"] = lead_type
-        else:
-            format_kwargs["lead_type"] = "null"
             
         if locale is not None:
             format_kwargs["locale"] = locale
@@ -152,7 +147,8 @@ class PromptBuilder:
     def build_response_schema(
         self,
         criteria: List[Dict[str, Any]],
-        extraction_fields: Optional[List[Dict[str, Any]]] = None
+        extraction_fields: Optional[List[Dict[str, Any]]] = None,
+        slot_hints_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build JSON schema for structured LLM response.
@@ -167,21 +163,6 @@ class PromptBuilder:
         Returns:
             JSON schema dict for the response
         """
-        score_properties = {}
-        for criterion in criteria:
-            criterion_key = criterion.get("criterion_key")
-            if criterion_key:
-                min_score = float(criterion.get("min_score", 0))
-                max_score = float(criterion.get("max_score", 10))
-                label = criterion.get("label", criterion_key)
-                
-                score_properties[criterion_key] = {
-                    "type": "number",
-                    "minimum": min_score,
-                    "maximum": max_score,
-                    "description": f"Score for {label} criterion"
-                }
-        
         extraction_properties = {}
         if extraction_fields:
             for field in extraction_fields:
@@ -195,21 +176,25 @@ class PromptBuilder:
                         "description": description,
                         "nullable": True
                     }
+
+        slot_hints_object_schema = slot_hints_schema if isinstance(slot_hints_schema, dict) else {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        }
         
         properties = {
             "reasoning": {
                 "type": "string",
                 "description": "Brief explanation of the scoring decision"
             },
-            "scores": {
-                "type": "object",
-                "properties": score_properties,
-                "description": "Scores for each criterion"
-            },
             "extracted_data": {
                 "type": "object",
                 "properties": extraction_properties,
-                "description": "Extracted data from conversation"
+                "description": "Extracted data from conversation",
+            },
+            "slot_hints": {
+                **slot_hints_object_schema,
+                "description": "Optional slot-level hints inferred by the LLM",
             },
             "confidence": {
                 "type": "number",
@@ -219,7 +204,8 @@ class PromptBuilder:
             }
         }
         
-        required = ["reasoning", "scores", "extracted_data"]
+        # Root contract: keep payload minimal and deterministic-ready.
+        required = ["extracted_data"]
         
         return {
             "type": "object",

@@ -5,6 +5,7 @@ from app.main import app, memory_reset_client, session_manager
 
 def test_internal_memory_reset_orchestrates_session_and_inference(monkeypatch):
     called = {}
+    token = "test-internal-token"
 
     async def fake_delete_session(client_id):
         called["delete_session_client_id"] = client_id
@@ -15,6 +16,7 @@ def test_internal_memory_reset_orchestrates_session_and_inference(monkeypatch):
         called["reason"] = reason
         return {"status": "ok", "client_id": client_id, "conversations_deleted": 2}
 
+    monkeypatch.setenv("INTERNAL_API_TOKEN", token)
     monkeypatch.setattr(session_manager, "delete_session", fake_delete_session)
     monkeypatch.setattr(memory_reset_client, "reset_inference_memory", fake_reset_inference_memory)
 
@@ -22,6 +24,7 @@ def test_internal_memory_reset_orchestrates_session_and_inference(monkeypatch):
     res = client.post(
         "/internal/memory/reset",
         json={"client_id": "64f357a0-98eb-44f1-9f41-6e615ed26180", "reason": "knowledge_sync"},
+        headers={"X-Internal-Token": token},
     )
 
     assert res.status_code == 200

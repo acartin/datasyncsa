@@ -6,8 +6,8 @@ import asyncio
 import logging
 import time
 from typing import Dict, Any, Optional
-from uuid import UUID, uuid4
-from fastapi import FastAPI, HTTPException, Request
+from uuid import UUID
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 from pydantic.alias_generators import to_camel
 import httpx
@@ -49,11 +49,7 @@ class GenericChatRequest(BaseModel):
     client_id: UUID = Field(
         ...,
         description="Tenant/client identifier",
-        validation_alias=AliasChoices("client_id", "clientId"),
-    )
-    lead_type: Optional[str] = Field(
-        None,
-        description="Deprecated. Inference v2 resolves lead_type from tenant vertical config.",
+        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
     )
     business_domain: Optional[str] = Field(None, description="Optional business domain")
     conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID")
@@ -73,6 +69,9 @@ class GenericChatResponse(BaseModel):
     conversation_id: UUID
     lead_id: Optional[UUID] = None
     scorecard_id: Optional[UUID] = None
+    scoring_status: Optional[str] = None
+    scoring_job_id: Optional[UUID] = None
+    scoring_eta: Optional[str] = None
     score_total: Optional[float] = None
     priority_label: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -200,6 +199,15 @@ async def chat_endpoint(request: GenericChatRequest):
                     "processing_time_ms": int((time.time() - start_time) * 1000)
                 }
             )
+
+            generic_response.scoring_status = _pick(v2_response, "scoringStatus", "scoring_status")
+            generic_response.scoring_eta = _pick(v2_response, "scoringEta", "scoring_eta")
+            scoring_job_id = _pick(v2_response, "scoringJobId", "scoring_job_id")
+            if scoring_job_id:
+                try:
+                    generic_response.scoring_job_id = UUID(str(scoring_job_id))
+                except ValueError:
+                    logger.warning("Invalid scoring_job_id in v2 response: %s", scoring_job_id)
             
             # Add scoring data if available
             if v2_response.get("scorecard"):
@@ -217,8 +225,8 @@ async def chat_endpoint(request: GenericChatRequest):
             
             logger.info(
                 f"Chat processed: client={request.client_id}, "
-                f"lead_type={request.lead_type}, "
-                f"conversation={generic_response.conversation_id}"
+                f"conversation={generic_response.conversation_id}, "
+                f"scoring_status={generic_response.scoring_status}"
             )
             
             return generic_response

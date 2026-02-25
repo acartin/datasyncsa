@@ -6,7 +6,7 @@ from app.transformer.core import SDUITransformer
 
 @pytest.mark.asyncio
 async def test_transform_init_has_no_fallback_message(monkeypatch):
-    monkeypatch.setattr(transformer_core.db_manager, "get_branding", lambda client_id: None)
+    monkeypatch.setattr(transformer_core.db_manager, "get_branding", lambda client_id, brand_project=None: None)
     transformer = SDUITransformer()
 
     response = await transformer.transform(
@@ -23,7 +23,7 @@ async def test_transform_init_has_no_fallback_message(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_transform_builds_property_card_from_sources(monkeypatch):
-    def fake_branding(_client_id):
+    def fake_branding(_client_id, _brand_project=None):
         return None
 
     def fake_property(_prop_id):

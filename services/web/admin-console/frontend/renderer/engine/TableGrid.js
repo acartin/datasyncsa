@@ -26,14 +26,14 @@ export class TableGrid extends GridBase {
 
     renderSkeleton() {
         this.container.innerHTML = `
-            <div class="table-grid-wrapper" style="min-height: 500px; display: flex; flex-direction: column;">
-                <div class="d-flex justify-content-between align-items-center mb-3 grid-header-controls">
+            <div class="table-grid-wrapper" style="min-height: 500px; display: flex; flex-direction: column; width: 100%; max-width: 100%; min-width: 0; overflow: hidden;">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 grid-header-controls">
                     <!-- Filters will inject here -->
                     <div class="grid-header-actions d-flex gap-2"></div>
                     <div id="${this.container.id}-loader" class="text-muted small ms-auto" style="display:none;">Loading...</div>
                 </div>
-                <div class="table-responsive" style="flex: 1;">
-                    <table class="table table-nowrap table-hover align-middle mb-0">
+                <div class="table-responsive" style="flex: 1; width: 100%; max-width: 100%; min-width: 0; overflow-x: auto;">
+                    <table class="table table-hover align-middle mb-0" style="width: 100%;">
                         <thead class="table-light text-muted">
                             <tr>${this.config.columns.map(c => `
                                 <th class="sortable text-uppercase" onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')" style="cursor:pointer; font-size:11px; font-weight:600;">
@@ -181,6 +181,14 @@ export class TableGrid extends GridBase {
                 <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${cellValue}; border: 1px solid rgba(0,0,0,0.1);"></div>
                 <span class="text-muted small">${cellValue}</span>
             </div>`;
+        }
+
+        // Icon Renderer (expects Remix class like ri-*)
+        if (col.type === 'icon') {
+            if (typeof cellValue === 'string' && cellValue.startsWith('ri-')) {
+                return `<span class="d-inline-flex align-items-center gap-2"><i class="${cellValue} fs-18"></i><span class="text-muted small">${cellValue}</span></span>`;
+            }
+            return `<span class="text-muted small">${cellValue}</span>`;
         }
 
         if (col.truncate && formatters.truncate) {

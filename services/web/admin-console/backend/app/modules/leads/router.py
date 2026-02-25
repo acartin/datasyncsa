@@ -19,7 +19,11 @@ async def get_all_leads_view(
     user: User = Depends(current_active_user)
 ):
     """Returns the General Management view for Leads (for Admins)."""
-    leads = await lead_service.get_my_leads(user.id)
+    leads = await lead_service.get_my_leads(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     rows = _transform_leads_to_rows(leads)
     
     return {
@@ -66,7 +70,11 @@ async def list_leads_data(
 ):
     """Returns raw data for all leads (Placeholder for Admin)."""
     # For now, return same as 'me' until manage logic is ready
-    leads = await lead_service.get_my_leads(user.id)
+    leads = await lead_service.get_my_leads(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     return _transform_leads_to_rows(leads)
 
 def _transform_leads_to_rows(leads):
@@ -140,7 +148,11 @@ async def list_my_leads_data(
     user: User = Depends(current_active_user)
 ):
     """Returns raw data for Client Side Grid."""
-    result = await lead_service.get_my_leads(user.id)
+    result = await lead_service.get_my_leads(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     
     # Transform items but keep structure
     items = _transform_leads_to_rows(result)
@@ -186,7 +198,11 @@ async def get_my_leads(
     user: User = Depends(current_active_user)
 ):
     """Returns the CRM Workview for the current user."""
-    result = await lead_service.get_my_leads(user.id)
+    result = await lead_service.get_my_leads(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     rows = _transform_leads_to_rows(result)
 
     return {

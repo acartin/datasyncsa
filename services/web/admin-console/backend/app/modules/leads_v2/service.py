@@ -9,13 +9,14 @@ from app.contracts.scoring_schema import ScoringSchemaV2, ScoringValuesV2, Score
 class LeadsV2Service:
     async def get_client_vertical_context(self, client_id: UUID) -> Optional[Dict[str, Any]]:
         """
-        Resolve tenant vertical context from lead_clients.vertical_id -> lead_client_verticals.
+        Resolve tenant scoring context from lead_clients (vertical + scoring_model_id).
         """
         query_str = text(
             """
             SELECT
                 c.id AS client_id,
                 c.vertical_id AS vertical_id,
+                c.scoring_model_id AS scoring_model_id,
                 v.slug AS vertical_slug,
                 v.name AS vertical_name
             FROM lead_clients c
@@ -30,15 +31,33 @@ class LeadsV2Service:
                 return None
             return dict(row)
 
-    async def get_my_leads_with_scoring_v2(self, user_id: UUID, lead_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_my_leads_with_scoring_v2(
+        self,
+        user_id: UUID,
+        is_superuser: bool = False,
+        tenant_ids: Optional[List[UUID]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Fetch leads with dynamic scoring v2 (using lead_scorecards/items).
         Returns list of leads with latest scorecard data.
         """
         # First check if scoring v2 is enabled
         if not settings.scoring_v2_enabled:
-            return await self._fallback_to_legacy(user_id)
-        
+            return await self._fallback_to_legacy(
+                user_id=user_id,
+                is_superuser=is_superuser,
+                tenant_ids=tenant_ids,
+            )
+
+        access_filter = ""
+        params: Dict[str, Any] = {"uid": user_id}
+        if not is_superuser:
+            if tenant_ids:
+                access_filter = " AND (l.assigned_user_id = :uid OR l.client_id = ANY(:tenant_ids))"
+                params["tenant_ids"] = tenant_ids
+            else:
+                access_filter = " AND l.assigned_user_id = :uid"
+
         query_str = text("""
             WITH latest_scorecards AS (
                 SELECT 
@@ -54,8 +73,8 @@ class LeadsV2Service:
                     ROW_NUMBER() OVER (PARTITION BY sc.lead_id ORDER BY sc.created_at DESC) as rn
                 FROM lead_scorecards sc
                 INNER JOIN lead_leads l ON l.id = sc.lead_id
-                WHERE l.assigned_user_id = :uid AND l.deleted_at IS NULL
-                AND (:lead_type IS NULL OR l.lead_type = :lead_type)
+                WHERE l.deleted_at IS NULL
+                """ + access_filter + """
             ),
             score_items_agg AS (
                 SELECT 
@@ -73,7 +92,7 @@ class LeadsV2Service:
                 GROUP BY si.scorecard_id
             )
             SELECT 
-                l.id, l.full_name, l.email, l.phone, l.lead_type, l.business_domain,
+                l.id, l.full_name, l.email, l.phone, l.business_domain,
                 l.created_at, l.status_id, l.client_id,
                 ls.scorecard_id, ls.score_total, ls.priority_label, ls.reasoning,
                 ls.created_at as scored_at, ls.model_id, ls.model_version, ls.prompt_version,
@@ -83,22 +102,32 @@ class LeadsV2Service:
             INNER JOIN latest_scorecards ls ON l.id = ls.lead_id AND ls.rn = 1
             LEFT JOIN score_items_agg sia ON ls.scorecard_id = sia.scorecard_id
             LEFT JOIN lead_statuses st ON l.status_id = st.id
-            WHERE l.assigned_user_id = :uid AND l.deleted_at IS NULL
+            WHERE l.deleted_at IS NULL
+            """ + access_filter + """
             ORDER BY ls.score_total DESC NULLS LAST, l.created_at DESC
         """)
         
         async with engine.connect() as conn:
-            result = await conn.execute(query_str, {"uid": user_id, "lead_type": lead_type})
+            result = await conn.execute(query_str, params)
             rows = result.all()
             return [dict(row._mapping) for row in rows]
     
-    async def _fallback_to_legacy(self, user_id: UUID) -> List[Dict[str, Any]]:
+    async def _fallback_to_legacy(
+        self,
+        user_id: UUID,
+        is_superuser: bool = False,
+        tenant_ids: Optional[List[UUID]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Fallback to legacy scoring when v2 is not enabled.
         This maintains backward compatibility.
         """
         from app.modules.leads.service import service as legacy_service
-        return await legacy_service.get_my_leads(user_id)
+        return await legacy_service.get_my_leads(
+            user_id=user_id,
+            is_superuser=is_superuser,
+            tenant_ids=tenant_ids,
+        )
     
     async def get_lead_detail_with_scoring_v2(
         self,
@@ -218,6 +247,7 @@ class LeadsV2Service:
     async def get_scoring_schema_for_vertical(
         self,
         vertical_id: int,
+        scoring_model_id: Optional[UUID] = None,
     ) -> Optional[ScoringSchemaV2]:
         """
         Resolve active scoring schema by vertical (v2 source of truth).
@@ -225,23 +255,42 @@ class LeadsV2Service:
         if not vertical_id:
             return None
 
-        model_query = text(
-            """
-            SELECT
-                m.id AS model_id,
-                m.version AS model_version,
-                m.prompt_version,
-                m.normalization_strategy,
-                v.slug AS vertical_slug
-            FROM lead_scoring_models m
-            LEFT JOIN lead_client_verticals v ON v.id = m.vertical_id
-            WHERE m.vertical_id = :vertical_id
-              AND m.is_active = true
-            ORDER BY m.version DESC
-            LIMIT 1
-            """
-        )
-        model_params = {"vertical_id": vertical_id}
+        if scoring_model_id:
+            model_query = text(
+                """
+                SELECT
+                    m.id AS model_id,
+                    m.version AS model_version,
+                    m.prompt_version,
+                    m.normalization_strategy,
+                    v.slug AS vertical_slug
+                FROM lead_scoring_models m
+                LEFT JOIN lead_client_verticals v ON v.id = m.vertical_id
+                WHERE m.id = :model_id
+                  AND m.vertical_id = :vertical_id
+                  AND m.is_active = true
+                LIMIT 1
+                """
+            )
+            model_params = {"vertical_id": vertical_id, "model_id": scoring_model_id}
+        else:
+            model_query = text(
+                """
+                SELECT
+                    m.id AS model_id,
+                    m.version AS model_version,
+                    m.prompt_version,
+                    m.normalization_strategy,
+                    v.slug AS vertical_slug
+                FROM lead_scoring_models m
+                LEFT JOIN lead_client_verticals v ON v.id = m.vertical_id
+                WHERE m.vertical_id = :vertical_id
+                  AND m.is_active = true
+                ORDER BY m.version DESC
+                LIMIT 1
+                """
+            )
+            model_params = {"vertical_id": vertical_id}
 
         async with engine.connect() as conn:
             model_result = await conn.execute(model_query, model_params)
@@ -256,6 +305,7 @@ class LeadsV2Service:
                     c.id AS criterion_id,
                     c.criterion_key,
                     c.label,
+                    c.icon,
                     c.weight,
                     c.min_score,
                     c.max_score,
@@ -293,6 +343,7 @@ class LeadsV2Service:
                     {
                         "criterion_key": criterion["criterion_key"],
                         "label": criterion["label"],
+                        "icon": criterion.get("icon"),
                         "weight": criterion["weight"],
                         "min_score": criterion["min_score"],
                         "max_score": criterion["max_score"],
@@ -302,43 +353,13 @@ class LeadsV2Service:
                 )
 
         return ScoringSchemaV2(
-            lead_type=(model_row.get("vertical_slug") or "generic"),
+            vertical_slug=(model_row.get("vertical_slug") or "generic"),
             model_id=model_row["model_id"],
             model_version=model_row["model_version"],
             prompt_version=model_row["prompt_version"],
             normalization_strategy=model_row["normalization_strategy"],
             criteria=criteria_payload,
         )
-
-    async def get_scoring_schema_for_lead_type(
-        self, lead_type: str, client_id: Optional[UUID] = None
-    ) -> Optional[ScoringSchemaV2]:
-        """
-        Backward-compatible resolver by lead_type.
-        Prefers tenant vertical context when client_id is provided.
-        """
-        if client_id:
-            vertical_ctx = await self.get_client_vertical_context(client_id)
-            if vertical_ctx and vertical_ctx.get("vertical_id"):
-                return await self.get_scoring_schema_for_vertical(
-                    int(vertical_ctx["vertical_id"])
-                )
-
-        vertical_query = text(
-            """
-            SELECT id
-            FROM lead_client_verticals
-            WHERE lower(slug) = lower(:lead_type)
-               OR lower(replace(name, ' ', '_')) = lower(:lead_type)
-            LIMIT 1
-            """
-        )
-        async with engine.connect() as conn:
-            vertical_result = await conn.execute(vertical_query, {"lead_type": lead_type})
-            vertical_row = vertical_result.mappings().first()
-            if not vertical_row:
-                return None
-            return await self.get_scoring_schema_for_vertical(int(vertical_row["id"]))
     
     def transform_to_scoring_values(self, lead_data: Dict[str, Any]) -> ScoringValuesV2:
         """

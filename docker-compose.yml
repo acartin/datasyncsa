@@ -67,6 +67,9 @@ services:
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
       - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
     volumes:
@@ -74,6 +77,37 @@ services:
     depends_on:
       - postgres
       - redis
+    networks:
+      - internal_network
+
+  # Inference Core V2 async scoring worker (persistent jobs)
+  inference-core-v2-worker:
+    build:
+      context: ./services/inference-stack-v2/inference-core-v2
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-inference-v2-worker
+    restart: always
+    command: ["python", "worker.py"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
+      - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+      - inference-core-v2
     networks:
       - internal_network
 

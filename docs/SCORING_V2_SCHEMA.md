@@ -1,518 +1,405 @@
 # Scoring V2 Schema Reference
 
-## Overview
+## Estado actual (2026-02-25)
 
-El sistema de scoring v2 introduce un modelo dinámico y configurable por vertical, reemplazando los scores fijos (v1) almacenados directamente en `lead_leads`.
+Scoring v2 opera con este flujo real:
 
-**Principio clave:** Los modelos de scoring se configuran por `vertical_id`, no por `client_id`. Esto permite reutilizar modelos entre clientes de la misma industria.
+1. `POST /api/v2/chat` responde primero el mensaje conversacional.
+2. El scoring se agenda en background en `lead_scoring_jobs`.
+3. Un worker toma el job luego del idle delay.
+4. El LLM extrae datos (`extracted_data`) y hints opcionales (`slot_hints`).
+5. El score final se calcula de forma determinista desde `extraction_schema.deterministic_scoring`.
+6. Se persiste `lead_scorecards` + `lead_score_items` y se actualiza `lead_leads.current_scorecard_id`.
+
+`lead_type` ya no se usa en v2 (fue removido de `lead_leads`). El enrutamiento es por `client_id`.
 
 ---
 
-## Diagrama de Entidades
+## Principios de diseño
 
-```
-┌─────────────────────────┐
-│ lead_client_verticals   │
-├─────────────────────────
-│ id (PK)                 │
-│ name: "Healthcare"      │
-│ slug: "healthcare"      │
-└───────────┬─────────────┘
-            │
-            │ 1:N
-            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      lead_scoring_models                            │
-├─────────────────────────────────────────────────────────────────────┤
-│ id (PK)                                                             │
-│ vertical_id (FK)                                                    │
-│ business_domain: null | "premium" | "basic"                        │
-│ name: "Medico Default v1"                                          │
-│ version: 1                                                          │
-│ prompt_version: 1                                                   │
-│ is_active: true                                                     │
-│ normalization_strategy: "weighted_average"                          │
-└───────────┬─────────────────────────────────────────────────────────┘
-            │
-            ├──────────────────────────────┐
-            │ 1:N (CASCADE DELETE)         │
-            ▼                              ▼
-┌───────────────────────────┐   ┌─────────────────────────────────────┐
-│ lead_scoring_criteria     │   │       lead_scoring_prompts          │
-├───────────────────────────┤   ├─────────────────────────────────────┤
-│ id (PK)                   │   │ id (PK)                             │
-│ model_id (FK)             │   │ model_id (FK)                       │
-│ criterion_key: "intent"   │   │ version: 1                          │
-│ label: "Intent"           │   │ prompt_template: TEXT               │
-│ weight: 1.0               │   │ extraction_schema: JSONB            │
-│ min_score: 0.0            │   │ is_active: true                     │
-│ max_score: 10.0           │   │ created_by: uuid                    │
-│ display_order: 1          │   └─────────────────────────────────────┘
-│ is_active: true           │              │
-└───────────┬───────────────┘              │ referencia
-            │ 1:N (CASCADE)                │
-            ▼                              │
-┌───────────────────────────────────────┐  │
-│         lead_scoring_bands            │  │
-├───────────────────────────────────────┤  │
-│ id (PK)                               │  │
-│ criterion_id (FK)                     │  │
-│ band_key: "low" | "medium" | "high"   │  │
-│ label: "Low"                          │  │
-│ min_score: 0.0                        │  │
-│ max_score: 3.0                        │  │
-│ icon: "thumb_down"                    │  │
-│ color: "#ef4444"                      │  │
-└───────────────────────────────────────┘  │
-                                           │
-┌──────────────────────────────────────────┼───────────────────────────┐
-│                           lead_leads     │                           │
-├──────────────────────────────────────────┼───────────────────────────┤
-│ id (PK)                                  │                           │
-│ client_id (FK)                           │                           │
-│ full_name, email, phone, ...             │                           │
-│ lead_type: "healthcare" (legacy)         │                           │
-│ business_domain: null | "premium"        │                           │
-│ current_scorecard_id (FK) ───────────────┼───────┐                   │
-│                                          │       │                   │
-│ ─── Columnas legacy (v1, deprecadas) ─── │       │                   │
-│ score_engagement, score_finance, ...     │       │                   │
-└──────────────────────────────────────────┼───────┼───────────────────┘
-                                           │       │
-            ┌──────────────────────────────┘       │
-            │ 1:N (CASCADE DELETE)                  │
-            ▼                                       │
-┌───────────────────────────────────────────────────┴───────────────────┐
-│                       lead_scorecards                                  │
-├────────────────────────────────────────────────────────────────────────┤
-│ id (PK)                                                                │
-│ lead_id (FK)                                                           │
-│ conversation_id (opcional)                                             │
-│ model_id (FK)                                                          │
-│ model_version: 1                         ← snapshot del modelo         │
-│ prompt_version: 1                        ← snapshot numérico (legacy)  │
-│ prompt_id (FK)                           ← referencia al prompt usado   │
-│ prompt_snapshot: TEXT                    ← COPIA para reproducibilidad │
-│ score_total: 3.75                                                      │
-│ priority_label: "medium"                                               │
-│ reasoning: "Lead analyzed using..."                                    │
-│ extraction_result: JSONB                 ← datos extraídos             │
-│ raw_payload: { metadata }                                              │
-│ created_at                                                              │
-└───────────┬─────────────────────────────────────────────────────────────┘
-            │
-            │ 1:N (CASCADE DELETE)
-            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      lead_score_items                               │
-├─────────────────────────────────────────────────────────────────────┤
-│ id (PK)                                                             │
-│ scorecard_id (FK)                                                   │
-│ criterion_key: "intent"                                             │
-│ score: 4.0                                                          │
-│ band_id (FK)                                                        │
-│ explanation: "Score calculated based on..."                        │
-│ extracted_data: { "confidence": 0.85 }                             │
-└─────────────────────────────────────────────────────────────────────┘
+- Resolución de modelo por tenant: `lead_clients.vertical_id` + `lead_clients.scoring_model_id`.
+- Prompt orientado a extracción, no a scoring numérico.
+- Scoring determinista y configurable por BD.
+- Scoring asíncrono e invisible para el usuario final de chat.
+- Trazabilidad completa: `prompt_id`, `prompt_snapshot`, `raw_payload`, estado de job y latencias.
+
+---
+
+## Diagrama de entidades
+
+```text
+lead_client_verticals (1) ──< lead_scoring_models (N)
+                                      │
+                                      ├──< lead_scoring_criteria (N)
+                                      │         └──< lead_scoring_bands (N)
+                                      │
+                                      └──< lead_scoring_prompts (N)
+
+lead_clients (1) ──< lead_leads (N) ──< lead_conversations (N)
+      │                 │
+      │                 ├──< lead_scorecards (N) ──< lead_score_items (N)
+      │                 │
+      │                 └──< lead_scoring_jobs (N)
+      │
+      └── scoring_model_id ───────────> lead_scoring_models.id
 ```
 
 ---
 
-## Tablas de Configuración (definidas una vez por vertical)
+## Tablas de configuración
 
 ### `lead_client_verticals`
 
-Define las verticales/industrias del sistema.
+Define verticales (industria).
 
-| Columna | Tipo | Descripción |
-|---------|------|-------------|
-| `id` | int | PK auto-incremental |
-| `name` | varchar(100) | Nombre legible: "Healthcare", "Real Estate" |
-| `slug` | varchar(100) | Identificador URL-safe: "healthcare" |
-
-**Ejemplos:**
-```sql
-SELECT * FROM lead_client_verticals;
-
- id |     name      |    slug     
-----+---------------+-------------
-  1 | Real Estate   | real_estate
-  2 | Automotive    | automotive
-  8 | Healthcare    | healthcare
-```
-
----
+Campos clave:
+- `id` (PK)
+- `name`
+- `slug`
 
 ### `lead_scoring_models`
 
-Define un modelo de scoring completo para una vertical.
+Define modelo de scoring por vertical/tenant scope.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `vertical_id` | int | NO | FK a `lead_client_verticals.id` |
-| `business_domain` | varchar(64) | YES | Sub-ámbito opcional (ej: "premium") |
-| `name` | varchar(128) | NO | Nombre del modelo |
-| `version` | int | NO | Versión del modelo (default: 1) |
-| `prompt_version` | int | NO | Versión del prompt LLM usado |
-| `is_active` | boolean | NO | Solo UN activo por (vertical + domain) |
-| `normalization_strategy` | varchar(64) | YES | "weighted_average", "sum" |
+Campos clave:
+- `id` (PK)
+- `vertical_id` (FK)
+- `business_domain` (opcional)
+- `name`
+- `version`
+- `prompt_version` (legacy numérico)
+- `is_active`
+- `normalization_strategy`
 
-**Constraints importantes:**
-- `uq_lead_scoring_models_active_scope`: Solo un modelo activo por `(vertical_id, COALESCE(business_domain, ''))`
-
-**Ejemplo:**
-```sql
-SELECT id, vertical_id, name, version, is_active 
-FROM lead_scoring_models;
-
-                  id                  | vertical_id |        name         | version | is_active 
---------------------------------------+-------------+---------------------+---------+-----------
- 53fe9e76-09e6-46af-a934-bc2c602c256b |           1 | Realtor Default v1  |       1 | t
- 23dbbd82-8ab6-4122-8d38-0528c0fa3cb5 |           8 | Dentista1 Medico v1 |       1 | t
-```
-
----
+Relación tenant:
+- `lead_clients.scoring_model_id` apunta al modelo que debe usar ese cliente.
 
 ### `lead_scoring_criteria`
 
-Define los criterios individuales de scoring dentro de un modelo.
+Criterios activos del modelo.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `model_id` | uuid | NO | FK a `lead_scoring_models.id` (CASCADE) |
-| `criterion_key` | varchar(64) | NO | Key técnica: "intent", "urgency" |
-| `label` | varchar(128) | NO | Label para UI: "Intent" |
-| `weight` | numeric(5,2) | NO | Peso para promedio ponderado (default: 1.0) |
-| `min_score` | numeric(5,2) | NO | Score mínimo (default: 0.0) |
-| `max_score` | numeric(5,2) | NO | Score máximo (default: 10.0) |
-| `display_order` | int | NO | Orden visual |
-| `is_active` | boolean | NO | Criterio activo |
-
-**Constraint:** `(model_id, criterion_key)` es único.
-
-**Ejemplo:**
-```sql
-SELECT criterion_key, label, weight, min_score, max_score, display_order
-FROM lead_scoring_criteria
-WHERE model_id = '23dbbd82-8ab6-4122-8d38-0528c0fa3cb5'
-ORDER BY display_order;
-
- criterion_key |    label     | weight | min_score | max_score | display_order 
----------------+--------------+--------+-----------+-----------+---------------
- intent        | Intent       |   1.00 |      0.00 |     10.00 |             1
- urgency       | Urgency      |   1.00 |      0.00 |     10.00 |             2
- data_quality  | Data Quality |   1.00 |      0.00 |     10.00 |             3
- engagement    | Engagement   |   1.00 |      0.00 |     10.00 |             4
-```
-
----
+Campos clave:
+- `model_id`
+- `criterion_key`
+- `label`
+- `weight`
+- `min_score`, `max_score`
+- `display_order`
+- `is_active`
 
 ### `lead_scoring_bands`
 
-Define las bandas/rangos visuales para cada criterio.
+Bandas visuales por criterio.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `criterion_id` | uuid | NO | FK a `lead_scoring_criteria.id` (CASCADE) |
-| `band_key` | varchar(32) | NO | Key: "low", "medium", "high" |
-| `label` | varchar(64) | NO | Label UI: "Low", "Medium", "High" |
-| `min_score` | numeric(5,2) | NO | Límite inferior |
-| `max_score` | numeric(5,2) | NO | Límite superior |
-| `icon` | varchar(128) | YES | Icono Material Icons |
-| `color` | varchar(32) | YES | Color hexadecimal |
-
-**Constraint:** `(criterion_id, band_key)` es único.
-
-**Ejemplo:**
-```sql
-SELECT c.criterion_key, b.band_key, b.label, b.min_score, b.max_score, b.icon, b.color
-FROM lead_scoring_bands b
-JOIN lead_scoring_criteria c ON c.id = b.criterion_id
-WHERE c.model_id = '23dbbd82-8ab6-4122-8d38-0528c0fa3cb5'
-ORDER BY c.display_order, b.min_score;
-
- criterion_key | band_key | label  | min_score | max_score | icon                     | color    
----------------+----------+--------+-----------+-----------+--------------------------+---------
- intent        | low      | Low    |      0.00 |      3.00 | thumb_down               | #ef4444
- intent        | medium   | Medium |      3.00 |      7.00 | thumb_up                 | #f59e0b
- intent        | high     | High   |      7.00 |     10.00 | star                     | #22c55e
- urgency       | low      | Low    |      0.00 |      3.00 | schedule                 | #ef4444
- urgency       | medium   | Medium |      3.00 |      7.00 | event                    | #f59e0b
- urgency       | high     | High   |      7.00 |     10.00 | bolt                     | #22c55e
- ...
-```
-
----
+Campos clave:
+- `criterion_id`
+- `band_key`
+- `label`
+- `min_score`, `max_score`
+- `icon`, `color`
 
 ### `lead_scoring_prompts`
 
-Define los prompts versionados para cada modelo de scoring. Permite auditoría reproducible.
+Prompt versionado por modelo.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `model_id` | uuid | NO | FK a `lead_scoring_models.id` (CASCADE) |
-| `version` | int | NO | Versión del prompt (incremental) |
-| `prompt_template` | text | NO | Template con placeholders: `{criteria}`, `{bands}`, `{vertical}` |
-| `extraction_schema` | jsonb | YES | Schema de campos a extraer por vertical |
-| `is_active` | boolean | NO | Solo UN prompt activo por modelo |
-| `created_at` | timestamptz | NO | Timestamp de creación |
-| `updated_at` | timestamptz | NO | Timestamp de actualización |
-| `created_by` | uuid | YES | Usuario que creó el prompt (auditoría) |
+Campos clave:
+- `id`
+- `model_id`
+- `version`
+- `prompt_template`
+- `extraction_schema` (JSONB)
+- `is_active`
+- `created_by`
 
-**Constraint:** `(model_id, version)` es único.
+#### Placeholders válidos en `prompt_template`
 
-**Ejemplo de `extraction_schema`:**
+- `{vertical_name}`
+- `{criteria_text}`
+- `{extraction_text}`
+- `{business_domain}`
+- `{locale}`
+- `{timestamp_utc}`
+
+Tokens legacy normalizados en runtime:
+- `{conversation_text}` -> eliminado
+- `{lead_type}` -> `{vertical_name}`
+
+#### Contrato de `extraction_schema`
+
+`extraction_schema` soporta:
+- `fields` o `properties`: campos a extraer.
+- `deterministic_scoring`: reglas para slots y scoring final.
+
+Ejemplo mínimo:
+
 ```json
 {
   "fields": [
-    {"key": "extracted_name", "type": "string", "description": "Nombre completo del usuario"},
-    {"key": "extracted_email", "type": "string", "description": "Email del usuario"},
-    {"key": "extracted_phone", "type": "string", "description": "Teléfono del usuario"},
-    {"key": "extracted_insurance", "type": "string", "description": "Seguro médico (solo healthcare)"},
-    {"key": "extracted_appointment_type", "type": "string", "description": "Tipo de cita (solo healthcare)"}
-  ]
+    {"key": "extracted_name", "type": "string", "description": "Nombre"},
+    {"key": "extracted_email", "type": "string", "description": "Correo"},
+    {"key": "extracted_phone", "type": "string", "description": "Telefono"}
+  ],
+  "deterministic_scoring": {
+    "slots": {
+      "intent": {
+        "default": "unknown",
+        "rules": [
+          {"set": "ready_to_advance", "contains_any": ["agendar", "visitar"]},
+          {"set": "interested", "contains_any": ["me interesa", "precio"]}
+        ]
+      }
+    },
+    "derived_slots": [
+      {
+        "slot": "contactability",
+        "type": "count_present_fields",
+        "fields": ["extracted_name", "extracted_email", "extracted_phone"],
+        "default": "none",
+        "thresholds": [
+          {"min": 2, "set": "full"},
+          {"min": 1, "set": "partial"}
+        ]
+      }
+    ],
+    "criteria_rules": {
+      "intent": {
+        "type": "slot_map",
+        "slot": "intent",
+        "default": 3.0,
+        "mapping": {
+          "ready_to_advance": 9.0,
+          "interested": 7.0,
+          "unknown": 3.0
+        }
+      }
+    }
+  }
 }
 ```
 
-**Ejemplo:**
-```sql
-SELECT id, model_id, version, is_active, created_at
-FROM lead_scoring_prompts
-WHERE model_id = '23dbbd82-8ab6-4122-8d38-0528c0fa3cb5'
-ORDER BY version DESC;
-
-                  id                  |              model_id               | version | is_active |          created_at           
---------------------------------------+--------------------------------------+---------+-----------+-------------------------------
- a1b2c3d4-5678-90ab-cdef-1234567890ab | 23dbbd82-8ab6-4122-8d38-0528c0fa3cb5 |       2 | t         | 2026-02-18 22:00:00+00
- b2c3d4e5-6789-01bc-def0-2345678901bc | 23dbbd82-8ab6-4122-8d38-0528c0fa3cb5 |       1 | f         | 2026-02-15 10:00:00+00
-```
-
 ---
 
-## Tablas de Runtime (se poblan con cada interacción)
+## Tablas runtime
 
 ### `lead_leads`
 
-Tabla principal de leads. Ver nota sobre columnas legacy.
+Lead principal.
 
-| Columna | Tipo | Descripción |
-|---------|------|-------------|
-| `id` | uuid | PK |
-| `client_id` | uuid | FK a `lead_clients.id` |
-| `full_name` | varchar(255) | Nombre del lead |
-| `lead_type` | varchar(32) | **Legacy v1.** Derivado de vertical_slug. Ignorado en v2. |
-| `business_domain` | varchar(64) | Sub-ámbito opcional |
-| `current_scorecard_id` | uuid | FK al scorecard más reciente |
+Campos relevantes para v2:
+- `id`
+- `client_id`
+- `full_name`, `email`, `phone`
+- `business_domain`
+- `current_scorecard_id`
 
-**Columnas legacy (v1, deprecadas):**
-- `lead_type`: Redundante con `vertical_id`. Se deriva automáticamente del vertical pero no se usa en scoring v2.
-- `score_engagement`, `score_finance`, `score_timeline`, `score_match`, `score_info`, `score_total`
-- Mantener para backwards compatibility, pero no usar en v2.
+Notas:
+- `lead_type` fue removido de esta tabla.
+- Siguen existiendo columnas legacy v1 (`score_engagement`, `score_finance`, etc.) por compatibilidad.
 
-**Nota:** En v2, el scoring se resuelve exclusivamente por `client_id` → `lead_clients.vertical_id` → `lead_scoring_models.vertical_id`.
+### `lead_conversations`
 
----
+Conversación consolidada por lead.
+
+Campos relevantes:
+- `id` (uuid interno)
+- `conversation_id` (id externo de sesión)
+- `lead_id`
+- `messages` (jsonb)
+- `lead_messages`, `bot_messages`, `total_messages`
+- `context_snapshot` (snapshot de vertical/modelo/prompt)
+
+### `lead_scoring_jobs`
+
+Cola persistente de scoring async.
+
+Campos clave:
+- `id`
+- `lead_id`
+- `conversation_id` (UNIQUE)
+- `client_id`
+- `model_id`, `prompt_id`
+- `expected_lead_messages`
+- `status`: `queued`, `running`, `rescheduled`, `completed`, `degraded`, `failed`, `cancelled`
+- `attempts`, `max_attempts`
+- `scheduled_for`, `started_at`, `finished_at`
+- `last_error_code`, `last_error_message`
+- `fallback_used`, `json_valid`, `latency_ms`, `response_chars`
 
 ### `lead_scorecards`
 
-Almacena el resultado de scoring de un lead en un momento dado.
+Resultado final por corrida de scoring.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `lead_id` | uuid | NO | FK a `lead_leads.id` (CASCADE) |
-| `conversation_id` | uuid | YES | Referencia a la conversación |
-| `model_id` | uuid | NO | FK a `lead_scoring_models.id` |
-| `model_version` | int | NO | Snapshot de versión del modelo |
-| `prompt_version` | int | NO | Snapshot de versión del prompt (numérico, legacy) |
-| `prompt_id` | uuid | YES | FK a `lead_scoring_prompts.id` (referencia exacta) |
-| `prompt_snapshot` | text | YES | **Copia del prompt** para reproducibilidad |
-| `score_total` | numeric(5,2) | NO | Score total calculado |
-| `priority_label` | varchar(32) | YES | "low", "medium", "high" |
-| `reasoning` | text | YES | Explicación general del LLM |
-| `extraction_result` | jsonb | YES | Datos extraídos de la conversación |
-| `raw_payload` | jsonb | YES | Metadatos adicionales |
-| `created_at` | timestamptz | NO | Timestamp de creación |
-
-**Importante:** 
-- Un lead puede tener múltiples scorecards (historial). El más reciente está referenciado en `lead_leads.current_scorecard_id`.
-- `prompt_snapshot` contiene una **copia exacta** del prompt usado, permitiendo reproducir el scoring históricamente aunque el prompt haya cambiado.
-
----
+Campos clave:
+- `id`
+- `lead_id`
+- `conversation_id`
+- `model_id`
+- `model_version`
+- `prompt_version` (legacy)
+- `prompt_id`
+- `prompt_snapshot`
+- `score_total`
+- `priority_label`
+- `reasoning`
+- `extraction_result`
+- `raw_payload`
 
 ### `lead_score_items`
 
-Desglose individual de cada criterio dentro de un scorecard.
+Desglose por criterio.
 
-| Columna | Tipo | Nullable | Descripción |
-|---------|------|----------|-------------|
-| `id` | uuid | NO | PK |
-| `scorecard_id` | uuid | NO | FK a `lead_scorecards.id` (CASCADE) |
-| `criterion_key` | varchar(64) | NO | Criterio evaluado |
-| `score` | numeric(5,2) | NO | Score asignado |
-| `band_id` | uuid | YES | FK a `lead_scoring_bands.id` |
-| `explanation` | text | YES | Explicación del LLM |
-| `extracted_data` | jsonb | YES | Datos extraídos relacionados |
-
-**Constraint:** `(scorecard_id, criterion_key)` es único.
+Campos clave:
+- `scorecard_id`
+- `criterion_key`
+- `score`
+- `band_id`
+- `explanation`
+- `extracted_data`
 
 ---
 
-## Flujo de Datos
+## Flujo de ejecución
 
-### 1. Configuración (una vez por vertical)
+### 1) Chat request
 
-```
-lead_client_verticals
-     ↓ crear
-lead_scoring_models (activo)
-     ↓ definir
-lead_scoring_criteria (4-5 criterios)
-     ↓ configurar
-lead_scoring_bands (3 bandas por criterio)
-```
+`POST /api/v2/chat`:
 
-### Requerimiento No Funcional: Scoring Invisible para el Usuario Final
+1. Valida `client_id`.
+2. Resuelve contexto tenant (`vertical_id` y `scoring_model_id`).
+3. Carga modelo activo y prompt activo.
+4. Genera respuesta de chat (Gemini + RAG).
+5. Persiste mensaje y actualiza lead.
+6. Encola job en `lead_scoring_jobs` con `scheduled_for = now + SCORING_IDLE_CLOSE_SECS`.
+7. Retorna respuesta sin bloquear por scoring.
 
-El usuario que está chateando **no debe percibir** el proceso de scoring.
+Respuesta incluye:
+- `scoring_status`
+- `scoring_job_id`
+- `scoring_eta`
 
-Directrices obligatorias:
-- `POST /api/v2/chat` responde inmediatamente con la respuesta conversacional.
-- El scoring se ejecuta **siempre en background** (cola/worker), sin bloquear la respuesta del chat.
-- El frontend de chat no espera `scorecard_id` ni estado de scoring.
-- Errores de scoring no se propagan al usuario final de chat; se manejan por observabilidad interna.
+### 2) Worker async
 
-Requisitos técnicos derivados:
-- Usar procesamiento asíncrono con reintentos controlados y DLQ.
-- Garantizar idempotencia para evitar scorecards duplicados (por ejemplo con llave lógica por conversación/modelo).
-- Persistir trazabilidad técnica en logs y métricas para diagnóstico.
-- Exponer resultados de scoring únicamente a backoffice/admin.
+Worker (`worker.py` + `ScoringWorker`) hace polling (`SCORING_WORKER_POLL_SECS`):
 
-### 2. Runtime (por cada mensaje de chat)
-
-```
-POST /api/v2/chat { queryText, clientId }
-     ↓
-1. Resolver vertical desde client_id
-   SELECT vertical_id FROM lead_clients WHERE id = :client_id
-     ↓
-2. Buscar modelo activo
-   SELECT * FROM lead_scoring_models 
-   WHERE vertical_id = :vertical_id AND is_active = true
-     ↓
-3. Crear/actualizar lead
-   INSERT/UPDATE lead_leads
-     ↓
-4. Calcular scores con modelo + LLM
-     ↓
-5. Persistir resultados
-   INSERT lead_scorecards
-   INSERT lead_score_items (por cada criterio)
-     ↓
-6. Actualizar referencia
-   UPDATE lead_leads SET current_scorecard_id = :new_id
-```
+1. Claim del siguiente job runnable.
+2. Verifica staleness (`expected_lead_messages` vs contador actual).
+3. Construye `conversation_text` con solo turnos de usuario.
+4. Llama `ScoringEngine.analyze_conversation(...)`.
+5. Persiste `lead_scorecards` + `lead_score_items`.
+6. Marca job `completed` o `degraded`.
 
 ---
 
-## Queries Útiles
+## Contrato LLM de scoring v2
 
-### Ver scorecard completo de un lead
+El LLM no decide el score final. Solo extrae señales.
+
+Payload esperado del LLM:
+
+```json
+{
+  "reasoning": "texto breve",
+  "extracted_data": {
+    "extracted_name": "...",
+    "extracted_email": "...",
+    "extracted_phone": "..."
+  },
+  "slot_hints": {
+    "intent": "interested"
+  },
+  "confidence": 0.82
+}
+```
+
+Reglas:
+- `extracted_data` es requerido.
+- `slot_hints`, `reasoning` y `confidence` son opcionales.
+- No se espera objeto `scores` desde el LLM.
+- El score final se calcula con `deterministic_scoring.criteria_rules`.
+
+---
+
+## Variables operativas clave
+
+- `SCORING_BG_ENABLED`
+- `SCORING_IDLE_CLOSE_SECS` (alias legacy: `SCORING_IDLE_DELAY_SECS`)
+- `SCORING_WORKER_POLL_SECS`
+- `SCORING_JOB_MAX_ATTEMPTS`
+- `SCORING_JOB_LOCK_TTL_SECS`
+- `SCORING_RETRY_DELAY_SECS`
+
+---
+
+## Consultas de verificación
+
+### Modelo activo por cliente
 
 ```sql
-SELECT 
-    l.full_name,
-    l.lead_type,
-    sc.score_total,
-    sc.priority_label,
-    sc.model_version,
-    si.criterion_key,
-    si.score,
-    b.band_key,
-    b.label as band_label,
-    b.color
-FROM lead_leads l
-JOIN lead_scorecards sc ON sc.lead_id = l.id
-JOIN lead_score_items si ON si.scorecard_id = sc.id
-LEFT JOIN lead_scoring_bands b ON b.id = si.band_id
-WHERE l.id = 'lead-uuid-here'
-ORDER BY sc.created_at DESC, si.criterion_key;
+SELECT c.id AS client_id, c.vertical_id, c.scoring_model_id, m.name, m.version, m.is_active
+FROM lead_clients c
+LEFT JOIN lead_scoring_models m ON m.id = c.scoring_model_id
+WHERE c.id = :client_id;
 ```
 
-### Ver historial de scorecards de un lead
+### Prompt activo + deterministic config
 
 ```sql
-SELECT 
-    sc.id,
-    sc.score_total,
-    sc.priority_label,
-    sc.created_at,
-    json_agg(json_build_object(
-        'criterion', si.criterion_key,
-        'score', si.score,
-        'band', b.band_key
-    )) as items
-FROM lead_scorecards sc
-JOIN lead_score_items si ON si.scorecard_id = sc.id
-LEFT JOIN lead_scoring_bands b ON b.id = si.band_id
-WHERE sc.lead_id = 'lead-uuid-here'
-GROUP BY sc.id
-ORDER BY sc.created_at DESC;
+SELECT p.id, p.model_id, p.version, p.is_active,
+       (p.extraction_schema ? 'deterministic_scoring') AS has_deterministic
+FROM lead_scoring_prompts p
+WHERE p.model_id = :model_id
+ORDER BY p.version DESC;
 ```
 
-### Ver configuración completa de un modelo
+### Timeline de job async
 
 ```sql
-SELECT 
-    m.name as model_name,
-    m.version as model_version,
-    c.criterion_key,
-    c.label as criterion_label,
-    c.weight,
-    json_agg(json_build_object(
-        'band', b.band_key,
-        'label', b.label,
-        'range', concat(b.min_score, '-', b.max_score),
-        'color', b.color
-    ) ORDER BY b.min_score) as bands
-FROM lead_scoring_models m
-JOIN lead_scoring_criteria c ON c.model_id = m.id
-LEFT JOIN lead_scoring_bands b ON b.criterion_id = c.id
-WHERE m.id = 'model-uuid-here'
-GROUP BY m.id, c.id
-ORDER BY c.display_order;
+SELECT id, status, attempts, scheduled_for, started_at, finished_at, latency_ms, response_chars
+FROM lead_scoring_jobs
+WHERE conversation_id = :conversation_id
+ORDER BY created_at DESC;
+```
+
+### Último scorecard
+
+```sql
+SELECT id, lead_id, score_total, priority_label, extraction_result, created_at
+FROM lead_scorecards
+WHERE lead_id = :lead_id
+ORDER BY created_at DESC
+LIMIT 1;
 ```
 
 ---
 
-## Migración de v1 a v2
+## Endpoints relevantes
 
-| Concepto v1 | Concepto v2 |
-|-------------|-------------|
-| `lead_leads.score_engagement` | `lead_score_items` con `criterion_key='engagement'` |
-| `lead_leads.score_finance` | `lead_score_items` con criterio configurable |
-| Scores fijos en columnas | Scores dinámicos por modelo |
-| Un scoring para todos | Scoring configurable por vertical |
-
----
-
-## APIs Relacionadas
-
-| Endpoint | Descripción |
-|----------|-------------|
-| `POST /api/v2/chat` | Procesa mensaje, crea lead y scorecard |
-| `GET /api/v2/leads/{lead_id}/scorecards/latest` | Obtiene último scorecard |
-| `GET /api/v2/scoring/models/active?client_id=...` | Obtiene modelo activo para un cliente |
-| `POST /api/v2/cache/invalidate` | Invalida caché de modelos |
+- `POST /api/v2/chat`
+- `GET /api/v2/scoring/jobs/{job_id}`
+- `GET /api/v2/leads/{lead_id}/scorecards/latest`
+- `GET /api/v2/leads/{lead_id}/scorecards/{scorecard_id}`
+- `GET /api/v2/scoring/models/active?client_id=...`
+- `POST /api/v2/cache/invalidate`
 
 ---
 
-## Referencias
+## Notas de compatibilidad
 
-- RFC original: `docs/LEAD_FLOW_SPLIT_RFC.md`
-- Código del repositorio: `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
-- Simulador de pruebas: `tests/sandbox/simulate_chat_flow.py`
+- `prompt_version` se conserva por compatibilidad histórica, pero la referencia exacta es `prompt_id` + `prompt_snapshot`.
+- Columnas v1 de score en `lead_leads` siguen presentes por compatibilidad, pero v2 persiste en `lead_scorecards` y `lead_score_items`.
+- Las plantillas de prompt en BD deben ser de extracción (no scoring numérico).
+
+---
+
+## Referencias de implementación
+
+- `services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/deterministic_scoring.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py`
+- `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
+- `migrations/2026-02-21_drop_lead_type_from_lead_leads.sql`
+- `migrations/2026-02-22_create_lead_scoring_jobs.sql`
+- `migrations/2026-02-25_seed_deterministic_scoring_config.sql`
+- `migrations/2026-02-26_update_lead_scoring_prompts_extraction_only.sql`

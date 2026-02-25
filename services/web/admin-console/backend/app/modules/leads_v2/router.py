@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional, Tuple
 from uuid import UUID
 from app.modules.auth.config import current_active_user
@@ -47,7 +47,8 @@ async def _resolve_vertical_schema_for_user(user: User) -> Tuple[Optional[Scorin
         return None, "generic", "Generic"
 
     schema = await lead_v2_service.get_scoring_schema_for_vertical(
-        int(vertical_ctx["vertical_id"])
+        int(vertical_ctx["vertical_id"]),
+        vertical_ctx.get("scoring_model_id"),
     )
     vertical_slug = (vertical_ctx.get("vertical_slug") or "generic").strip()
     vertical_name = (vertical_ctx.get("vertical_name") or vertical_slug or "Generic").strip()
@@ -64,33 +65,22 @@ def _grid_props_to_renderer_config(config: DynamicGridConfig) -> dict:
     return payload
 
 
+@router.get("", response_model=WebIAFirstResponse)
 @router.get("/", response_model=WebIAFirstResponse)
 async def get_leads_grid_v2(
     user: User = Depends(current_active_user),
-    lead_type: Optional[str] = Query(None, description="Filter by lead type")
 ):
     """
     Returns the dynamic leads grid for v2 scoring.
-    Uses dynamic scoring schema based on lead_type or defaults.
+    Uses dynamic scoring schema based on tenant context (vertical + scoring_model_id).
     """
-    # Check if dynamic UI is enabled
-    if not settings.admin_dynamic_scoring_ui:
-        # Fallback to legacy view
-        from app.modules.leads.router import get_my_leads as get_legacy_my_leads
-        return await get_legacy_my_leads(user)
-    
-    leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
+    leads = await lead_v2_service.get_my_leads_with_scoring_v2(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     schema, vertical_slug, vertical_name = await _resolve_vertical_schema_for_user(user)
-
-    # Compatibility fallback for old lead_type filter
-    if lead_type and not schema:
-        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-            lead_type, _get_primary_client_id(user)
-        )
-        vertical_slug = lead_type
-        vertical_name = lead_type.capitalize()
-
-    grid_config = _build_dynamic_grid_config(schema, vertical_slug, lead_type)
+    grid_config = _build_dynamic_grid_config(schema, vertical_slug)
     
     # Transform leads to grid rows
     rows = _transform_leads_to_dynamic_rows(leads, schema)
@@ -127,17 +117,16 @@ async def get_leads_grid_v2(
 @router.get("/data", response_model=List[dict])
 async def list_leads_data_v2(
     user: User = Depends(current_active_user),
-    lead_type: Optional[str] = Query(None, description="Filter by lead type")
 ):
     """
     Returns raw data for leads with v2 scoring.
     """
-    leads = await lead_v2_service.get_my_leads_with_scoring_v2(user.id, lead_type)
+    leads = await lead_v2_service.get_my_leads_with_scoring_v2(
+        user_id=user.id,
+        is_superuser=user.is_superuser,
+        tenant_ids=_get_tenant_ids(user),
+    )
     schema, _, _ = await _resolve_vertical_schema_for_user(user)
-    if lead_type and not schema:
-        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-            lead_type, _get_primary_client_id(user)
-        )
 
     return _transform_leads_to_dynamic_rows(leads, schema)
 
@@ -169,14 +158,11 @@ async def get_lead_detail_v2(
         vertical_ctx = await lead_v2_service.get_client_vertical_context(lead["client_id"])
         if vertical_ctx and vertical_ctx.get("vertical_id"):
             schema = await lead_v2_service.get_scoring_schema_for_vertical(
-                int(vertical_ctx["vertical_id"])
+                int(vertical_ctx["vertical_id"]),
+                vertical_ctx.get("scoring_model_id"),
             )
     if not schema:
-        lead_type = lead.get("lead_type", "generic")
-        schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-            lead_type,
-            _get_primary_client_id(user),
-        )
+        schema, _, _ = await _resolve_vertical_schema_for_user(user)
     
     # Build detail components with dynamic scoring
     components = _build_lead_detail_components(lead, scoring_values, schema)
@@ -214,23 +200,19 @@ async def get_lead_scoring_values(
     return lead_v2_service.transform_to_scoring_values(lead)
 
 
-@router.get("/schema/{lead_type}", response_model=ScoringSchemaV2)
+@router.get("/schema/current", response_model=ScoringSchemaV2)
 async def get_scoring_schema(
-    lead_type: str,
     user: User = Depends(current_active_user)
 ):
     """
-    Returns scoring schema for a specific lead type.
+    Returns scoring schema for current tenant context (vertical + scoring_model_id).
     """
-    schema = await lead_v2_service.get_scoring_schema_for_lead_type(
-        lead_type,
-        _get_primary_client_id(user)
-    )
+    schema, _, _ = await _resolve_vertical_schema_for_user(user)
     
     if not schema:
         raise HTTPException(
             status_code=404, 
-            detail=f"No active scoring schema found for lead type: {lead_type}"
+            detail="No active scoring schema found for current tenant context"
         )
     
     return schema
@@ -239,7 +221,6 @@ async def get_scoring_schema(
 def _build_dynamic_grid_config(
     schema: Optional[ScoringSchemaV2],
     vertical_slug: str,
-    lead_type_filter: Optional[str] = None,
 ) -> DynamicGridConfig:
     """
     Build dynamic grid configuration based on scoring schema.
@@ -264,7 +245,7 @@ def _build_dynamic_grid_config(
                 label=criterion.label,
                 type="scoring-pillar",
                 sortable=True,
-                icon=criterion.bands[0].icon if criterion.bands else "ri-star-line",
+                icon=criterion.icon or "ri-star-line",
                 criterion_key=criterion.criterion_key
             ))
     
@@ -295,9 +276,7 @@ def _build_dynamic_grid_config(
     
     return DynamicGridConfig(
         grid_id=f"leads-v2-{vertical_slug}",
-        data_url=(
-            f"/leads_v2/data?lead_type={lead_type_filter}" if lead_type_filter else "/leads_v2/data"
-        ),
+        data_url="/leads_v2/data",
         enable_filters=True,
         columns=columns,
         filter_config={
@@ -305,7 +284,11 @@ def _build_dynamic_grid_config(
             "filterableColumns": [
                 {"id": "identity", "label": "Lead", "icon": "ri-shield-user-line"}
             ] + ([
-                {"id": f"scoring_{c.criterion_key}", "label": c.label, "icon": c.bands[0].icon if c.bands else "ri-star-line"}
+                {
+                    "id": f"scoring_{c.criterion_key}",
+                    "label": c.label,
+                    "icon": c.icon or "ri-star-line",
+                }
                 for c in (schema.criteria if schema else [])
             ] if schema else [])
         },
@@ -393,7 +376,7 @@ def _build_lead_detail_components(
                             "title": "Información del Lead",
                             "components": [
                                 {"type": "typography", "tag": "h4", "text": lead['full_name'], "class": "mb-1"},
-                                {"type": "typography", "tag": "p", "text": f"Tipo: {lead.get('lead_type', 'realtor').capitalize()}", "class": "text-muted mb-1"},
+                                {"type": "typography", "tag": "p", "text": f"Vertical: {(schema.vertical_slug if schema else 'generic').capitalize()}", "class": "text-muted mb-1"},
                                 {"type": "typography", "tag": "p", "text": f"Status: {lead.get('status_label') or 'Nuevo'}", "class": "text-muted mb-3"},
                                 {"type": "typography", "tag": "p", "text": f"Email: {lead['email'] or '-'}"},
                                 {"type": "typography", "tag": "p", "text": f"Tel: {lead['phone'] or '-'}"}

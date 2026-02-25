@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+import re
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -26,6 +27,16 @@ from .admin_scoring_schemas import (
 
 
 class AdminScoringService:
+    _prompt_placeholder_pattern = re.compile(r"(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})")
+    _allowed_prompt_placeholders = {
+        "vertical_name",
+        "criteria_text",
+        "extraction_text",
+        "business_domain",
+        "locale",
+        "timestamp_utc",
+    }
+
     @staticmethod
     def _row_to_dict(row: Any) -> Dict[str, Any]:
         if hasattr(row, "_mapping"):
@@ -33,6 +44,34 @@ class AdminScoringService:
         if isinstance(row, dict):
             return row
         return dict(row)
+
+    @classmethod
+    def _normalize_prompt_template(cls, template: str) -> str:
+        text = template or ""
+        return text.replace("\\r\\n", "\n").replace("\\n", "\n").strip()
+
+    @classmethod
+    def _validate_prompt_template(cls, template: str) -> None:
+        normalized = cls._normalize_prompt_template(template)
+        if not normalized:
+            raise HTTPException(status_code=422, detail="Prompt template cannot be empty")
+        if len(normalized) < 80:
+            raise HTTPException(status_code=422, detail="Prompt template too short (min 80 chars)")
+        if len(normalized) > 32000:
+            raise HTTPException(status_code=422, detail="Prompt template too long (max 32000 chars)")
+
+        placeholders = set(cls._prompt_placeholder_pattern.findall(normalized))
+        unsupported = sorted([p for p in placeholders if p not in cls._allowed_prompt_placeholders])
+        if unsupported:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported prompt placeholders: {', '.join(unsupported)}",
+            )
+        if "conversation_text" in placeholders or "{conversation_text}" in normalized:
+            raise HTTPException(
+                status_code=422,
+                detail="Placeholder {conversation_text} is not supported in prompt templates",
+            )
 
     @classmethod
     def _validate_row(cls, schema: Any, row: Any):
@@ -227,6 +266,7 @@ class AdminScoringService:
                 c.min_score,
                 c.max_score,
                 c.display_order,
+                c.icon,
                 c.is_active
             FROM lead_scoring_criteria c
             JOIN lead_scoring_models m ON m.id = c.model_id
@@ -251,6 +291,7 @@ class AdminScoringService:
                 c.min_score,
                 c.max_score,
                 c.display_order,
+                c.icon,
                 c.is_active
             FROM lead_scoring_criteria c
             JOIN lead_scoring_models m ON m.id = c.model_id
@@ -264,10 +305,10 @@ class AdminScoringService:
     async def create_scoring_criterion(self, payload: ScoringCriterionCreate) -> ScoringCriterionRow:
         query = text("""
             INSERT INTO lead_scoring_criteria (
-                model_id, criterion_key, label, weight, min_score, max_score, display_order, is_active
+                model_id, criterion_key, label, weight, min_score, max_score, display_order, icon, is_active
             )
             VALUES (
-                :model_id, :criterion_key, :label, :weight, :min_score, :max_score, :display_order, :is_active
+                :model_id, :criterion_key, :label, :weight, :min_score, :max_score, :display_order, :icon, :is_active
             )
             RETURNING id
         """)
@@ -284,6 +325,8 @@ class AdminScoringService:
 
     async def update_scoring_criterion(self, item_id: UUID, payload: ScoringCriterionUpdate) -> Optional[ScoringCriterionRow]:
         data = payload.model_dump(exclude_unset=True)
+        if "criterion_key" in data:
+            raise HTTPException(status_code=400, detail="criterion_key is immutable and cannot be updated")
         if not data:
             return await self.get_scoring_criterion(item_id)
 
@@ -476,6 +519,10 @@ class AdminScoringService:
             return self._validate_row(ScoringPromptRow, row) if row else None
 
     async def create_scoring_prompt(self, payload: ScoringPromptCreate, created_by: Optional[UUID]) -> ScoringPromptRow:
+        normalized_template = self._normalize_prompt_template(payload.prompt_template)
+        if payload.is_active:
+            self._validate_prompt_template(normalized_template)
+
         query = text("""
             INSERT INTO lead_scoring_prompts (
                 model_id, version, prompt_template, is_active, created_by
@@ -486,6 +533,7 @@ class AdminScoringService:
             RETURNING id
         """)
         params = payload.model_dump()
+        params["prompt_template"] = normalized_template
         params["created_by"] = created_by
 
         async with engine.begin() as conn:
@@ -508,6 +556,18 @@ class AdminScoringService:
         data = payload.model_dump(exclude_unset=True)
         if not data:
             return await self.get_scoring_prompt(item_id)
+
+        current = await self.get_scoring_prompt(item_id)
+        if not current:
+            return None
+
+        merged_template = data.get("prompt_template", current.prompt_template)
+        merged_is_active = data.get("is_active", current.is_active)
+        normalized_template = self._normalize_prompt_template(merged_template)
+        if merged_is_active:
+            self._validate_prompt_template(normalized_template)
+        if "prompt_template" in data:
+            data["prompt_template"] = normalized_template
 
         updates: List[str] = []
         params: Dict[str, Any] = {"id": item_id}

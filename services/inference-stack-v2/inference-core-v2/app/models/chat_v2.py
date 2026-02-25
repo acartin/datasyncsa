@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, AliasChoices
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from pydantic.alias_generators import to_camel
@@ -13,12 +13,10 @@ class ChatV2Request(BaseModel):
     )
     
     query_text: str = Field(..., min_length=1, max_length=4000, description="The user's question or message")
-    client_id: UUID = Field(..., description="The tenant/client identifier")
-    lead_type: Optional[str] = Field(
-        None,
-        min_length=1,
-        max_length=32,
-        description="Deprecated. lead_type is resolved from tenant vertical configuration.",
+    client_id: UUID = Field(
+        ...,
+        description="The tenant/client identifier",
+        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
     )
     filters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional filters like category or source")
     conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID if applicable")
@@ -68,6 +66,37 @@ class ChatV2Response(BaseModel):
     lead_id: Optional[UUID] = Field(None, description="Lead ID if created/identified")
     scorecard_id: Optional[UUID] = Field(None, description="Scorecard ID if scoring was performed")
     scorecard: Optional[ScorecardV2] = Field(None, description="Scoring results if performed")
+    scoring_status: Optional[str] = Field(None, description="Background scoring state (e.g., pending, disabled)")
+    scoring_job_id: Optional[UUID] = Field(None, description="Background scoring job ID if available")
+    scoring_eta: Optional[str] = Field(None, description="Estimated UTC completion timestamp for scoring")
+
+
+class ScoringJobResponse(BaseModel):
+    """Response contract for background scoring job status."""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    id: UUID
+    lead_id: UUID
+    conversation_id: UUID
+    client_id: UUID
+    status: str
+    attempts: int
+    max_attempts: int
+    expected_lead_messages: Optional[int] = None
+    scheduled_for: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    last_error_code: Optional[str] = None
+    last_error_message: Optional[str] = None
+    fallback_used: Optional[bool] = None
+    json_valid: Optional[bool] = None
+    latency_ms: Optional[int] = None
+    response_chars: Optional[int] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class ScorecardResponse(BaseModel):

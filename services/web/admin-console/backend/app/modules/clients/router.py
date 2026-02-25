@@ -280,13 +280,88 @@ async def get_client_dashboard(client_id: UUID, current_user: AuthUser = Depends
         ]
     })
 
-    # 3. Prompts (Everyone)
+    prompt_form_schema = [
+        {"name": "client_id", "type": "hidden", "value": str(client_id)},
+        {
+            "name": "slug",
+            "label": "Slug / Nombre Unico",
+            "type": "text",
+            "required": True,
+            "min_length": 3,
+            "placeholder": "ej. primary_chat",
+        },
+        {
+            "name": "prompt_text",
+            "label": "Instrucciones del Prompt",
+            "type": "textarea",
+            "required": True,
+            "min_length": 10,
+            "rows": 20,
+        },
+        {
+            "name": "is_active",
+            "label": "Activo",
+            "type": "switch",
+            "value": True,
+        },
+    ]
+
+    # 3. Prompts (CRUD scoped to current client)
     tabs.append({
         "id": "prompts",
         "label": "Prompts",
         "icon": "ri-robot-line",
         "content": [
-            {"type": "typography", "variant": "p", "content": "Gestión de Prompts personalizados para este cliente (Próximamente)."}
+            {
+                "type": "grid-visual",
+                "label": "Prompts del Cliente",
+                "properties": {
+                    "data_url": f"/prompts/data?client_id={client_id}",
+                    "primary_key": "id",
+                    "columns": [
+                        {"id": "slug", "label": "Slug", "type": "text", "sortable": True},
+                        {"id": "prompt_text", "label": "Contenido", "type": "text", "truncate": 100},
+                        {"id": "is_active", "label": "Activo", "type": "badge", "badge_map": {"true": "success", "false": "secondary"}},
+                        {"id": "updated_at", "label": "Actualizado", "type": "datetime", "sortable": True},
+                    ],
+                    "enableFilters": True,
+                    "filterConfig": {
+                        "searchFields": ["slug", "prompt_text"]
+                    },
+                    "header_actions": [
+                        {
+                            "type": "button",
+                            "icon": "ri-add-line",
+                            "label": "Nuevo Prompt",
+                            "color": "success",
+                            "action": "modal-form",
+                            "action_url": "/prompts",
+                            "modal_title": "Crear Prompt",
+                            "schema": prompt_form_schema,
+                        }
+                    ],
+                    "actions": [
+                        {
+                            "type": "button",
+                            "icon": "ri-edit-line",
+                            "label": "Editar",
+                            "action": "modal-form",
+                            "action_url": "/prompts/{id}",
+                            "modal_title": "Editar Prompt",
+                            "schema": prompt_form_schema,
+                        },
+                        {
+                            "type": "button",
+                            "icon": "ri-delete-bin-line",
+                            "label": "Eliminar",
+                            "color": "danger",
+                            "action": "delete",
+                            "action_url": "/prompts/{id}",
+                            "confirm_message": "¿Estás seguro de eliminar este prompt?",
+                        }
+                    ]
+                }
+            }
         ]
     })
 

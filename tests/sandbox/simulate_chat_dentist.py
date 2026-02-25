@@ -31,7 +31,7 @@ except ImportError:
 
 CLIENT_ID = "66fc0a3b-c8d3-4707-8471-c751c642852d"
 INFERENCE_V2_URL = "http://localhost:8091/api/v2"
-MODEL_ID = "23dbbd82-8ab6-4122-8d38-0528c0fa3cb5"
+
 
 AUTO_MESSAGES = [
     "Hola, necesito una cita dental",
@@ -187,18 +187,41 @@ class ChatSimulator:
             pass
         return None
 
-    def wait_for_latest_scorecard(self, max_wait_seconds: int = 20, interval_seconds: float = 1.5) -> dict:
-        """Poll latest scorecard endpoint until async scoring is persisted."""
+    def wait_for_latest_scorecard(
+        self,
+        max_wait_seconds: int = 60,
+        interval_seconds: float = 1.5,
+        settle_seconds: float = 5.0,
+    ) -> dict:
+        """Poll latest scorecard endpoint until async scoring is persisted and stable."""
         if not self.lead_id:
             return None
 
         deadline = time.time() + max_wait_seconds
+        last_seen = None
+        stable_since = None
+        fallback = None
         while time.time() < deadline:
             scorecard = self.get_scorecard(self.lead_id)
             if scorecard:
-                return scorecard
+                fallback = scorecard
+                extraction = scorecard.get("extractionResult", scorecard.get("extraction_result", {})) or {}
+                signature = json.dumps(
+                    {
+                        "id": scorecard.get("id"),
+                        "score": scorecard.get("scoreTotal", scorecard.get("score_total")),
+                        "priority": scorecard.get("priorityLabel", scorecard.get("priority_label")),
+                        "extraction": extraction,
+                    },
+                    sort_keys=True,
+                )
+                if signature != last_seen:
+                    last_seen = signature
+                    stable_since = time.time()
+                elif stable_since and (time.time() - stable_since) >= settle_seconds:
+                    return scorecard
             time.sleep(interval_seconds)
-        return None
+        return fallback
     
     def display_scorebar(self, score: float, max_score: float = 10.0, width: int = 12) -> str:
         filled = int((score / max_score) * width)
@@ -306,7 +329,7 @@ class ChatSimulator:
         if self.lead_id:
             print(f"""
 -- Ver lead creado
-SELECT id, full_name, lead_type, current_scorecard_id, created_at
+SELECT id, full_name, current_scorecard_id, created_at
 FROM lead_leads
 WHERE id = '{self.lead_id}';
 
@@ -351,7 +374,8 @@ WHERE scorecard_id = '{scorecard_id}';
             print(f"  version: {model.get('modelVersion')}")
             criteria = model.get("criteria", [])
             if criteria:
-                print(f"  criterios: {', '.join([c.get('criterionKey') for c in criteria])}")
+                criterion_keys = [c.get("criterion_key", c.get("criterionKey")) for c in criteria]
+                print(f"  criterios: {', '.join(filter(None, criterion_keys))}")
         
         print()
         print("Escribe un mensaje o 'exit' para terminar")
@@ -432,9 +456,6 @@ WHERE scorecard_id = '{scorecard_id}';
                 criterion_keys = [c.get("criterion_key", c.get("criterionKey")) for c in criteria]
                 print(f"Criterios: {', '.join(filter(None, criterion_keys))}")
         
-        print()
-        input("Presiona Enter para iniciar la simulacion...")
-        
         for i, query in enumerate(AUTO_MESSAGES, 1):
             response = self.send_chat(query)
             
@@ -448,9 +469,6 @@ WHERE scorecard_id = '{scorecard_id}';
                 })
                 self.display_response(response, i, query)
             
-            if i < len(AUTO_MESSAGES):
-                input("\nPresiona Enter para siguiente mensaje...")
-        
         self.display_summary()
     
     def run_single(self, query: str):
@@ -503,8 +521,8 @@ WHERE scorecard_id = '{scorecard_id}';
         if self.scorecards:
             print("\nEvolucion de scores:")
             for entry in self.scorecards:
-                total = entry["scorecard"].get("scoreTotal", 0)
-                priority = entry["scorecard"].get("priorityLabel", "-")
+                total = entry["scorecard"].get("score_total", entry["scorecard"].get("scoreTotal", 0))
+                priority = entry["scorecard"].get("priority_label", entry["scorecard"].get("priorityLabel", "-"))
                 print(f"  [{entry['msg_num']}] {total:.2f} ({priority}) - \"{entry['query'][:30]}...\"")
         
         self.display_db_queries()
@@ -519,8 +537,8 @@ def main():
     parser.add_argument(
         "--model-id",
         type=str,
-        default=os.getenv("MODEL_ID", MODEL_ID),
-        help=f"Model ID esperado (default: env MODEL_ID o {MODEL_ID})",
+        default=os.getenv("MODEL_ID"),
+        help="Model ID esperado (opcional; por defecto usa el modelo configurado en BD para el cliente).",
     )
     parser.add_argument(
         "--url",
@@ -548,7 +566,7 @@ def main():
     elif args.auto:
         simulator.run_auto()
     else:
-        simulator.run_interactive()
+        simulator.run_auto()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import logging
 import json
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +49,41 @@ class ScoringRepository:
                 messages = json.loads(messages)
             except Exception:
                 logger.warning("Invalid JSON in lead_conversations.messages for %s", conversation_id)
+                return []
+
+        if not isinstance(messages, list):
+            return []
+
+        if max_messages <= 0:
+            return []
+        return messages[-max_messages:]
+
+    async def get_latest_lead_messages(
+        self,
+        lead_id: UUID,
+        max_messages: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fallback: returns latest conversation messages by lead when conversation lookup misses.
+        """
+        query = text("""
+            SELECT lc.messages
+            FROM lead_conversations lc
+            WHERE lc.lead_id = :lead_id
+            ORDER BY lc.updated_at DESC NULLS LAST, lc.created_at DESC
+            LIMIT 1
+        """)
+        result = await self.session.execute(query, {"lead_id": str(lead_id)})
+        row = result.mappings().first()
+        if not row:
+            return []
+
+        messages = row.get("messages") or []
+        if isinstance(messages, str):
+            try:
+                messages = json.loads(messages)
+            except Exception:
+                logger.warning("Invalid JSON in lead_conversations.messages for lead %s", lead_id)
                 return []
 
         if not isinstance(messages, list):
@@ -110,7 +146,6 @@ class ScoringRepository:
                 full_name,
                 email,
                 phone,
-                lead_type,
                 source_id,
                 current_scorecard_id,
                 created_at
@@ -134,7 +169,6 @@ class ScoringRepository:
             "full_name": row.get("full_name"),
             "email": row.get("email"),
             "phone": row.get("phone"),
-            "lead_type": row.get("lead_type"),
             "source_id": row.get("source_id"),
             "current_scorecard_id": str(row.get("current_scorecard_id")) if row.get("current_scorecard_id") else None,
             "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
@@ -163,7 +197,7 @@ class ScoringRepository:
         """Get or create a conversation"""
         # Try to find existing conversation
         query = text("""
-            SELECT id, lead_id, platform, conversation_id, messages, total_messages
+            SELECT id, lead_id, platform, conversation_id, messages, total_messages, context_snapshot
             FROM lead_conversations 
             WHERE lead_id = :lead_id 
               AND conversation_id = :conversation_id
@@ -180,9 +214,9 @@ class ScoringRepository:
         
         # Create new conversation
         insert_query = text("""
-            INSERT INTO lead_conversations (lead_id, platform, conversation_id, messages, total_messages, bot_messages, lead_messages)
-            VALUES (:lead_id, :platform, :conversation_id, '[]'::jsonb, 0, 0, 0)
-            RETURNING id, lead_id, platform, conversation_id, messages, total_messages
+            INSERT INTO lead_conversations (lead_id, platform, conversation_id, messages, total_messages, bot_messages, lead_messages, context_snapshot)
+            VALUES (:lead_id, :platform, :conversation_id, '[]'::jsonb, 0, 0, 0, '{}'::jsonb)
+            RETURNING id, lead_id, platform, conversation_id, messages, total_messages, context_snapshot
         """)
         result = await self.session.execute(insert_query, {
             "lead_id": str(lead_id),
@@ -193,13 +227,79 @@ class ScoringRepository:
         await self.session.commit()
         return dict(row)
 
+    async def get_conversation_context_snapshot(
+        self,
+        conversation_id: UUID,
+        client_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Returns tenant-scoped context snapshot for a conversation.
+        """
+        query = text("""
+            SELECT lc.context_snapshot
+            FROM lead_conversations lc
+            JOIN lead_leads ll ON ll.id = lc.lead_id
+            WHERE lc.conversation_id = :conversation_id
+              AND ll.client_id = :client_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            query,
+            {
+                "conversation_id": str(conversation_id),
+                "client_id": str(client_id),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            return None
+
+        snapshot = row.get("context_snapshot")
+        if not snapshot:
+            return None
+        if isinstance(snapshot, str):
+            try:
+                snapshot = json.loads(snapshot)
+            except Exception:
+                logger.warning("Invalid JSON in lead_conversations.context_snapshot for %s", conversation_id)
+                return None
+        if not isinstance(snapshot, dict):
+            return None
+        return snapshot
+
+    async def set_conversation_context_snapshot(
+        self,
+        conversation_id: UUID,
+        lead_id: UUID,
+        snapshot: Dict[str, Any],
+    ) -> None:
+        """
+        Upsert context snapshot for a conversation row.
+        """
+        payload = snapshot if isinstance(snapshot, dict) else {}
+        query = text("""
+            UPDATE lead_conversations
+            SET context_snapshot = CAST(:context_snapshot AS jsonb)
+            WHERE conversation_id = :conversation_id
+              AND lead_id = :lead_id
+        """)
+        await self.session.execute(
+            query,
+            {
+                "context_snapshot": json.dumps(payload, default=str),
+                "conversation_id": str(conversation_id),
+                "lead_id": str(lead_id),
+            },
+        )
+        await self.session.commit()
+
     async def update_conversation(
         self,
         conversation_id: UUID,
         lead_id: UUID,
         user_message: str,
         bot_message: str
-    ) -> None:
+    ) -> Dict[str, int]:
         """Update conversation with new messages"""
         # Get current messages - search by conversation_id field
         query = text("""
@@ -212,7 +312,7 @@ class ScoringRepository:
         
         if not row:
             logger.warning(f"Conversation {conversation_id} not found")
-            return
+            return {"total_messages": 0, "bot_messages": 0, "lead_messages": 0}
         
         messages = row.get("messages", [])
         if isinstance(messages, str):
@@ -254,6 +354,46 @@ class ScoringRepository:
             "conversation_id": str(conversation_id)
         })
         await self.session.commit()
+        return {
+            "total_messages": int(total),
+            "bot_messages": int(bot_count),
+            "lead_messages": int(lead_count),
+        }
+
+    async def get_conversation_message_counters(
+        self,
+        conversation_id: UUID,
+        client_id: UUID,
+    ) -> Optional[Dict[str, int]]:
+        """
+        Returns tenant-scoped message counters for a conversation.
+        """
+        stmt = text("""
+            SELECT
+                COALESCE(lc.total_messages, 0) AS total_messages,
+                COALESCE(lc.bot_messages, 0) AS bot_messages,
+                COALESCE(lc.lead_messages, 0) AS lead_messages
+            FROM lead_conversations lc
+            JOIN lead_leads ll ON ll.id = lc.lead_id
+            WHERE lc.conversation_id = :conversation_id
+              AND ll.client_id = :client_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            stmt,
+            {
+                "conversation_id": str(conversation_id),
+                "client_id": str(client_id),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            return None
+        return {
+            "total_messages": int(row.get("total_messages") or 0),
+            "bot_messages": int(row.get("bot_messages") or 0),
+            "lead_messages": int(row.get("lead_messages") or 0),
+        }
     
     @staticmethod
     def _normalize_extraction_result(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -524,18 +664,15 @@ class ScoringRepository:
 
             if not updates and not cleaned_extraction:
                 return False
+            if not updates:
+                # lead_leads no longer stores extraction_result; nothing to persist at lead row level.
+                return False
 
             set_clauses = []
-            params = {
-                "lead_id": str(lead_id),
-                "extraction_result": json.dumps(cleaned_extraction),
-            }
+            params = {"lead_id": str(lead_id)}
             for key, value in updates.items():
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
-            set_clauses.append(
-                "extraction_result = COALESCE(extraction_result, '{}'::jsonb) || CAST(:extraction_result AS jsonb)"
-            )
             
             stmt = text(f"""
                 UPDATE lead_leads
@@ -583,7 +720,6 @@ class ScoringRepository:
     async def get_or_create_lead(
         self,
         client_id: UUID,
-        lead_type: str,
         user_metadata: Optional[Dict[str, Any]] = None,
         conversation_id: Optional[str] = None,
     ) -> UUID:
@@ -629,9 +765,7 @@ class ScoringRepository:
                 full_name,
                 email,
                 phone,
-                lead_type,
                 business_domain,
-                extraction_result,
                 created_at
             )
             VALUES (
@@ -641,9 +775,7 @@ class ScoringRepository:
                 :full_name,
                 :email,
                 :phone,
-                :lead_type,
                 :business_domain,
-                CAST(:extraction_result AS jsonb),
                 NOW()
             )
             RETURNING id
@@ -654,9 +786,7 @@ class ScoringRepository:
             "full_name": full_name,
             "email": email,
             "phone": phone,
-            "lead_type": lead_type,
             "business_domain": None,
-            "extraction_result": json.dumps(extraction_seed),
         })
         new_lead_id = result.scalar_one()
         
@@ -822,6 +952,331 @@ class ScoringRepository:
             "extraction_schema": row.get("extraction_schema"),
             "is_active": row["is_active"]
         }
+
+    @staticmethod
+    def _serialize_scoring_job_row(row: Dict[str, Any]) -> Dict[str, Any]:
+        if not row:
+            return {}
+        return {
+            "id": str(row.get("id")) if row.get("id") else None,
+            "lead_id": str(row.get("lead_id")) if row.get("lead_id") else None,
+            "conversation_id": str(row.get("conversation_id")) if row.get("conversation_id") else None,
+            "client_id": str(row.get("client_id")) if row.get("client_id") else None,
+            "model_id": str(row.get("model_id")) if row.get("model_id") else None,
+            "prompt_id": str(row.get("prompt_id")) if row.get("prompt_id") else None,
+            "expected_lead_messages": row.get("expected_lead_messages"),
+            "status": row.get("status"),
+            "attempts": row.get("attempts"),
+            "max_attempts": row.get("max_attempts"),
+            "scheduled_for": row.get("scheduled_for").isoformat() if row.get("scheduled_for") else None,
+            "started_at": row.get("started_at").isoformat() if row.get("started_at") else None,
+            "finished_at": row.get("finished_at").isoformat() if row.get("finished_at") else None,
+            "last_error_code": row.get("last_error_code"),
+            "last_error_message": row.get("last_error_message"),
+            "fallback_used": row.get("fallback_used"),
+            "json_valid": row.get("json_valid"),
+            "latency_ms": row.get("latency_ms"),
+            "response_chars": row.get("response_chars"),
+            "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+            "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
+        }
+
+    async def upsert_scoring_job(
+        self,
+        *,
+        lead_id: UUID,
+        conversation_id: UUID,
+        client_id: UUID,
+        expected_lead_messages: Optional[int],
+        scheduled_for: datetime,
+        max_attempts: int,
+        model_id: Optional[UUID] = None,
+        prompt_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create or refresh a scoring job keyed by conversation.
+        """
+        stmt = text("""
+            INSERT INTO lead_scoring_jobs (
+                lead_id,
+                conversation_id,
+                client_id,
+                model_id,
+                prompt_id,
+                expected_lead_messages,
+                status,
+                attempts,
+                max_attempts,
+                scheduled_for,
+                last_error_code,
+                last_error_message,
+                fallback_used,
+                json_valid,
+                latency_ms,
+                response_chars,
+                started_at,
+                finished_at
+            )
+            VALUES (
+                CAST(:lead_id AS uuid),
+                CAST(:conversation_id AS uuid),
+                CAST(:client_id AS uuid),
+                CAST(:model_id AS uuid),
+                CAST(:prompt_id AS uuid),
+                :expected_lead_messages,
+                'queued',
+                0,
+                :max_attempts,
+                :scheduled_for,
+                NULL,
+                NULL,
+                FALSE,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL
+            )
+            ON CONFLICT (conversation_id)
+            DO UPDATE SET
+                lead_id = EXCLUDED.lead_id,
+                client_id = EXCLUDED.client_id,
+                model_id = EXCLUDED.model_id,
+                prompt_id = EXCLUDED.prompt_id,
+                expected_lead_messages = EXCLUDED.expected_lead_messages,
+                status = 'queued',
+                attempts = 0,
+                max_attempts = EXCLUDED.max_attempts,
+                scheduled_for = EXCLUDED.scheduled_for,
+                last_error_code = NULL,
+                last_error_message = NULL,
+                fallback_used = FALSE,
+                json_valid = NULL,
+                latency_ms = NULL,
+                response_chars = NULL,
+                started_at = NULL,
+                finished_at = NULL,
+                updated_at = NOW()
+            RETURNING *
+        """)
+        result = await self.session.execute(
+            stmt,
+            {
+                "lead_id": str(lead_id),
+                "conversation_id": str(conversation_id),
+                "client_id": str(client_id),
+                "model_id": str(model_id) if model_id else None,
+                "prompt_id": str(prompt_id) if prompt_id else None,
+                "expected_lead_messages": expected_lead_messages,
+                "max_attempts": max_attempts,
+                "scheduled_for": scheduled_for,
+            },
+        )
+        row = result.mappings().first()
+        await self.session.commit()
+        return self._serialize_scoring_job_row(dict(row)) if row else {}
+
+    async def claim_next_scoring_job(
+        self,
+        *,
+        default_max_attempts: int,
+        lock_ttl_secs: int,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Atomically claims the next runnable scoring job.
+        """
+        cleanup_stmt = text("""
+            UPDATE lead_scoring_jobs
+            SET status = 'failed',
+                finished_at = COALESCE(finished_at, NOW()),
+                last_error_code = COALESCE(last_error_code, 'LOCK_EXPIRED_MAX_ATTEMPTS'),
+                last_error_message = COALESCE(
+                    last_error_message,
+                    'Job lease expired after reaching max attempts; marked as failed.'
+                ),
+                updated_at = NOW()
+            WHERE status = 'running'
+              AND started_at IS NOT NULL
+              AND started_at <= NOW() - (CAST(:lock_ttl_secs AS INTEGER) * INTERVAL '1 second')
+              AND attempts >= COALESCE(max_attempts, :default_max_attempts)
+        """)
+        cleanup_result = await self.session.execute(
+            cleanup_stmt,
+            {
+                "default_max_attempts": default_max_attempts,
+                "lock_ttl_secs": max(1, int(lock_ttl_secs or 1)),
+            },
+        )
+        if (cleanup_result.rowcount or 0) > 0:
+            await self.session.commit()
+
+        stmt = text("""
+            WITH candidate AS (
+                SELECT id
+                FROM lead_scoring_jobs
+                WHERE (
+                    (
+                        status IN ('queued', 'rescheduled')
+                        AND scheduled_for <= NOW()
+                    )
+                    OR (
+                        status = 'running'
+                        AND started_at IS NOT NULL
+                        AND started_at <= NOW() - (CAST(:lock_ttl_secs AS INTEGER) * INTERVAL '1 second')
+                    )
+                )
+                  AND attempts < COALESCE(max_attempts, :default_max_attempts)
+                ORDER BY scheduled_for ASC, created_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE lead_scoring_jobs job
+            SET status = 'running',
+                attempts = job.attempts + 1,
+                started_at = NOW(),
+                finished_at = NULL,
+                last_error_code = CASE
+                    WHEN job.status = 'running' THEN 'LOCK_EXPIRED'
+                    ELSE job.last_error_code
+                END,
+                last_error_message = CASE
+                    WHEN job.status = 'running' THEN 'Previous worker lease expired; job reclaimed.'
+                    ELSE job.last_error_message
+                END,
+                updated_at = NOW()
+            FROM candidate
+            WHERE job.id = candidate.id
+            RETURNING job.*
+        """)
+        result = await self.session.execute(
+            stmt,
+            {
+                "default_max_attempts": default_max_attempts,
+                "lock_ttl_secs": max(1, int(lock_ttl_secs or 1)),
+            },
+        )
+        row = result.mappings().first()
+        if not row:
+            await self.session.rollback()
+            return None
+        await self.session.commit()
+        return dict(row)
+
+    async def get_scoring_job(self, job_id: UUID) -> Optional[Dict[str, Any]]:
+        stmt = text("""
+            SELECT *
+            FROM lead_scoring_jobs
+            WHERE id = :job_id
+            LIMIT 1
+        """)
+        result = await self.session.execute(stmt, {"job_id": str(job_id)})
+        row = result.mappings().first()
+        if not row:
+            return None
+        return self._serialize_scoring_job_row(dict(row))
+
+    async def reschedule_scoring_job(
+        self,
+        *,
+        job_id: UUID,
+        next_scheduled_for: datetime,
+        error_code: Optional[str],
+        error_message: Optional[str],
+    ) -> None:
+        stmt = text("""
+            UPDATE lead_scoring_jobs
+            SET status = 'rescheduled',
+                scheduled_for = :scheduled_for,
+                last_error_code = :last_error_code,
+                last_error_message = :last_error_message,
+                finished_at = NULL,
+                updated_at = NOW()
+            WHERE id = :job_id
+        """)
+        await self.session.execute(
+            stmt,
+            {
+                "job_id": str(job_id),
+                "scheduled_for": next_scheduled_for,
+                "last_error_code": error_code,
+                "last_error_message": error_message,
+            },
+        )
+        await self.session.commit()
+
+    async def complete_scoring_job(
+        self,
+        *,
+        job_id: UUID,
+        fallback_used: bool,
+        json_valid: Optional[bool],
+        latency_ms: Optional[int],
+        response_chars: Optional[int],
+    ) -> None:
+        status = "degraded" if fallback_used else "completed"
+        stmt = text("""
+            UPDATE lead_scoring_jobs
+            SET status = :status,
+                finished_at = NOW(),
+                last_error_code = NULL,
+                last_error_message = NULL,
+                fallback_used = :fallback_used,
+                json_valid = :json_valid,
+                latency_ms = :latency_ms,
+                response_chars = :response_chars,
+                updated_at = NOW()
+            WHERE id = :job_id
+        """)
+        await self.session.execute(
+            stmt,
+            {
+                "job_id": str(job_id),
+                "status": status,
+                "fallback_used": fallback_used,
+                "json_valid": json_valid,
+                "latency_ms": latency_ms,
+                "response_chars": response_chars,
+            },
+        )
+        await self.session.commit()
+
+    async def fail_scoring_job(
+        self,
+        *,
+        job_id: UUID,
+        error_code: str,
+        error_message: str,
+        retry_delay_secs: int = 0,
+    ) -> None:
+        stmt = text("""
+            UPDATE lead_scoring_jobs
+            SET status = CASE
+                    WHEN attempts >= COALESCE(max_attempts, 1) THEN 'failed'
+                    ELSE 'queued'
+                END,
+                scheduled_for = CASE
+                    WHEN attempts >= COALESCE(max_attempts, 1) THEN scheduled_for
+                    ELSE NOW() + (CAST(:retry_delay_secs AS INTEGER) * INTERVAL '1 second')
+                END,
+                finished_at = CASE
+                    WHEN attempts >= COALESCE(max_attempts, 1) THEN NOW()
+                    ELSE NULL
+                END,
+                last_error_code = :error_code,
+                last_error_message = :error_message,
+                updated_at = NOW()
+            WHERE id = :job_id
+        """)
+        await self.session.execute(
+            stmt,
+            {
+                "job_id": str(job_id),
+                "error_code": (error_code or "SCORING_ERROR")[:64],
+                "error_message": error_message[:4000] if error_message else "",
+                "retry_delay_secs": max(0, int(retry_delay_secs or 0)),
+            },
+        )
+        await self.session.commit()
 
     async def get_client_system_prompt(self, client_id: UUID, slug: str = "primary_chat") -> Optional[str]:
         """

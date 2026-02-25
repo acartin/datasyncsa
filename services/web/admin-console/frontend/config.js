@@ -12,8 +12,21 @@ if (legacyPortOverride) {
     localStorage.removeItem('admin_api_port');
 }
 
-// Default to same-origin so web Nginx proxies API routes without CORS.
-const apiBaseUrl = runtimeBaseUrlOverride || runtimeOrigin;
+const inferApiBaseUrl = () => {
+    if (!runtimeBaseUrlOverride) return runtimeOrigin;
+    try {
+        const parsed = new URL(runtimeBaseUrlOverride, runtimeOrigin);
+        if (parsed.hostname === window.location.hostname && !parsed.port && window.location.port) {
+            localStorage.removeItem('admin_api_base_url');
+            return runtimeOrigin;
+        }
+        return parsed.origin;
+    } catch (_error) {
+        localStorage.removeItem('admin_api_base_url');
+        return runtimeOrigin;
+    }
+};
+const apiBaseUrl = inferApiBaseUrl();
 
 window.AppConfig = {
     API_BASE_URL: apiBaseUrl

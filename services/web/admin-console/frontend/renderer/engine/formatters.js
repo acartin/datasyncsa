@@ -80,8 +80,12 @@ export const formatters = {
      * Truncates text if it exceeds a specified length.
      */
     truncate: (cell, col) => {
-        if (typeof cell === 'string' && cell.length > col.truncate) {
-            return cell.substring(0, col.truncate) + '...';
+        if (typeof cell === 'string') {
+            const limit = Number(col.truncate) || 80;
+            const maxWidth = Number(col.max_width) || 520;
+            const trimmed = cell.length > limit ? `${cell.substring(0, limit)}...` : cell;
+            const safeTitle = cell.replace(/"/g, '&quot;');
+            return `<span class="d-inline-block text-truncate align-middle" style="max-width:${maxWidth}px;" title="${safeTitle}">${trimmed}</span>`;
         }
         return cell;
     }

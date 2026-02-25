@@ -16,7 +16,22 @@ server {
 const runtimeBaseUrlOverride = localStorage.getItem('admin_api_base_url');
 const legacyPortOverride = localStorage.getItem('admin_api_port');
 if (legacyPortOverride) { localStorage.removeItem('admin_api_port'); }
-const apiBaseUrl = runtimeBaseUrlOverride || runtimeOrigin;
+const resolveApiBaseUrl = () => {
+  if (!runtimeBaseUrlOverride) return runtimeOrigin;
+  try {
+    const parsed = new URL(runtimeBaseUrlOverride, runtimeOrigin);
+    // Ignore stale override like http://host (no port) when app runs on :8085.
+    if (parsed.hostname === window.location.hostname && !parsed.port && window.location.port) {
+      localStorage.removeItem('admin_api_base_url');
+      return runtimeOrigin;
+    }
+    return parsed.origin;
+  } catch (_) {
+    localStorage.removeItem('admin_api_base_url');
+    return runtimeOrigin;
+  }
+};
+const apiBaseUrl = resolveApiBaseUrl();
 const appVersion = '${APP_VERSION}';
 window.AppConfig = {
   API_BASE_URL: apiBaseUrl,
@@ -30,6 +45,11 @@ window.AppConfig = {
         # Only direct document navigation should fallback to SPA shell.
         # XHR/fetch for SDUI JSON must always hit backend.
         if ($http_sec_fetch_dest = "document") {
+            return 418;
+        }
+        # Some browsers/proxies omit Sec-Fetch-* on reload; this header still indicates
+        # a full document navigation and should be handled by SPA index, not backend API.
+        if ($http_upgrade_insecure_requests = "1") {
             return 418;
         }
 

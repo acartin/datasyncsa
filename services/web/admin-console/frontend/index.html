@@ -193,6 +193,61 @@
         html[data-bs-theme="dark"] .js-grid-visual .table tbody tr.grid-row-selected {
             background-color: color-mix(in srgb, var(--vz-primary), transparent 75%) !important;
         }
+
+        /* Keep custom grids inside their card/container on desktop and mobile */
+        .js-grid-visual,
+        .js-grid-visual .table-grid-wrapper {
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .js-grid-visual .table-responsive {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        /* Force all grids to fill tab/container width consistently */
+        .tab-pane .card,
+        .tab-pane .card-body,
+        .tab-pane .js-grid-visual,
+        .tab-pane .js-grid-visual .table-grid-wrapper {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .js-grid-visual .filter-bar .grid-filter-topbar,
+        .js-grid-visual .filter-bar .grid-filter-actions {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Fallback for cached GridFilters markup: prevent right overflow in controls row */
+        .js-grid-visual .filter-bar .col-md-7.text-end.d-flex {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+        }
+
+        @media (min-width: 768px) {
+            .js-grid-visual .filter-bar .col-md-7.text-end.d-flex {
+                justify-content: flex-end !important;
+            }
+        }
+
+        /* Legacy Bootstrap row gutters can leak outside card width */
+        .js-grid-visual .filter-bar .row {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        .js-grid-visual .filter-bar .row > [class*="col-"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
     </style>
 </head>
 

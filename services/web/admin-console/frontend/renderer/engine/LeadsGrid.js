@@ -1,5 +1,6 @@
 
 import { GridBase } from './GridBase.js';
+import { resolveActionUrl } from './actionContract.js';
 
 export class LeadsGrid extends GridBase {
     constructor(container, config) {
@@ -62,11 +63,18 @@ export class LeadsGrid extends GridBase {
     render() {
         const rows = this.getPaginatedRows(); // Provided by GridBase
         const pageIcons = { asc: '↑', desc: '↓' };
+        const renderHeaderIcon = (icon) => {
+            if (!icon) return '';
+            if (typeof icon === 'string' && icon.startsWith('ri-')) {
+                return `<i class="${icon} me-1 text-muted"></i>`;
+            }
+            return `<span class="me-1 text-muted">${icon}</span>`;
+        };
 
         // Render Header
         const thead = this.config.columns.map(c => {
             const isSorted = this.sortState.colId === c.id;
-            const icon = c.icon ? `<i class="${c.icon} me-1 text-muted"></i>` : '';
+            const icon = renderHeaderIcon(c.icon);
             return `<th onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')">
                 ${icon}${c.label || c.name} ${isSorted ? pageIcons[this.sortState.direction] : ''}
             </th>`;
@@ -74,7 +82,7 @@ export class LeadsGrid extends GridBase {
 
         // Render Body
         const tbody = rows.map(row => `
-            <tr onclick="window.navigateTo('/dashboard/leads/${row.id}')" style="cursor: pointer;">
+            <tr onclick="window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)" style="cursor: pointer;">
                 ${this.config.columns.map(col => `<td>${this.renderCell(row, col)}</td>`).join('')}
                 <td onclick="event.stopPropagation()">${this.renderActions(row)}</td>
             </tr>
@@ -105,7 +113,7 @@ export class LeadsGrid extends GridBase {
                     </div>
                     <div>
                         <div class="fw-bold" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">
-                            <a href="/dashboard/leads/${row.id}" class="text-reset text-decoration-none">${name}</a>
+                            <a href="#" onclick="event.preventDefault(); window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)" class="text-reset text-decoration-none">${name}</a>
                         </div>
                         <div class="text-muted" style="font-size:10px;">${email}</div>
                     </div>
@@ -117,30 +125,101 @@ export class LeadsGrid extends GridBase {
         if (col.type === 'scoring-pillar') {
             const item = row[col.id] || {};
             const label = item.label || null;
-            const colorClass = item.color || 'secondary';
+            const rawColor = item.color || 'secondary';
+            const isCssColor = typeof rawColor === 'string' && (
+                rawColor.startsWith('#') ||
+                rawColor.startsWith('rgb(') ||
+                rawColor.startsWith('rgba(') ||
+                rawColor.startsWith('hsl(') ||
+                rawColor.startsWith('hsla(') ||
+                rawColor.startsWith('var(')
+            );
             const icon = item.icon || '';
+            const iconHtml = icon
+                ? (
+                    icon.startsWith('ri-')
+                        ? `<i class="${icon} me-2 align-middle fs-22 ${isCssColor ? '' : `text-${rawColor}`}" ${isCssColor ? `style="color:${rawColor};"` : ''}></i>`
+                        : `<span class="me-2 align-middle">${icon}</span>`
+                )
+                : '';
 
             // Special handling for preference/status
             if (col.id === 'contact_preference' || col.id === 'status') {
                 if (!label) return `<span class="text-muted fst-italic">-</span>`;
-                const iconHtml = icon ? `<i class="${icon} me-2 align-middle fs-22 text-${colorClass}"></i>` : '';
                 return `<span class="d-inline-flex align-items-center">${iconHtml}<span class="text-body fw-normal">${label}</span></span>`;
             }
 
             // Default Pill Style
             const displayLabel = label || '-';
-            return `<span class="badge-pill-custom text-${colorClass} border border-${colorClass}">${displayLabel.toUpperCase()}</span>`;
+            if (isCssColor) {
+                return `<span class="badge-pill-custom border" style="color:${rawColor}; border-color:${rawColor} !important;">${displayLabel.toUpperCase()}</span>`;
+            }
+            return `<span class="badge-pill-custom text-${rawColor} border border-${rawColor}">${displayLabel.toUpperCase()}</span>`;
         }
 
         return row[col.id] || '-';
     }
 
     renderActions(row) {
+        const actions = Array.isArray(this.config.actions) ? this.config.actions : [];
+        const rendered = actions
+            .filter((action) => action?.action === 'navigate')
+            .map((action, idx) => {
+                const icon = action.icon || 'ri-arrow-right-line';
+                const label = action.label || 'Abrir';
+                return `
+                    <button class="btn btn-sm btn-soft-secondary me-1"
+                        title="${label}"
+                        onclick="window.gridInstances['${this.container.id}'].executeAction('${row.id}', ${idx}, event)">
+                        <i class="${icon}"></i>
+                    </button>
+                `;
+            })
+            .join('');
+
+        if (rendered) return rendered;
         return `
-            <button class="btn btn-sm btn-soft-secondary" onclick="window.navigateTo('/dashboard/leads/${row.id}')">
+            <button class="btn btn-sm btn-soft-secondary"
+                onclick="window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)">
                 <i class="ri-eye-line"></i>
             </button>
         `;
+    }
+
+    handleRowNavigate(rowId, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const row = this.data.find((item) => String(item?.id ?? '') === String(rowId));
+        if (!row) return;
+
+        const navigateAction = (this.config.actions || []).find((action) => action?.action === 'navigate');
+        const targetUrl = navigateAction
+            ? resolveActionUrl(navigateAction, row)
+            : `/dashboard/leads/${row.id}`;
+
+        if (targetUrl && window.navigateTo) {
+            window.navigateTo(targetUrl);
+        }
+    }
+
+    executeAction(rowId, actionIndex, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        const row = this.data.find((item) => String(item?.id ?? '') === String(rowId));
+        if (!row) return;
+        const actions = Array.isArray(this.config.actions) ? this.config.actions : [];
+        const navigateActions = actions.filter((action) => action?.action === 'navigate');
+        const selected = navigateActions[actionIndex];
+        if (!selected) return;
+
+        const targetUrl = resolveActionUrl(selected, row);
+        if (targetUrl && window.navigateTo) {
+            window.navigateTo(targetUrl);
+        }
     }
 
     renderPager() {

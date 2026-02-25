@@ -20,18 +20,19 @@ class ScoringCriterionV2(BaseModel):
     min_score: float = Field(..., description="Minimum possible score")
     max_score: float = Field(..., description="Maximum possible score")
     display_order: int = Field(..., ge=0, description="Order for UI display")
+    icon: Optional[str] = Field(None, description="Icon class for criterion header/display")
     bands: List[ScoringBandV2] = Field(default_factory=list, description="Visual bands for this criterion")
 
 
 class ScoringSchemaV2(BaseModel):
-    """Dynamic scoring schema for a lead type"""
+    """Dynamic scoring schema for a tenant vertical"""
     model_config = {"populate_by_name": True}
     
-    lead_type: str = Field(..., description="Type of lead (e.g., realtor, medico, dental, automotriz)")
+    vertical_slug: str = Field(..., description="Vertical slug (e.g., real-estate, healthcare)")
     model_id: UUID = Field(..., description="Active model ID")
     model_version: int = Field(..., gt=0, description="Model version")
     prompt_version: int = Field(..., gt=0, description="Prompt version")
-    criteria: List[ScoringCriterionV2] = Field(default_factory=list, description="Active criteria for this lead type")
+    criteria: List[ScoringCriterionV2] = Field(default_factory=list, description="Active criteria for this vertical")
     normalization_strategy: Optional[str] = Field(None, description="Strategy for score normalization")
 
 

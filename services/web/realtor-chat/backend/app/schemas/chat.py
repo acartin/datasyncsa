@@ -7,7 +7,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 class InitRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId"))
+    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"))
     brand_project: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("brand_project", "brandProject", "project"),
@@ -18,7 +18,7 @@ class ChatRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     text: str = Field(min_length=1, max_length=4000)
-    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId"))
+    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"))
     conversation_id: Optional[UUID] = Field(
         default=None, validation_alias=AliasChoices("conversation_id", "conversationId")
     )
@@ -50,5 +50,5 @@ class ChatRequest(BaseModel):
 class InternalMemoryResetRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId"))
+    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"))
     reason: Optional[str] = None
