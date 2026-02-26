@@ -92,6 +92,15 @@ Regla:
 
 ## 9. Testing Mínimo por Cambio
 
+Regla crítica de sincronización runtime (obligatoria para Inference v2):
+- Si se modifica cualquier archivo de `services/inference-stack-v2/inference-core-v2/**`, es obligatorio ejecutar antes de probar:
+  - `docker compose up -d --build inference-core-v2 inference-core-v2-worker`
+- Motivo: en `docker-compose.yml` esos servicios no montan el código de `/app` por volumen, solo `schemas`; sin rebuild quedan ejecutando imagen vieja.
+- No se aceptan resultados de tests/simulaciones si no se recrearon ambos contenedores (`inference-core-v2` + `inference-core-v2-worker`) después del cambio.
+- Verificación mínima obligatoria:
+  - `docker compose ps inference-core-v2 inference-core-v2-worker`
+  - `docker compose exec -T inference-core-v2-worker /bin/bash -lc "grep -n 'deterministic_scoring_service' app/services/scoring_engine.py"`
+
 Si tocas cada área, corre como mínimo en el contenedor **backend/API** correspondiente (nunca en `*-web`):
 
 Admin Console backend (`admin-console-api`):

@@ -3,7 +3,7 @@
  * Handles forms, deletes, modals, and generic SDUI actions.
  */
 
-import { LinkModalForm, renderFormFromSchema } from '../../components/forms/ModalForm.js';
+import { LinkModalForm, renderFormFromSchema, initJsonEditors, syncJsonEditors, destroyJsonEditors } from '../../components/forms/ModalForm.js';
 import { safeAtob, safeBtoa } from '../../utils/base64.js';
 
 const API_BASE_URL = window.AppConfig.API_BASE_URL;
@@ -15,6 +15,16 @@ export async function submitModalForm(event, formId, actionUrl, method = 'POST')
     if (event) event.preventDefault();
 
     const form = document.getElementById(formId);
+    if (!form) {
+        Swal.fire({ title: "Error", text: "No se encontró el formulario.", icon: "error" });
+        return;
+    }
+    const jsonSync = syncJsonEditors(form);
+    if (!jsonSync.ok) {
+        Swal.fire({ title: "Error", text: jsonSync.message || "JSON inválido.", icon: "error" });
+        return;
+    }
+
     if (!form.checkValidity()) {
         form.reportValidity();
         return;
@@ -312,7 +322,10 @@ export async function openGenericModal(schema, url, method, title, data = {}) {
         modalEl.setAttribute('inert', '');
     });
 
-    modalEl.addEventListener('hidden.bs.modal', () => { modalEl.remove(); });
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        destroyJsonEditors(modalEl);
+        modalEl.remove();
+    });
 
     // Hydrate selects in the modal
     const selects = modalEl.querySelectorAll('select[data-source]');
@@ -320,6 +333,7 @@ export async function openGenericModal(schema, url, method, title, data = {}) {
         await hydrateSelect(select);
     }
     bindDependentSelects(modalEl);
+    initJsonEditors(modalEl);
 }
 
 /**

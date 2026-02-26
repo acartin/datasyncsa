@@ -25,6 +25,299 @@ export function LinkModalForm(id, title, formHtml, saveActionUrl, method = 'POST
     `;
 }
 
+const JSON_EDITOR_FIELD_NAMES = new Set(['extraction_schema_legacy']);
+
+function toTextAreaValue(value) {
+    let textValue = value;
+    if (textValue && typeof textValue === 'object') {
+        try {
+            textValue = JSON.stringify(textValue, null, 2);
+        } catch (e) {
+            textValue = String(textValue);
+        }
+    } else if (textValue === null || textValue === undefined) {
+        textValue = '';
+    }
+    return String(textValue);
+}
+
+function renderJsonEditorField(label, name, textValue, required, validation, attrs = '') {
+    const readonlyAttr = validation.readonly ? 'readonly' : '';
+    const rows = validation.rows || 16;
+    const requiredAttr = required ? 'required' : '';
+    const editorHostId = `${name}-json-host`;
+    const fallbackId = `${name}-json-fallback`;
+
+    return `
+        <div class="mb-3 js-json-editor-group" data-json-field="${name}">
+            <label for="${fallbackId}" class="form-label">${label}</label>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <button type="button" class="btn btn-light btn-sm js-json-format">Format</button>
+                <button type="button" class="btn btn-light btn-sm js-json-compact">Compact</button>
+                <span class="small text-muted js-json-status">Preparando editor JSON...</span>
+            </div>
+            <div id="${editorHostId}" class="js-json-editor-host border rounded" style="height: 360px;"></div>
+            <textarea class="form-control d-none js-json-source" id="${name}" name="${name}" rows="${rows}"
+                ${requiredAttr} ${attrs} ${readonlyAttr}>${textValue}</textarea>
+            <textarea class="form-control d-none js-json-fallback mt-2" id="${fallbackId}" rows="${rows}"
+                ${requiredAttr} ${attrs} ${readonlyAttr}>${textValue}</textarea>
+            <div class="form-text">Tip: cambia a modo código en el menú del editor si quieres pegar JSON completo.</div>
+        </div>
+    `;
+}
+
+function setJsonStatus(group, message, isError = false) {
+    const status = group.querySelector('.js-json-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.toggle('text-danger', Boolean(isError));
+    status.classList.toggle('text-muted', !isError);
+}
+
+function syncTextJson(group) {
+    const source = group.querySelector('.js-json-source');
+    const fallback = group.querySelector('.js-json-fallback');
+    const raw = String((fallback?.value ?? source?.value ?? '')).trim();
+    const sourceName = source?.name || 'json';
+
+    if (source && fallback) source.value = fallback.value;
+    if (!raw) {
+        setJsonStatus(group, 'JSON vacío (se guardará null).');
+        return { ok: true };
+    }
+
+    try {
+        JSON.parse(raw);
+        setJsonStatus(group, 'JSON válido.');
+        return { ok: true };
+    } catch (error) {
+        const detail = error?.message || 'estructura inválida';
+        setJsonStatus(group, `JSON inválido: ${detail}`, true);
+        return { ok: false, message: `JSON inválido en ${sourceName}: ${detail}` };
+    }
+}
+
+function formatTextJson(group, compact = false) {
+    const source = group.querySelector('.js-json-source');
+    const fallback = group.querySelector('.js-json-fallback');
+    if (!fallback) return;
+
+    const raw = String(fallback.value || '').trim();
+    if (!raw) {
+        if (source) source.value = fallback.value;
+        setJsonStatus(group, 'JSON vacío (sin cambios).');
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        const formatted = compact ? JSON.stringify(parsed) : JSON.stringify(parsed, null, 2);
+        fallback.value = formatted;
+        if (source) source.value = formatted;
+        setJsonStatus(group, 'JSON formateado.');
+    } catch (error) {
+        const detail = error?.message || 'estructura inválida';
+        setJsonStatus(group, `JSON inválido: ${detail}`, true);
+    }
+}
+
+function getEditorText(editor) {
+    if (!editor) return '';
+    if (typeof editor.getText === 'function') return editor.getText();
+    if (typeof editor.get === 'function') return JSON.stringify(editor.get(), null, 2);
+    return '';
+}
+
+function formatEditorJson(group, compact = false) {
+    const editor = group._jsonEditor;
+    const source = group.querySelector('.js-json-source');
+    const fallback = group.querySelector('.js-json-fallback');
+    if (!editor) {
+        formatTextJson(group, compact);
+        return;
+    }
+
+    try {
+        const currentText = String(getEditorText(editor) || '').trim();
+        if (!currentText) {
+            editor.set({});
+            const emptyValue = compact ? '{}' : JSON.stringify({}, null, 2);
+            if (source) source.value = emptyValue;
+            if (fallback) fallback.value = emptyValue;
+            setJsonStatus(group, 'JSON inicializado.');
+            return;
+        }
+
+        const parsed = JSON.parse(currentText);
+        const formatted = compact ? JSON.stringify(parsed) : JSON.stringify(parsed, null, 2);
+        if (typeof editor.setText === 'function') {
+            editor.setText(formatted);
+        } else {
+            editor.set(parsed);
+        }
+        if (source) source.value = formatted;
+        if (fallback) fallback.value = formatted;
+        setJsonStatus(group, 'JSON formateado.');
+    } catch (error) {
+        const detail = error?.message || 'estructura inválida';
+        setJsonStatus(group, `JSON inválido: ${detail}`, true);
+    }
+}
+
+export function initJsonEditors(rootEl = document) {
+    const groups = rootEl.querySelectorAll('.js-json-editor-group');
+    groups.forEach((group) => {
+        if (group.dataset.initialized === '1') return;
+
+        const source = group.querySelector('.js-json-source');
+        const fallback = group.querySelector('.js-json-fallback');
+        const host = group.querySelector('.js-json-editor-host');
+        const formatBtn = group.querySelector('.js-json-format');
+        const compactBtn = group.querySelector('.js-json-compact');
+
+        if (formatBtn) formatBtn.addEventListener('click', () => formatEditorJson(group, false));
+        if (compactBtn) compactBtn.addEventListener('click', () => formatEditorJson(group, true));
+
+        if (!window.JSONEditor || !host || !source || !fallback) {
+            if (host) host.classList.add('d-none');
+            if (fallback) {
+                fallback.classList.remove('d-none');
+                fallback.addEventListener('input', () => {
+                    if (source) source.value = fallback.value;
+                    syncTextJson(group);
+                });
+            }
+            syncTextJson(group);
+            setJsonStatus(group, 'Editor visual no disponible. Usando modo texto.');
+            group.dataset.initialized = '1';
+            return;
+        }
+
+        const initialText = String(source.value || '').trim();
+        let parsedInitial = {};
+        let hasValidInitial = false;
+        if (initialText) {
+            try {
+                parsedInitial = JSON.parse(initialText);
+                hasValidInitial = true;
+            } catch (e) {
+                hasValidInitial = false;
+            }
+        }
+
+        if (!hasValidInitial && initialText) {
+            host.classList.add('d-none');
+            fallback.classList.remove('d-none');
+            fallback.addEventListener('input', () => {
+                source.value = fallback.value;
+                syncTextJson(group);
+            });
+            setJsonStatus(group, 'JSON inicial inválido. Corrige en modo texto.', true);
+            group.dataset.initialized = '1';
+            return;
+        }
+
+        try {
+            const editor = new window.JSONEditor(host, {
+                mode: 'tree',
+                modes: ['tree', 'code', 'view'],
+                search: false,
+                history: true,
+                navigationBar: true,
+                statusBar: true,
+                mainMenuBar: true,
+                onChangeText: (text) => {
+                    const raw = String(text || '');
+                    source.value = raw;
+                    fallback.value = raw;
+                    const trimmed = raw.trim();
+                    if (!trimmed) {
+                        setJsonStatus(group, 'JSON vacío (se guardará null).');
+                        return;
+                    }
+                    try {
+                        JSON.parse(trimmed);
+                        setJsonStatus(group, 'JSON válido.');
+                    } catch (error) {
+                        const detail = error?.message || 'estructura inválida';
+                        setJsonStatus(group, `JSON inválido: ${detail}`, true);
+                    }
+                },
+            });
+
+            editor.set(hasValidInitial ? parsedInitial : {});
+            source.value = hasValidInitial ? JSON.stringify(parsedInitial, null, 2) : JSON.stringify({}, null, 2);
+            fallback.value = source.value;
+            fallback.classList.add('d-none');
+            host.classList.remove('d-none');
+            setJsonStatus(group, 'JSON válido.');
+            group._jsonEditor = editor;
+        } catch (error) {
+            host.classList.add('d-none');
+            fallback.classList.remove('d-none');
+            fallback.addEventListener('input', () => {
+                source.value = fallback.value;
+                syncTextJson(group);
+            });
+            setJsonStatus(group, 'No se pudo iniciar el editor visual. Usando modo texto.', true);
+        }
+
+        group.dataset.initialized = '1';
+    });
+}
+
+export function syncJsonEditors(formEl) {
+    const groups = formEl.querySelectorAll('.js-json-editor-group');
+    for (const group of groups) {
+        const source = group.querySelector('.js-json-source');
+        const fallback = group.querySelector('.js-json-fallback');
+        let raw = '';
+
+        if (group._jsonEditor) {
+            try {
+                raw = String(getEditorText(group._jsonEditor) || '');
+            } catch (e) {
+                raw = String(source?.value || '');
+            }
+        } else if (fallback && !fallback.classList.contains('d-none')) {
+            raw = String(fallback.value || '');
+        } else {
+            raw = String(source?.value || '');
+        }
+
+        if (source) source.value = raw;
+        if (fallback) fallback.value = raw;
+
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            setJsonStatus(group, 'JSON vacío (se guardará null).');
+            continue;
+        }
+
+        try {
+            JSON.parse(trimmed);
+            setJsonStatus(group, 'JSON válido.');
+        } catch (error) {
+            const detail = error?.message || 'estructura inválida';
+            const sourceName = source?.name || 'json';
+            setJsonStatus(group, `JSON inválido: ${detail}`, true);
+            return { ok: false, message: `JSON inválido en ${sourceName}: ${detail}` };
+        }
+    }
+    return { ok: true };
+}
+
+export function destroyJsonEditors(rootEl = document) {
+    const groups = rootEl.querySelectorAll('.js-json-editor-group');
+    groups.forEach((group) => {
+        if (group._jsonEditor && typeof group._jsonEditor.destroy === 'function') {
+            group._jsonEditor.destroy();
+        }
+        delete group._jsonEditor;
+        delete group.dataset.initialized;
+    });
+}
+
 // Helper to render a single input
 export function renderInput(label, name, value = '', type = 'text', required = false, validation = {}, data = {}) {
     const isRequired = required ? 'required' : '';
@@ -69,23 +362,17 @@ export function renderInput(label, name, value = '', type = 'text', required = f
     }
 
     if (type === 'textarea') {
-        let textValue = value;
-        if (textValue && typeof textValue === 'object') {
-            try {
-                textValue = JSON.stringify(textValue, null, 2);
-            } catch (e) {
-                textValue = String(textValue);
-            }
-        } else if (textValue === null || textValue === undefined) {
-            textValue = '';
+        const textValue = toTextAreaValue(value);
+        const attrs = `${minLength} ${maxLength}`.trim();
+        if (JSON_EDITOR_FIELD_NAMES.has(String(name || ''))) {
+            return renderJsonEditorField(label, name, textValue, required, validation, attrs);
         }
-
         const readonlyAttr = validation.readonly ? 'readonly' : '';
         return `
             <div class="mb-3">
                 <label for="${name}" class="form-label">${label}</label>
                 <textarea class="form-control" id="${name}" name="${name}" rows="${validation.rows || 3}" 
-                    ${isRequired} ${minLength} ${maxLength} ${readonlyAttr}>${textValue}</textarea>
+                    ${isRequired} ${attrs} ${readonlyAttr}>${textValue}</textarea>
             </div>
         `;
     }

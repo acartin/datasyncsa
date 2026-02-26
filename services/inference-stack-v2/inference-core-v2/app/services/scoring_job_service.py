@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import UUID
 
@@ -28,7 +28,8 @@ class ScoringJobService:
         model_id: Optional[UUID],
         prompt_id: Optional[UUID],
     ) -> Dict[str, Any]:
-        scheduled_for = self._utc_now() + timedelta(seconds=max(0.0, settings.scoring_idle_close_secs))
+        # Queue immediately on each incoming message; no idle debounce.
+        scheduled_for = self._utc_now()
         return await self.repo.upsert_scoring_job(
             lead_id=lead_id,
             conversation_id=conversation_id,

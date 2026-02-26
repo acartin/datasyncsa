@@ -886,7 +886,7 @@ class ScoringOrchestrator:
                     "scoring_metadata": {
                         "normalization_strategy": model_data.get("normalization_strategy"),
                         "criteria_count": len(scorecard_data.score_items),
-                        "engine": "gemini+deterministic_slots",
+                        "engine": "gemini_structured_json",
                     },
                     "slot_state": slot_state,
                     "llm_meta": {

@@ -8,12 +8,10 @@ import logging
 import json
 import asyncio
 import re
-import unicodedata
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from app.core.config import settings
-from app.services.deterministic_scoring import deterministic_scoring_service
 from app.services.prompt_builder import PromptBuilder
 from app.services.prompt_linter import PromptLinter
 
@@ -39,7 +37,7 @@ class ScoringEngine:
         self._client = None
         self._model_id = settings.llm_model
         self._temperature = settings.llm_temperature
-        self._max_retries = settings.llm_max_retries
+        self._max_retries = max(1, int(settings.scoring_llm_max_retries or 1))
         self._timeout = settings.scoring_llm_timeout_secs
     
     @property
@@ -101,9 +99,6 @@ class ScoringEngine:
             extraction_fields,
             DEFAULT_EXTRACTION_FIELDS,
         )
-        deterministic_config = schema_config["deterministic_config"]
-        if not deterministic_config:
-            raise ValueError("DETERMINISTIC_SCORING_CONFIG_MISSING")
         
         system_prompt = builder.build_prompt(
             vertical_name=vertical_name,
@@ -119,6 +114,7 @@ class ScoringEngine:
             criteria,
             extraction_fields,
             slot_hints_schema=schema_config["slot_hints_schema"],
+            response_schema_override=schema_config["response_schema_override"],
         )
         try:
             schema_chars = len(json.dumps(response_schema, ensure_ascii=False, default=str))
@@ -150,14 +146,14 @@ class ScoringEngine:
             result = llm_response.get("payload", {}) if isinstance(llm_response, dict) else {}
             llm_meta = llm_response.get("meta", llm_meta) if isinstance(llm_response, dict) else llm_meta
         except Exception as exc:
-            logger.error("LLM extraction unavailable, continuing with deterministic scoring: %s", exc)
+            logger.error("LLM scoring unavailable, using conservative fallback: %s", exc)
             used_fallback = True
         
-        scores: Dict[str, float] = {}
-        explanations: Dict[str, str] = {}
         extraction_result: Dict[str, Any] = {}
-        slot_state: Dict[str, str] = {}
+        slot_state: Dict[str, Any] = {}
         confidence = None
+        if isinstance(result.get("slot_hints"), dict):
+            slot_state = result.get("slot_hints") or {}
         
         extracted_data_container = result.get("extracted_data", {})
         if not isinstance(extracted_data_container, dict):
@@ -172,26 +168,32 @@ class ScoringEngine:
                 extraction_result[key] = value
 
         extraction_result = self._enrich_extraction_from_text(conversation_text, extraction_result)
-        deterministic = deterministic_scoring_service.evaluate(
-            conversation_text=conversation_text,
-            extracted_data=extraction_result,
+        scores, explanations, missing_score_keys = self._extract_scores_and_explanations(
             criteria=criteria,
-            deterministic_config=deterministic_config,
+            payload=result,
         )
-        scores = deterministic.get("scores", {})
-        explanations = deterministic.get("explanations", {})
-        slot_state = deterministic.get("slot_state", {})
+        if missing_score_keys:
+            used_fallback = True
+            logger.warning(
+                "LLM payload missing/invalid scores for criteria=%s; conservative defaults applied",
+                ",".join(missing_score_keys),
+            )
         
         if "confidence" in result and result["confidence"] is not None:
-            confidence = float(result["confidence"])
+            parsed_conf = self._coerce_float(result["confidence"])
+            if parsed_conf is not None:
+                confidence = max(0.0, min(1.0, parsed_conf))
 
         reasoning_parts = []
         llm_reasoning = (result.get("reasoning") or "").strip() if isinstance(result, dict) else ""
-        deterministic_reasoning = (deterministic.get("reasoning") or "").strip()
         if llm_reasoning:
             reasoning_parts.append(llm_reasoning)
-        if deterministic_reasoning:
-            reasoning_parts.append(deterministic_reasoning)
+        elif used_fallback:
+            reasoning_parts.append("Scoring conservador por ausencia de salida valida del LLM.")
+        if missing_score_keys:
+            reasoning_parts.append(
+                f"Criteria con default conservador: {', '.join(missing_score_keys)}."
+            )
         final_reasoning = " | ".join(reasoning_parts)
 
         total_ms = (time.perf_counter() - analysis_start) * 1000.0
@@ -235,10 +237,85 @@ class ScoringEngine:
         return True
 
     @staticmethod
-    def _normalize_text(value: str) -> str:
-        normalized = unicodedata.normalize("NFKD", value or "")
-        ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
-        return ascii_text.lower()
+    def _coerce_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = value.strip().replace(",", ".")
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+
+    def _extract_scores_and_explanations(
+        self,
+        *,
+        criteria: List[Dict[str, Any]],
+        payload: Dict[str, Any],
+    ) -> Tuple[Dict[str, float], Dict[str, str], List[str]]:
+        raw_scores = payload.get("scores") if isinstance(payload, dict) else {}
+        if not isinstance(raw_scores, dict):
+            raw_scores = {}
+        raw_score_reasons = payload.get("score_reasons") if isinstance(payload, dict) else {}
+        if not isinstance(raw_score_reasons, dict):
+            raw_score_reasons = {}
+        generic_reasoning = (payload.get("reasoning") or "").strip() if isinstance(payload, dict) else ""
+
+        scores: Dict[str, float] = {}
+        explanations: Dict[str, str] = {}
+        missing: List[str] = []
+
+        for criterion in criteria or []:
+            criterion_key = str(criterion.get("criterion_key") or "").strip()
+            if not criterion_key:
+                continue
+            min_score = float(criterion.get("min_score", 0))
+            max_score = float(criterion.get("max_score", 10))
+            conservative_default = (min_score + max_score) / 2.0
+
+            raw_value = raw_scores.get(criterion_key)
+            criterion_reason = ""
+            if isinstance(raw_value, dict):
+                raw_score_value = (
+                    raw_value.get("score")
+                    if raw_value.get("score") is not None
+                    else raw_value.get("value")
+                )
+                criterion_reason = str(
+                    raw_value.get("reason") or raw_value.get("explanation") or ""
+                ).strip()
+            else:
+                raw_score_value = raw_value
+
+            parsed_score = self._coerce_float(raw_score_value)
+            if parsed_score is None:
+                parsed_score = conservative_default
+                missing.append(criterion_key)
+            parsed_score = max(min_score, min(max_score, float(parsed_score)))
+            scores[criterion_key] = parsed_score
+
+            if not criterion_reason:
+                reason_from_map = raw_score_reasons.get(criterion_key)
+                if isinstance(reason_from_map, str):
+                    criterion_reason = reason_from_map.strip()
+            if not criterion_reason:
+                if criterion_key in missing:
+                    criterion_reason = (
+                        f"Evidencia insuficiente para {criterion_key}; "
+                        f"default conservador {parsed_score:.1f}."
+                    )
+                else:
+                    criterion_reason = generic_reasoning or f"LLM score for {criterion_key}."
+            explanations[criterion_key] = criterion_reason
+
+        return scores, explanations, missing
 
     def _enrich_extraction_from_text(self, conversation_text: str, extraction: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(extraction or {})
@@ -344,8 +421,9 @@ class ScoringEngine:
             raise ImportError("google-genai package not installed")
         
         prompt = (
-            "Analiza la siguiente conversacion y devuelve SOLO JSON con extracted_data, "
-            "slot_hints opcionales y reasoning breve.\n\n"
+            "Analiza la conversacion y devuelve SOLO JSON valido que cumpla "
+            "estrictamente el schema solicitado.\n\n"
+            "CONVERSACION:\n"
             f"{conversation_text}"
         )
         call_start = time.perf_counter()
@@ -443,35 +521,80 @@ class ScoringEngine:
                         "description": str(field.get("description") or ""),
                     }
                 )
-        elif isinstance(schema.get("properties"), dict):
-            for key, meta in (schema.get("properties") or {}).items():
-                if not key:
-                    continue
-                meta_dict = meta if isinstance(meta, dict) else {}
-                fields.append(
-                    {
-                        "key": str(key),
-                        "type": str(meta_dict.get("type") or "string"),
-                        "description": str(meta_dict.get("description") or ""),
-                    }
-                )
+        response_schema_override = schema.get("response_schema")
+        if not isinstance(response_schema_override, dict):
+            response_schema_override = {}
+        response_schema_override = self._sanitize_schema_for_gemini(response_schema_override)
+
+        if not response_schema_override and isinstance(schema.get("properties"), dict):
+            props = schema.get("properties") or {}
+            # Backward compatibility: treat extraction_schema as response_schema root only
+            # when it clearly defines scoring/extraction response objects.
+            if "scores" in props or "extracted_data" in props:
+                response_schema_override = schema
+
+        if not fields and isinstance(response_schema_override, dict):
+            extracted_data_schema = (response_schema_override.get("properties") or {}).get("extracted_data")
+            if isinstance(extracted_data_schema, dict):
+                fields = self._extract_fields_from_properties(extracted_data_schema.get("properties"))
+
+        if not fields and isinstance(schema.get("properties"), dict):
+            fields = self._extract_fields_from_properties(schema.get("properties"))
 
         deterministic_config = schema.get("deterministic_scoring")
         if not isinstance(deterministic_config, dict):
             deterministic_config = {}
 
-        slot_hints_schema = self._build_slot_hints_schema_from_config(deterministic_config)
+        slot_hints_schema = schema.get("slot_hints_schema")
+        if not isinstance(slot_hints_schema, dict):
+            slot_hints_schema = self._build_slot_hints_schema_from_config(deterministic_config)
+        slot_hints_schema = self._sanitize_schema_for_gemini(slot_hints_schema)
 
         return {
             "extraction_fields": fields,
-            "deterministic_config": deterministic_config,
             "slot_hints_schema": slot_hints_schema,
+            "response_schema_override": response_schema_override,
         }
+
+    @staticmethod
+    def _extract_fields_from_properties(raw_properties: Any) -> List[Dict[str, Any]]:
+        if not isinstance(raw_properties, dict):
+            return []
+        fields: List[Dict[str, Any]] = []
+        for key, meta in raw_properties.items():
+            if not key:
+                continue
+            meta_dict = meta if isinstance(meta, dict) else {}
+            fields.append(
+                {
+                    "key": str(key),
+                    "type": str(meta_dict.get("type") or "string"),
+                    "description": str(meta_dict.get("description") or ""),
+                }
+            )
+        return fields
+
+    @staticmethod
+    def _sanitize_schema_for_gemini(schema: Any) -> Any:
+        """
+        Drop schema keys that trigger INVALID_ARGUMENT in Gemini response_schema.
+        """
+        unsupported_keys = {"additionalProperties", "additional_properties"}
+        if isinstance(schema, dict):
+            clean: Dict[str, Any] = {}
+            for key, value in schema.items():
+                if key in unsupported_keys:
+                    continue
+                clean[key] = ScoringEngine._sanitize_schema_for_gemini(value)
+            return clean
+        if isinstance(schema, list):
+            return [ScoringEngine._sanitize_schema_for_gemini(item) for item in schema]
+        return schema
 
     @staticmethod
     def _build_slot_hints_schema_from_config(deterministic_config: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(deterministic_config, dict):
-            return {"type": "object", "additionalProperties": {"type": "string"}}
+            return {"type": "object"}
 
         explicit = deterministic_config.get("slot_hints_schema")
         if isinstance(explicit, dict):
@@ -522,7 +645,7 @@ class ScoringEngine:
             properties[slot_key] = prop
 
         if not properties:
-            return {"type": "object", "additionalProperties": {"type": "string"}}
+            return {"type": "object"}
         return {"type": "object", "properties": properties}
 
 

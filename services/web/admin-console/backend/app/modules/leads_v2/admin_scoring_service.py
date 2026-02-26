@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 import re
+import json
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -76,6 +77,26 @@ class AdminScoringService:
     @classmethod
     def _validate_row(cls, schema: Any, row: Any):
         return schema.model_validate(cls._row_to_dict(row))
+
+    @staticmethod
+    def _normalize_extraction_schema_legacy(raw_schema: Any) -> Optional[Dict[str, Any]]:
+        if raw_schema is None:
+            return None
+
+        parsed: Any = raw_schema
+        if isinstance(raw_schema, str):
+            text_value = raw_schema.strip()
+            if not text_value:
+                return None
+            try:
+                parsed = json.loads(text_value)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=422, detail=f"Invalid JSON in extraction_schema_legacy: {exc.msg}")
+
+        if not isinstance(parsed, dict):
+            raise HTTPException(status_code=422, detail="extraction_schema_legacy must be a JSON object")
+
+        return parsed
 
     async def list_verticals(self) -> List[VerticalRow]:
         query = text("""
@@ -522,18 +543,21 @@ class AdminScoringService:
         normalized_template = self._normalize_prompt_template(payload.prompt_template)
         if payload.is_active:
             self._validate_prompt_template(normalized_template)
+        normalized_extraction_schema = self._normalize_extraction_schema_legacy(payload.extraction_schema_legacy)
 
         query = text("""
             INSERT INTO lead_scoring_prompts (
-                model_id, version, prompt_template, is_active, created_by
+                model_id, version, prompt_template, extraction_schema, is_active, created_by
             )
             VALUES (
-                :model_id, :version, :prompt_template, :is_active, :created_by
+                :model_id, :version, :prompt_template, CAST(:extraction_schema AS jsonb), :is_active, :created_by
             )
             RETURNING id
         """)
         params = payload.model_dump()
+        params.pop("extraction_schema_legacy", None)
         params["prompt_template"] = normalized_template
+        params["extraction_schema"] = json.dumps(normalized_extraction_schema) if normalized_extraction_schema is not None else None
         params["created_by"] = created_by
 
         async with engine.begin() as conn:
@@ -554,26 +578,34 @@ class AdminScoringService:
 
     async def update_scoring_prompt(self, item_id: UUID, payload: ScoringPromptUpdate) -> Optional[ScoringPromptRow]:
         data = payload.model_dump(exclude_unset=True)
-        if not data:
-            return await self.get_scoring_prompt(item_id)
-
         current = await self.get_scoring_prompt(item_id)
         if not current:
             return None
 
-        merged_template = data.get("prompt_template", current.prompt_template)
-        merged_is_active = data.get("is_active", current.is_active)
-        normalized_template = self._normalize_prompt_template(merged_template)
-        if merged_is_active:
-            self._validate_prompt_template(normalized_template)
-        if "prompt_template" in data:
-            data["prompt_template"] = normalized_template
+        if "prompt_template" in data or "is_active" in data:
+            merged_template = data.get("prompt_template", current.prompt_template)
+            merged_is_active = data.get("is_active", current.is_active)
+            normalized_template = self._normalize_prompt_template(merged_template)
+            if merged_is_active:
+                self._validate_prompt_template(normalized_template)
+            if "prompt_template" in data:
+                data["prompt_template"] = normalized_template
+
+        if "extraction_schema_legacy" in data:
+            normalized_extraction_schema = self._normalize_extraction_schema_legacy(data.pop("extraction_schema_legacy"))
+            data["extraction_schema"] = json.dumps(normalized_extraction_schema) if normalized_extraction_schema is not None else None
+
+        if not data:
+            return current
 
         updates: List[str] = []
         params: Dict[str, Any] = {"id": item_id}
 
         for key, value in data.items():
-            updates.append(f"{key} = :{key}")
+            if key == "extraction_schema":
+                updates.append("extraction_schema = CAST(:extraction_schema AS jsonb)")
+            else:
+                updates.append(f"{key} = :{key}")
             params[key] = value
 
         query = text(f"""

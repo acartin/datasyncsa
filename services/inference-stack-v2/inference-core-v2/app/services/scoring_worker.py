@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
@@ -100,10 +100,9 @@ class ScoringWorker:
         ):
             await repo.reschedule_scoring_job(
                 job_id=job_id,
-                next_scheduled_for=(
-                    datetime.now(timezone.utc)
-                    + timedelta(seconds=max(0.0, settings.scoring_idle_close_secs))
-                ),
+                # New user turn arrived while this job was pending/running.
+                # Requeue immediately so the freshest context is scored next.
+                next_scheduled_for=datetime.now(timezone.utc),
                 error_code="STALE_CONVERSATION",
                 error_message=(
                     f"Conversation advanced from expected={expected_lead_messages} "

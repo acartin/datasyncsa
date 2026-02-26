@@ -124,6 +124,13 @@ def _prompt_form_schema(model_id: Optional[UUID] = None) -> list[dict]:
         model_field,
         {"name": "version", "label": "Versión Prompt", "type": "number", "required": True, "value": 1},
         {"name": "prompt_template", "label": "Prompt Template", "type": "textarea", "required": True, "rows": 20},
+        {
+            "name": "extraction_schema_legacy",
+            "label": "Extraction Schema (JSON) - Para modificar criterios: deterministic_scoring/criteria_rules",
+            "type": "textarea",
+            "required": False,
+            "rows": 16,
+        },
         {"name": "is_active", "label": "Activo", "type": "switch", "value": True},
     ]
 
@@ -209,6 +216,13 @@ async def get_verticals_scoring_admin_ui(
         {"name": "model_id", "label": "Modelo", "type": "hidden", "required": True, "value": "{context_model_id}"},
         {"name": "version", "label": "Versión Prompt", "type": "number", "required": True, "value": 1},
         {"name": "prompt_template", "label": "Prompt Template", "type": "textarea", "required": True, "rows": 20},
+        {
+            "name": "extraction_schema_legacy",
+            "label": "Extraction Schema (JSON) - Para modificar criterios: deterministic_scoring/criteria_rules",
+            "type": "textarea",
+            "required": False,
+            "rows": 16,
+        },
         {"name": "is_active", "label": "Activo", "type": "switch", "value": True},
     ]
     band_modal_schema = _band_form_schema()

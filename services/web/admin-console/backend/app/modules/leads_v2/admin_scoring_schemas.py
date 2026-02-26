@@ -139,6 +139,7 @@ class ScoringPromptCreate(BaseModel):
     model_id: UUID
     version: int = Field(..., gt=0)
     prompt_template: str = Field(..., min_length=10)
+    extraction_schema_legacy: Optional[Any] = None
     is_active: bool = True
 
 
@@ -146,4 +147,5 @@ class ScoringPromptUpdate(BaseModel):
     model_id: Optional[UUID] = None
     version: Optional[int] = Field(default=None, gt=0)
     prompt_template: Optional[str] = Field(default=None, min_length=10)
+    extraction_schema_legacy: Optional[Any] = None
     is_active: Optional[bool] = None

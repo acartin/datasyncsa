@@ -149,6 +149,7 @@ class PromptBuilder:
         criteria: List[Dict[str, Any]],
         extraction_fields: Optional[List[Dict[str, Any]]] = None,
         slot_hints_schema: Optional[Dict[str, Any]] = None,
+        response_schema_override: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build JSON schema for structured LLM response.
@@ -163,6 +164,11 @@ class PromptBuilder:
         Returns:
             JSON schema dict for the response
         """
+        if isinstance(response_schema_override, dict) and response_schema_override:
+            schema = dict(response_schema_override)
+            schema.setdefault("type", "object")
+            return schema
+
         extraction_properties = {}
         if extraction_fields:
             for field in extraction_fields:
@@ -172,21 +178,42 @@ class PromptBuilder:
                 
                 if key:
                     extraction_properties[key] = {
-                        "type": field_type if field_type in ["string", "number", "boolean"] else "string",
+                        "type": field_type if field_type in ["string", "number", "boolean", "integer"] else "string",
                         "description": description,
                         "nullable": True
                     }
 
+        score_properties: Dict[str, Any] = {}
+        required_scores: List[str] = []
+        for criterion in criteria or []:
+            criterion_key = str(criterion.get("criterion_key") or "").strip()
+            if not criterion_key:
+                continue
+            min_score = float(criterion.get("min_score", 0))
+            max_score = float(criterion.get("max_score", 10))
+            score_properties[criterion_key] = {
+                "type": "number",
+                "minimum": min_score,
+                "maximum": max_score,
+            }
+            required_scores.append(criterion_key)
+
         slot_hints_object_schema = slot_hints_schema if isinstance(slot_hints_schema, dict) else {
             "type": "object",
-            "additionalProperties": {"type": "string"},
         }
+        scores_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": score_properties,
+        }
+        if required_scores:
+            scores_schema["required"] = required_scores
         
         properties = {
             "reasoning": {
                 "type": "string",
                 "description": "Brief explanation of the scoring decision"
             },
+            "scores": scores_schema,
             "extracted_data": {
                 "type": "object",
                 "properties": extraction_properties,
@@ -204,11 +231,10 @@ class PromptBuilder:
             }
         }
         
-        # Root contract: keep payload minimal and deterministic-ready.
-        required = ["extracted_data"]
+        required = ["scores", "extracted_data"]
         
         return {
             "type": "object",
             "properties": properties,
-            "required": required
+            "required": required,
         }
