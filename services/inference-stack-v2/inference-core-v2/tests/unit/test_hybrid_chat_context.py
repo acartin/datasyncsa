@@ -86,6 +86,16 @@ async def test_generate_chat_response_includes_history_and_hybrid_placeholders()
     assert "Usuario: Busco 2 habitaciones" in prompt
     assert "[sin resultados vectoriales]" in prompt
     assert "[sin contexto estructurado]" in prompt
+    config = kwargs["config"]
+    assert getattr(config, "max_output_tokens", None) is not None
+
+
+def test_truncate_history_context_keeps_recent_tail():
+    text = "A" * 2500
+    truncated = ScoringOrchestrator._truncate_history_context(text, max_chars=1000)
+    assert truncated.startswith("[historial truncado por longitud]")
+    assert len(truncated) > 1000
+    assert truncated.endswith("A" * 1000)
 
 
 @pytest.mark.asyncio

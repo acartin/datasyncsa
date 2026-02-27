@@ -188,7 +188,7 @@ LEADS_GRID_CONFIG_FULL = {
         {"id": "status", "label": "Estado", "type": "scoring-pillar", "sortable": True, "icon": "ri-git-branch-line"}
     ],
     "actions": [
-        {"label": "Ver Perfil", "icon": "ri-eye-line", "action": "navigate", "action_url": "/dashboard/leads/{id}"},
+        {"label": "Ver Perfil", "icon": "ri-eye-line", "action": "navigate", "action_url": "/dashboard/leads_v2/{id}"},
         {"label": "Chat", "icon": "ri-chat-3-line", "action": "navigate", "action_url": "/dashboard/leads/{id}/chat"}
     ]
 }

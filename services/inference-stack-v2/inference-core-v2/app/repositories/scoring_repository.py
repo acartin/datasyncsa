@@ -1,6 +1,6 @@
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -323,13 +323,13 @@ class ScoringRepository:
         messages.append({
             "role": "user",
             "content": user_message,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         # Add bot message
         messages.append({
             "role": "assistant", 
             "content": bot_message,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
         total = row.get("total_messages", 0) + 2
@@ -350,7 +350,7 @@ class ScoringRepository:
             "total_messages": total,
             "bot_messages": bot_count,
             "lead_messages": lead_count,
-            "last_message_at": datetime.utcnow(),
+            "last_message_at": datetime.now(timezone.utc),
             "conversation_id": str(conversation_id)
         })
         await self.session.commit()
@@ -964,6 +964,8 @@ class ScoringRepository:
             "client_id": str(row.get("client_id")) if row.get("client_id") else None,
             "model_id": str(row.get("model_id")) if row.get("model_id") else None,
             "prompt_id": str(row.get("prompt_id")) if row.get("prompt_id") else None,
+            "generation": row.get("generation"),
+            "running_generation": row.get("running_generation"),
             "expected_lead_messages": row.get("expected_lead_messages"),
             "status": row.get("status"),
             "attempts": row.get("attempts"),
@@ -1003,6 +1005,8 @@ class ScoringRepository:
                 client_id,
                 model_id,
                 prompt_id,
+                generation,
+                running_generation,
                 expected_lead_messages,
                 status,
                 attempts,
@@ -1023,6 +1027,8 @@ class ScoringRepository:
                 CAST(:client_id AS uuid),
                 CAST(:model_id AS uuid),
                 CAST(:prompt_id AS uuid),
+                1,
+                NULL,
                 :expected_lead_messages,
                 'queued',
                 0,
@@ -1043,6 +1049,8 @@ class ScoringRepository:
                 client_id = EXCLUDED.client_id,
                 model_id = EXCLUDED.model_id,
                 prompt_id = EXCLUDED.prompt_id,
+                generation = lead_scoring_jobs.generation + 1,
+                running_generation = NULL,
                 expected_lead_messages = EXCLUDED.expected_lead_messages,
                 status = 'queued',
                 attempts = 0,
@@ -1089,6 +1097,7 @@ class ScoringRepository:
             UPDATE lead_scoring_jobs
             SET status = 'failed',
                 finished_at = COALESCE(finished_at, NOW()),
+                running_generation = NULL,
                 last_error_code = COALESCE(last_error_code, 'LOCK_EXPIRED_MAX_ATTEMPTS'),
                 last_error_message = COALESCE(
                     last_error_message,
@@ -1135,6 +1144,7 @@ class ScoringRepository:
                 attempts = job.attempts + 1,
                 started_at = NOW(),
                 finished_at = NULL,
+                running_generation = job.generation,
                 last_error_code = CASE
                     WHEN job.status = 'running' THEN 'LOCK_EXPIRED'
                     ELSE job.last_error_code
@@ -1175,6 +1185,134 @@ class ScoringRepository:
             return None
         return self._serialize_scoring_job_row(dict(row))
 
+    async def get_scoring_ops_summary(self, *, window_minutes: int = 60) -> Dict[str, Any]:
+        window_minutes = max(5, min(1440, int(window_minutes or 60)))
+        stmt = text("""
+            WITH queue_now AS (
+                SELECT
+                    COUNT(*) FILTER (WHERE status IN ('queued', 'rescheduled')) AS queue_depth,
+                    COUNT(*) FILTER (
+                        WHERE status IN ('queued', 'rescheduled')
+                          AND scheduled_for <= NOW()
+                    ) AS queue_depth_due,
+                    COUNT(*) FILTER (WHERE status = 'running') AS running
+                FROM lead_scoring_jobs
+            ),
+            windowed AS (
+                SELECT *
+                FROM lead_scoring_jobs
+                WHERE created_at >= NOW() - (CAST(:window_minutes AS INTEGER) * INTERVAL '1 minute')
+            ),
+            metrics AS (
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed_count,
+                    COUNT(*) FILTER (WHERE status = 'degraded') AS degraded_count,
+                    COUNT(*) FILTER (WHERE status = 'failed') AS failed_count,
+                    COUNT(*) FILTER (WHERE COALESCE(last_error_code, '') ILIKE '%TIMEOUT%') AS timeout_count,
+                    COUNT(*) FILTER (WHERE COALESCE(last_error_code, '') = 'STALE_CONVERSATION') AS stale_count,
+                    percentile_cont(0.95) WITHIN GROUP (
+                        ORDER BY EXTRACT(EPOCH FROM (started_at - created_at))
+                    ) FILTER (
+                        WHERE started_at IS NOT NULL
+                          AND created_at IS NOT NULL
+                    ) AS p95_wait_seconds,
+                    percentile_cont(0.95) WITHIN GROUP (
+                        ORDER BY EXTRACT(EPOCH FROM (finished_at - created_at))
+                    ) FILTER (
+                        WHERE finished_at IS NOT NULL
+                          AND created_at IS NOT NULL
+                    ) AS p95_end_to_end_seconds
+                FROM windowed
+            )
+            SELECT
+                CAST(:window_minutes AS INTEGER) AS window_minutes,
+                COALESCE(q.queue_depth, 0) AS queue_depth,
+                COALESCE(q.queue_depth_due, 0) AS queue_depth_due,
+                COALESCE(q.running, 0) AS running,
+                COALESCE(m.completed_count, 0) AS completed_count,
+                COALESCE(m.degraded_count, 0) AS degraded_count,
+                COALESCE(m.failed_count, 0) AS failed_count,
+                COALESCE(m.timeout_count, 0) AS timeout_count,
+                COALESCE(m.stale_count, 0) AS stale_count,
+                m.p95_wait_seconds AS p95_wait_seconds,
+                m.p95_end_to_end_seconds AS p95_end_to_end_seconds,
+                ROUND(COALESCE(m.completed_count::numeric / NULLIF(CAST(:window_minutes AS numeric), 0), 0), 3) AS completion_rate_per_min,
+                ROUND(
+                    COALESCE(
+                        m.failed_count::numeric /
+                        NULLIF((m.completed_count + m.degraded_count + m.failed_count)::numeric, 0) * 100,
+                        0
+                    ),
+                    2
+                ) AS failure_rate_pct,
+                ROUND(
+                    COALESCE(
+                        m.degraded_count::numeric /
+                        NULLIF((m.completed_count + m.degraded_count + m.failed_count)::numeric, 0) * 100,
+                        0
+                    ),
+                    2
+                ) AS degraded_rate_pct
+            FROM queue_now q
+            CROSS JOIN metrics m
+        """)
+        result = await self.session.execute(stmt, {"window_minutes": window_minutes})
+        row = result.mappings().first() or {}
+
+        def _to_int(value: Any) -> int:
+            try:
+                return int(value or 0)
+            except Exception:
+                return 0
+
+        def _to_float(value: Any) -> Optional[float]:
+            if value is None:
+                return None
+            try:
+                return float(value)
+            except Exception:
+                return None
+
+        return {
+            "window_minutes": _to_int(row.get("window_minutes")),
+            "queue_depth": _to_int(row.get("queue_depth")),
+            "queue_depth_due": _to_int(row.get("queue_depth_due")),
+            "running": _to_int(row.get("running")),
+            "completed_count": _to_int(row.get("completed_count")),
+            "degraded_count": _to_int(row.get("degraded_count")),
+            "failed_count": _to_int(row.get("failed_count")),
+            "timeout_count": _to_int(row.get("timeout_count")),
+            "stale_count": _to_int(row.get("stale_count")),
+            "p95_wait_seconds": _to_float(row.get("p95_wait_seconds")),
+            "p95_end_to_end_seconds": _to_float(row.get("p95_end_to_end_seconds")),
+            "completion_rate_per_min": _to_float(row.get("completion_rate_per_min")) or 0.0,
+            "failure_rate_pct": _to_float(row.get("failure_rate_pct")) or 0.0,
+            "degraded_rate_pct": _to_float(row.get("degraded_rate_pct")) or 0.0,
+        }
+
+    async def is_scoring_job_claim_current(
+        self,
+        *,
+        job_id: UUID,
+        running_generation: int,
+    ) -> bool:
+        stmt = text("""
+            SELECT 1
+            FROM lead_scoring_jobs
+            WHERE id = :job_id
+              AND status = 'running'
+              AND running_generation = :running_generation
+            LIMIT 1
+        """)
+        result = await self.session.execute(
+            stmt,
+            {
+                "job_id": str(job_id),
+                "running_generation": int(running_generation),
+            },
+        )
+        return bool(result.first())
+
     async def reschedule_scoring_job(
         self,
         *,
@@ -1182,63 +1320,105 @@ class ScoringRepository:
         next_scheduled_for: datetime,
         error_code: Optional[str],
         error_message: Optional[str],
-    ) -> None:
-        stmt = text("""
-            UPDATE lead_scoring_jobs
-            SET status = 'rescheduled',
-                scheduled_for = :scheduled_for,
-                last_error_code = :last_error_code,
-                last_error_message = :last_error_message,
-                finished_at = NULL,
-                updated_at = NOW()
-            WHERE id = :job_id
-        """)
-        await self.session.execute(
-            stmt,
-            {
-                "job_id": str(job_id),
-                "scheduled_for": next_scheduled_for,
-                "last_error_code": error_code,
-                "last_error_message": error_message,
-            },
-        )
+        expected_running_generation: Optional[int] = None,
+    ) -> bool:
+        params = {
+            "job_id": str(job_id),
+            "scheduled_for": next_scheduled_for,
+            "last_error_code": error_code,
+            "last_error_message": error_message,
+        }
+        if expected_running_generation is None:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = 'rescheduled',
+                    scheduled_for = :scheduled_for,
+                    last_error_code = :last_error_code,
+                    last_error_message = :last_error_message,
+                    running_generation = NULL,
+                    finished_at = NULL,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                RETURNING id
+            """)
+        else:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = 'rescheduled',
+                    scheduled_for = :scheduled_for,
+                    last_error_code = :last_error_code,
+                    last_error_message = :last_error_message,
+                    running_generation = NULL,
+                    finished_at = NULL,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                  AND status = 'running'
+                  AND running_generation = :expected_running_generation
+                RETURNING id
+            """)
+            params["expected_running_generation"] = int(expected_running_generation)
+
+        result = await self.session.execute(stmt, params)
         await self.session.commit()
+        return bool(result.first())
 
     async def complete_scoring_job(
         self,
         *,
         job_id: UUID,
+        expected_running_generation: Optional[int],
         fallback_used: bool,
         json_valid: Optional[bool],
         latency_ms: Optional[int],
         response_chars: Optional[int],
-    ) -> None:
+    ) -> bool:
         status = "degraded" if fallback_used else "completed"
-        stmt = text("""
-            UPDATE lead_scoring_jobs
-            SET status = :status,
-                finished_at = NOW(),
-                last_error_code = NULL,
-                last_error_message = NULL,
-                fallback_used = :fallback_used,
-                json_valid = :json_valid,
-                latency_ms = :latency_ms,
-                response_chars = :response_chars,
-                updated_at = NOW()
-            WHERE id = :job_id
-        """)
-        await self.session.execute(
-            stmt,
-            {
-                "job_id": str(job_id),
-                "status": status,
-                "fallback_used": fallback_used,
-                "json_valid": json_valid,
-                "latency_ms": latency_ms,
-                "response_chars": response_chars,
-            },
-        )
+        params = {
+            "job_id": str(job_id),
+            "status": status,
+            "fallback_used": fallback_used,
+            "json_valid": json_valid,
+            "latency_ms": latency_ms,
+            "response_chars": response_chars,
+        }
+        if expected_running_generation is None:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = :status,
+                    finished_at = NOW(),
+                    running_generation = NULL,
+                    last_error_code = NULL,
+                    last_error_message = NULL,
+                    fallback_used = :fallback_used,
+                    json_valid = :json_valid,
+                    latency_ms = :latency_ms,
+                    response_chars = :response_chars,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                RETURNING id
+            """)
+        else:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = :status,
+                    finished_at = NOW(),
+                    running_generation = NULL,
+                    last_error_code = NULL,
+                    last_error_message = NULL,
+                    fallback_used = :fallback_used,
+                    json_valid = :json_valid,
+                    latency_ms = :latency_ms,
+                    response_chars = :response_chars,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                  AND status = 'running'
+                  AND running_generation = :expected_running_generation
+                RETURNING id
+            """)
+            params["expected_running_generation"] = int(expected_running_generation)
+        result = await self.session.execute(stmt, params)
         await self.session.commit()
+        return bool(result.first())
 
     async def fail_scoring_job(
         self,
@@ -1247,36 +1427,64 @@ class ScoringRepository:
         error_code: str,
         error_message: str,
         retry_delay_secs: int = 0,
-    ) -> None:
-        stmt = text("""
-            UPDATE lead_scoring_jobs
-            SET status = CASE
-                    WHEN attempts >= COALESCE(max_attempts, 1) THEN 'failed'
-                    ELSE 'queued'
-                END,
-                scheduled_for = CASE
-                    WHEN attempts >= COALESCE(max_attempts, 1) THEN scheduled_for
-                    ELSE NOW() + (CAST(:retry_delay_secs AS INTEGER) * INTERVAL '1 second')
-                END,
-                finished_at = CASE
-                    WHEN attempts >= COALESCE(max_attempts, 1) THEN NOW()
-                    ELSE NULL
-                END,
-                last_error_code = :error_code,
-                last_error_message = :error_message,
-                updated_at = NOW()
-            WHERE id = :job_id
-        """)
-        await self.session.execute(
-            stmt,
-            {
-                "job_id": str(job_id),
-                "error_code": (error_code or "SCORING_ERROR")[:64],
-                "error_message": error_message[:4000] if error_message else "",
-                "retry_delay_secs": max(0, int(retry_delay_secs or 0)),
-            },
-        )
+        expected_running_generation: Optional[int] = None,
+    ) -> bool:
+        params = {
+            "job_id": str(job_id),
+            "error_code": (error_code or "SCORING_ERROR")[:64],
+            "error_message": error_message[:4000] if error_message else "",
+            "retry_delay_secs": max(0, int(retry_delay_secs or 0)),
+        }
+        if expected_running_generation is None:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN 'failed'
+                        ELSE 'queued'
+                    END,
+                    scheduled_for = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN scheduled_for
+                        ELSE NOW() + (CAST(:retry_delay_secs AS INTEGER) * INTERVAL '1 second')
+                    END,
+                    finished_at = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN NOW()
+                        ELSE NULL
+                    END,
+                    running_generation = NULL,
+                    last_error_code = :error_code,
+                    last_error_message = :error_message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                RETURNING id
+            """)
+        else:
+            stmt = text("""
+                UPDATE lead_scoring_jobs
+                SET status = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN 'failed'
+                        ELSE 'queued'
+                    END,
+                    scheduled_for = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN scheduled_for
+                        ELSE NOW() + (CAST(:retry_delay_secs AS INTEGER) * INTERVAL '1 second')
+                    END,
+                    finished_at = CASE
+                        WHEN attempts >= COALESCE(max_attempts, 1) THEN NOW()
+                        ELSE NULL
+                    END,
+                    running_generation = NULL,
+                    last_error_code = :error_code,
+                    last_error_message = :error_message,
+                    updated_at = NOW()
+                WHERE id = :job_id
+                  AND status = 'running'
+                  AND running_generation = :expected_running_generation
+                RETURNING id
+            """)
+            params["expected_running_generation"] = int(expected_running_generation)
+        result = await self.session.execute(stmt, params)
         await self.session.commit()
+        return bool(result.first())
 
     async def get_client_system_prompt(self, client_id: UUID, slug: str = "primary_chat") -> Optional[str]:
         """

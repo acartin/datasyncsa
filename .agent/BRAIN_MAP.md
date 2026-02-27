@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-02-26T22:15:27Z`
+- Generated UTC: `2026-02-27T04:15:53Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-25`
-- Git commit: `100923b`
+- Git branch: `HETZNER-LOCAL-2026-02-27`
+- Git commit: `5b22270`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 

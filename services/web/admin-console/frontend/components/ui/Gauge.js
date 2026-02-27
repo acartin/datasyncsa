@@ -1,7 +1,12 @@
 
 export function LinkGauge(component) {
     const props = component.properties || {};
-    const value = parseInt(props.value || 0);
+    const rawValue = Number(props.value ?? 0);
+    const value = Number.isFinite(rawValue) ? rawValue : 0;
+    const rawMaxScore = Number(props.max_score ?? props.max ?? 100);
+    const maxScore = Number.isFinite(rawMaxScore) && rawMaxScore > 0 ? rawMaxScore : 100;
+    const clampedValue = Math.min(maxScore, Math.max(0, value));
+    const normalizedPct = clampedValue / maxScore;
     const size = parseInt(props.size || 48); // Slightly larger than grid (32)
     const strokeWidth = props.stroke || 4;
 
@@ -19,10 +24,10 @@ export function LinkGauge(component) {
 
     // Fallback Color Logic (If no color prop provided)
     if (!props.color) {
-        if (value >= 90) color = '#f06548';      // Extreme
-        else if (value >= 70) color = '#f7b84b'; // High
-        else if (value >= 50) color = '#4b38b3'; // Mid
-        else if (value >= 20) color = '#0ab39c'; // Low
+        if (normalizedPct >= 0.9) color = '#f06548';      // Extreme
+        else if (normalizedPct >= 0.7) color = '#f7b84b'; // High
+        else if (normalizedPct >= 0.5) color = '#4b38b3'; // Mid
+        else if (normalizedPct >= 0.2) color = '#0ab39c'; // Low
         else color = '#475569';                  // None
     }
 
@@ -30,15 +35,18 @@ export function LinkGauge(component) {
     const cx = size / 2;
     const cy = size / 2;
     const c = 2 * Math.PI * r;
-    const offset = c - (value / 100) * c;
+    const offset = c - normalizedPct * c;
     const fontSize = size * 0.28;
+    const displayValue = Number.isInteger(clampedValue)
+        ? String(clampedValue)
+        : clampedValue.toFixed(1).replace(/\.0$/, '');
 
     // Unique Animation ID to avoid conflicts if multiple gauges on screen
     const animId = `gauge-anim-${Math.random().toString(36).substr(2, 5)}`;
 
     return `
         <div class="d-inline-flex align-items-center justify-content-center position-relative ${props.class || ''}" 
-             style="width: ${size}px; height: ${size}px;" title="Score: ${value}">
+             style="width: ${size}px; height: ${size}px;" title="Score: ${displayValue}/${maxScore}">
             <style>
                 @keyframes ${animId} {
                     from { stroke-dashoffset: ${c}; }
@@ -54,7 +62,7 @@ export function LinkGauge(component) {
                     transform="rotate(-90 ${cx} ${cy})"
                     style="animation: ${animId} 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;"></circle>
                 <text x="50%" y="54%" text-anchor="middle" dy=".1em" 
-                      font-size="${fontSize}" font-weight="700" fill="#6c757d">${value}</text>
+                      font-size="${fontSize}" font-weight="700" fill="#6c757d">${displayValue}</text>
             </svg>
         </div>
     `;

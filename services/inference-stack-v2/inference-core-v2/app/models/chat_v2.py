@@ -99,6 +99,29 @@ class ScoringJobResponse(BaseModel):
     updated_at: Optional[str] = None
 
 
+class ScoringOpsSummaryResponse(BaseModel):
+    """Operational summary for async scoring pipeline."""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    window_minutes: int
+    queue_depth: int
+    queue_depth_due: int
+    running: int
+    completed_count: int
+    degraded_count: int
+    failed_count: int
+    timeout_count: int
+    stale_count: int
+    p95_wait_seconds: Optional[float] = None
+    p95_end_to_end_seconds: Optional[float] = None
+    completion_rate_per_min: float
+    failure_rate_pct: float
+    degraded_rate_pct: float
+
+
 class ScorecardResponse(BaseModel):
     """Response contract for scorecard endpoints"""
     model_config = ConfigDict(

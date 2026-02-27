@@ -354,6 +354,14 @@ class ScoringOrchestrator:
         return str(structured)
 
     @staticmethod
+    def _truncate_history_context(text: str, max_chars: int) -> str:
+        value = (text or "").strip()
+        if max_chars <= 0 or len(value) <= max_chars:
+            return value
+        # Keep the most recent tail because chat relevance is recency-biased.
+        return "[historial truncado por longitud]\n" + value[-max_chars:]
+
+    @staticmethod
     def _default_vector_category_for_vertical(vertical_slug: str) -> Optional[str]:
         slug = (vertical_slug or "").strip().lower()
         if slug in {"realtor", "real_estate", "inmobiliaria"}:
@@ -467,7 +475,10 @@ class ScoringOrchestrator:
                 vertical_ctx=vertical_ctx,
                 conversation_id=conversation_id,
             )
-            history_text = self._format_conversation_history(hybrid_ctx["history"])
+            history_text = self._truncate_history_context(
+                self._format_conversation_history(hybrid_ctx["history"]),
+                max_chars=max(0, int(settings.chat_history_context_max_chars or 0)),
+            )
 
             # Get system prompt from lead_ai_prompts unless snapshot provided one.
             if not system_prompt:
@@ -508,13 +519,18 @@ class ScoringOrchestrator:
             # Generate response using LLM
             from google.genai import types
             llm_start = time.perf_counter()
-            response = self.llm_client.models.generate_content(
-                model=settings.llm_model,
-                contents=[composed_user_prompt],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.2,
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.llm_client.models.generate_content,
+                    model=settings.llm_model,
+                    contents=[composed_user_prompt],
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2,
+                        max_output_tokens=max(64, int(settings.chat_llm_max_output_tokens or 320)),
+                    ),
                 ),
+                timeout=max(1, int(settings.llm_timeout_secs or 30)),
             )
             llm_ms = (time.perf_counter() - llm_start) * 1000.0
             total_ms = (time.perf_counter() - start_total) * 1000.0
@@ -526,7 +542,13 @@ class ScoringOrchestrator:
                 len(response.text or ""),
             )
             return response.text
-            
+        except asyncio.TimeoutError:
+            logger.error(
+                "Chat LLM timeout for conversation %s after %ss",
+                conversation_id,
+                max(1, int(settings.llm_timeout_secs or 30)),
+            )
+            return "Lo siento, en este momento la respuesta está tardando más de lo esperado. Intenta de nuevo en unos segundos."
         except Exception as e:
             logger.error(f"Error generating chat response: {e}")
             return "Lo siento, tuve un problema procesando tu solicitud."
@@ -686,6 +708,11 @@ class ScoringOrchestrator:
     async def get_scoring_job_response(self, job_id: UUID) -> Optional[Dict[str, Any]]:
         """Get scoring job state by id."""
         return await self.job_service.get_job(job_id)
+
+    async def get_scoring_ops_summary(self, window_minutes: int = 60) -> Dict[str, Any]:
+        """Get operational scoring metrics for SLO and alerting."""
+        bounded_window = max(5, min(1440, int(window_minutes or 60)))
+        return await self.job_service.get_ops_summary(window_minutes=bounded_window)
     
     async def _run_scoring_background(
         self,
@@ -831,11 +858,11 @@ class ScoringOrchestrator:
         else:
             normalized_total = 0.0
         
-        priority_label = "medium"
+        priority_label = "Media"
         if normalized_total >= 8.0:
-            priority_label = "high"
+            priority_label = "Alta"
         elif normalized_total <= 3.0:
-            priority_label = "low"
+            priority_label = "Baja"
         
         return ScorecardV2(
             score_total=normalized_total,

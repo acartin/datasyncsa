@@ -79,7 +79,7 @@ def test_build_scorecard_from_result_clamps_scores_and_sets_priority():
     # Band upper bound is exclusive, so score==max_score currently yields no band.
     assert scorecard.score_items[0].band_key is None
     assert scorecard.score_items[1].score == 0.0
-    assert scorecard.priority_label == "medium"
+    assert scorecard.priority_label == "Media"
 
 
 @pytest.mark.asyncio
@@ -143,3 +143,15 @@ def test_build_scorecard_response_from_repo_dict():
     assert len(response["score_items"]) == 1
     assert response["score_items"][0]["criterion_key"] == "intent"
     assert response["score_items"][0]["band_id"] == str(band_id)
+
+
+@pytest.mark.asyncio
+async def test_get_scoring_ops_summary_clamps_window_and_uses_service():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+    orchestrator.job_service = AsyncMock()
+    orchestrator.job_service.get_ops_summary = AsyncMock(return_value={"window_minutes": 1440})
+
+    result = await orchestrator.get_scoring_ops_summary(window_minutes=99999)
+
+    assert result == {"window_minutes": 1440}
+    orchestrator.job_service.get_ops_summary.assert_called_once_with(window_minutes=1440)

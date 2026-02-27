@@ -46,13 +46,15 @@ class ScoringWorker:
                 return False
 
             job_id = UUID(str(claimed["id"]))
+            running_generation = claimed.get("running_generation")
             logger.info(
-                "Processing scoring job id=%s lead_id=%s conversation_id=%s attempt=%s/%s",
+                "Processing scoring job id=%s lead_id=%s conversation_id=%s attempt=%s/%s generation=%s",
                 job_id,
                 claimed.get("lead_id"),
                 claimed.get("conversation_id"),
                 claimed.get("attempts"),
                 claimed.get("max_attempts"),
+                running_generation,
             )
 
             try:
@@ -62,18 +64,33 @@ class ScoringWorker:
                 error_text = str(exc) or exc.__class__.__name__
                 error_code = error_text.split(":", 1)[0].strip()[:64] or "SCORING_WORKER_ERROR"
                 retry_delay = settings.scoring_retry_delay_secs * max(1, int(claimed.get("attempts") or 1))
-                await repo.fail_scoring_job(
+                try:
+                    await db_session.rollback()
+                except Exception:
+                    logger.exception("Failed to rollback worker session before fail_scoring_job")
+                failed = await repo.fail_scoring_job(
                     job_id=job_id,
                     error_code=error_code,
                     error_message=error_text,
                     retry_delay_secs=retry_delay,
+                    expected_running_generation=(
+                        int(running_generation) if running_generation is not None else None
+                    ),
                 )
-                logger.exception(
-                    "Failed scoring job id=%s error_code=%s retry_delay_secs=%s",
-                    job_id,
-                    error_code,
-                    retry_delay,
-                )
+                if failed:
+                    logger.exception(
+                        "Failed scoring job id=%s error_code=%s retry_delay_secs=%s generation=%s",
+                        job_id,
+                        error_code,
+                        retry_delay,
+                        running_generation,
+                    )
+                else:
+                    logger.info(
+                        "Ignored fail update for stale claim id=%s generation=%s",
+                        job_id,
+                        running_generation,
+                    )
                 return True
 
     async def _run_job_payload(
@@ -87,6 +104,10 @@ class ScoringWorker:
         lead_id = UUID(str(job["lead_id"]))
         job_id = UUID(str(job["id"]))
         expected_lead_messages = job.get("expected_lead_messages")
+        running_generation_raw = job.get("running_generation")
+        if running_generation_raw is None:
+            raise ValueError("MISSING_RUNNING_GENERATION")
+        running_generation = int(running_generation_raw)
 
         counters = await repo.get_conversation_message_counters(
             conversation_id=conversation_id,
@@ -98,7 +119,7 @@ class ScoringWorker:
             and latest_lead_messages is not None
             and latest_lead_messages > expected_lead_messages
         ):
-            await repo.reschedule_scoring_job(
+            rescheduled = await repo.reschedule_scoring_job(
                 job_id=job_id,
                 # New user turn arrived while this job was pending/running.
                 # Requeue immediately so the freshest context is scored next.
@@ -108,8 +129,20 @@ class ScoringWorker:
                     f"Conversation advanced from expected={expected_lead_messages} "
                     f"to latest={latest_lead_messages}; rescheduled."
                 ),
+                expected_running_generation=running_generation,
             )
-            logger.info("Rescheduled stale scoring job id=%s", job_id)
+            if rescheduled:
+                logger.info(
+                    "Rescheduled stale scoring job id=%s generation=%s",
+                    job_id,
+                    running_generation,
+                )
+            else:
+                logger.info(
+                    "Skipped stale reschedule for superseded job id=%s generation=%s",
+                    job_id,
+                    running_generation,
+                )
             return
 
         snapshot = await repo.get_conversation_context_snapshot(
@@ -146,6 +179,19 @@ class ScoringWorker:
         if not conversation_text:
             raise ValueError("EMPTY_CONVERSATION_CONTEXT")
 
+        # Re-check claim ownership right before the expensive LLM call.
+        claim_is_current = await repo.is_scoring_job_claim_current(
+            job_id=job_id,
+            running_generation=running_generation,
+        )
+        if not claim_is_current:
+            logger.info(
+                "Skipping pre-LLM execution for superseded job id=%s generation=%s",
+                job_id,
+                running_generation,
+            )
+            return
+
         result = await scoring_engine.analyze_conversation(
             conversation_text=conversation_text,
             model_config={
@@ -155,6 +201,21 @@ class ScoringWorker:
             },
             prompt_config=prompt_config,
         )
+
+        # Re-check claim ownership right before persisting scorecard results.
+        # If a newer generation was enqueued while this worker was running,
+        # drop this stale write.
+        claim_is_current = await repo.is_scoring_job_claim_current(
+            job_id=job_id,
+            running_generation=running_generation,
+        )
+        if not claim_is_current:
+            logger.info(
+                "Skipping stale scoring persistence for job id=%s generation=%s",
+                job_id,
+                running_generation,
+            )
+            return
 
         orchestrator = ScoringOrchestrator(db_session)
         scorecard_data = orchestrator._build_scorecard_from_result(
@@ -172,12 +233,24 @@ class ScoringWorker:
             conversation_id=conversation_id,
         )
 
-        await repo.complete_scoring_job(
+        completed = await repo.complete_scoring_job(
             job_id=job_id,
+            expected_running_generation=running_generation,
             fallback_used=bool(result.get("fallback_used")),
             json_valid=result.get("json_valid"),
             latency_ms=result.get("latency_ms"),
             response_chars=result.get("response_chars"),
         )
-
-        logger.info("Completed scoring job id=%s lead_id=%s", job_id, lead_id)
+        if completed:
+            logger.info(
+                "Completed scoring job id=%s lead_id=%s generation=%s",
+                job_id,
+                lead_id,
+                running_generation,
+            )
+        else:
+            logger.info(
+                "Skipped completion update for superseded job id=%s generation=%s",
+                job_id,
+                running_generation,
+            )

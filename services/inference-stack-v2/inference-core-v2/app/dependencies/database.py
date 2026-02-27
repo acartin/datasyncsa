@@ -52,6 +52,8 @@ async def init_database():
                 client_id UUID NOT NULL,
                 model_id UUID NULL,
                 prompt_id UUID NULL,
+                generation BIGINT NOT NULL DEFAULT 1,
+                running_generation BIGINT NULL,
                 expected_lead_messages INTEGER NULL,
                 status VARCHAR(24) NOT NULL DEFAULT 'queued',
                 attempts INTEGER NOT NULL DEFAULT 0,
@@ -74,6 +76,14 @@ async def init_database():
         await conn.execute(text("""
             CREATE UNIQUE INDEX IF NOT EXISTS uq_lead_scoring_jobs_conversation
             ON lead_scoring_jobs(conversation_id)
+        """))
+        await conn.execute(text("""
+            ALTER TABLE lead_scoring_jobs
+            ADD COLUMN IF NOT EXISTS generation BIGINT NOT NULL DEFAULT 1
+        """))
+        await conn.execute(text("""
+            ALTER TABLE lead_scoring_jobs
+            ADD COLUMN IF NOT EXISTS running_generation BIGINT NULL
         """))
         await conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_lead_scoring_jobs_status_scheduled

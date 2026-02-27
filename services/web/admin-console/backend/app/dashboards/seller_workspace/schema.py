@@ -1,4 +1,5 @@
-from typing import List, Optional
+import json
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from app.contracts.ui_schema import UIComponent as DashboardComponent, WebIAFirstResponse
 
@@ -10,6 +11,11 @@ class ClientUserDashboardSchema(BaseModel):
 
 
 from app.modules.leads.router import LEADS_GRID_CONFIG_FULL
+
+PALETTE_HIGH = "#0AB39C"
+PALETTE_MEDIUM = "#E7B547"
+PALETTE_LOW = "#E06A4B"
+PALETTE_NEUTRAL = "#8F98A8"
 
 def get_seller_workspace_schema(user_id: str) -> ClientUserDashboardSchema:
     # 1. Configuración del Grid (Importada de la Fuente de Verdad)
@@ -102,168 +108,341 @@ def get_seller_workspace_schema(user_id: str) -> ClientUserDashboardSchema:
         ]
     )
 
-def get_lead_detail_schema(user_id: str, lead_id: str, lead: dict) -> ClientUserDashboardSchema:
+def get_lead_detail_schema_v2_clone(
+    user_id: str,
+    lead_id: str,
+    lead: dict,
+    scoring_schema: Optional[Dict[str, Any]] = None,
+) -> ClientUserDashboardSchema:
     """
-    Returns the Schema for the Lead Detail View (Drill-down).
+    Mis Leads v2 detail schema with dynamic scoring criteria mapping.
     """
-    # Extract lead data with defaults
-    full_name = lead.get('full_name') or 'Sin Nombre'
-    email = lead.get('email') or 'Sin email'
-    phone = lead.get('phone') or 'Sin teléfono'
-    score_total = lead.get('score_total') or 0
-    status_label = lead.get('status_label') or 'Nuevo'
-    status_color = lead.get('status_color') or 'warning'
-    
-    # Calculate gauge color based on score (Matching frontend formatters.js)
-    gauge_color = '#475569'
-    if score_total >= 90: gauge_color = '#f06548'
-    elif score_total >= 70: gauge_color = '#f7b84b'
-    elif score_total >= 50: gauge_color = '#4b38b3'
-    elif score_total >= 20: gauge_color = '#0ab39c'
-    
-    # Get initials for avatar
-    initials = ''.join([n[0].upper() for n in full_name.split()[:2]]) if full_name != 'Sin Nombre' else 'L'
+    extraction_result = _parse_extraction_result(lead)
+    intent_value, intent_icon, intent_color = _resolve_appointment_intent(extraction_result)
+    score_rows = _build_v2_score_rows(lead, scoring_schema)
+    profile_props = _build_v2_profile_header_props(lead, intent_value, intent_icon, intent_color)
 
-    # Score Components using new Frontend Renderer
-    score_components = [
-        DashboardComponent(type="score-row", properties={
-            "title": "Interés", "score": lead.get('score_engagement') or 0, "max_score": 30, 
-            "icon": lead.get('eng_icon'), "color": lead.get('eng_color', 'primary'), "label": lead.get('eng_label') or '-'
-        }),
-        DashboardComponent(type="score-row", properties={
-            "title": "Finanzas", "score": lead.get('score_finance') or 0, "max_score": 30, 
-            "icon": lead.get('fin_icon'), "color": lead.get('fin_color', 'primary'), "label": lead.get('fin_label') or '-'
-        }),
-        DashboardComponent(type="score-row", properties={
-            "title": "Urgencia", "score": lead.get('score_timeline') or 0, "max_score": 30, 
-            "icon": lead.get('tim_icon'), "color": lead.get('tim_color', 'primary'), "label": lead.get('tim_label') or '-'
-        }),
-        DashboardComponent(type="score-row", properties={
-            "title": "Match", "score": lead.get('score_match') or 0, "max_score": 30, 
-            "icon": lead.get('mat_icon'), "color": lead.get('mat_color', 'primary'), "label": lead.get('mat_label') or '-'
-        }),
-        DashboardComponent(type="score-row", properties={
-            "title": "Calidad", "score": lead.get('score_info') or 0, "max_score": 30, 
-            "icon": lead.get('inf_icon'), "color": lead.get('inf_color', 'primary'), "label": lead.get('inf_label') or '-'
-        })
-    ]
-
-    # Contact Info Components
-    contact_components = [
-        DashboardComponent(type="info-row", properties={
-            "label": "Teléfono", "value": lead.get('phone') or '-', 
-            "icon": "ri-phone-line", "color": "success"
-        }),
-        DashboardComponent(type="info-row", properties={
-            "label": "Email", "value": lead.get('email') or '-',
-            "icon": "ri-mail-line", "color": "warning"
-        }),
-        DashboardComponent(type="info-row", properties={
-            "label": "Intención", "value": lead.get('cp_label') or 'No definida',
-            "icon": lead.get('cp_icon') or "ri-chat-1-line", "color": lead.get('cp_color', 'primary')
-        }),
-        DashboardComponent(type="info-row", properties={
-            "label": "Registrado", "value": lead.get('created_at').strftime('%d %b, %Y') if lead.get('created_at') else '-',
-            "icon": "ri-calendar-line", "color": "info", "last": True
-        })
-    ]
     return ClientUserDashboardSchema(
         layout="dashboard-standard",
-        debug_data=lead,
         components=[
-            # Back to Dashboard
             DashboardComponent(
                 type="back-link",
-                properties={"text": "Volver", "fallback_url": "/leads/me"}
+                properties={"text": "Volver", "fallback_url": "/leads_v2/", "force_fallback": True},
             ),
-            # Banner Card (Profile Header)
             DashboardComponent(
                 type="profile-header",
-                properties={
-                    "full_name": full_name,
-                    "email": email,
-                    "phone": phone,
-                    "score_value": score_total,
-                    "score_color": lead.get('prio_color'),
-                    "intent_label": lead.get('cp_label'),
-                    "intent_color": lead.get('cp_color', 'primary'),
-                    "intent_icon": lead.get('cp_icon'),
-                    "status_label": lead.get('status_label'),
-                    "status_color": lead.get('status_color', 'warning'),
-                    "status_icon": lead.get('status_icon')
-                }
+                properties=profile_props,
             ),
-            
-            # Tabs (Información, Audit, Fuente)
             DashboardComponent(
                 type="tabs",
                 class_="border-0 shadow-none",
-                items=[
-                    {
-                        "id": "tab-info", "label": "Información", "icon": "ri-information-line", "active": True,
-                        "content": [
-                            DashboardComponent(
-                                type="card",
-                                class_="border-0 shadow-none",
-                                components=[
-                                    DashboardComponent(
-                                        type="row",
-                                        class_="border-0",
-                                        components=[
-                                    # Column 1: Profile & Contact
-                                    # Column 1: Profile & Contact
-                                    DashboardComponent(
-                                        type="col", size=6,
-                                        components=contact_components
-                                    ),
-                                    # Column 2: Detailed Scoring (Redesigned Grid)
-                                    DashboardComponent(
-                                        type="col", size=6,
-                                        components=score_components
-                                    )
-                                ]
-                                    )
-                                ]
-                            )
-                        ]
-                    },
-                    {
-                        "id": "tab-audit", "label": "Audit", "icon": "ri-file-list-3-line",
-                        "content": [
-                            DashboardComponent(
-                                type="card",
-                                components=[
-                                    DashboardComponent(
-                                        type="empty-state",
-                                        properties={
-                                            "title": "Historial de Cambios",
-                                            "message": "El audit trail se mostrará aquí muy pronto.",
-                                            "icon": "ri-history-line"
-                                        }
-                                    )
-                                ]
-                            )
-                        ]
-                    },
-                     {
-                        "id": "tab-source", "label": "Fuente", "icon": "ri-links-line",
-                        "content": [
-                            DashboardComponent(
-                                type="card",
-                                components=[
-                                    DashboardComponent(
-                                        type="empty-state",
-                                        properties={
-                                            "title": "Origen del Lead",
-                                            "message": "Información detallada de la fuente se mostrará aquí.",
-                                            "icon": "ri-links-line"
-                                        }
-                                    )
-                                ]
-                            )
-                        ]
-                    }
-                ]
-            )
-        ]
+                items=_build_v2_tabs(score_rows, lead, extraction_result),
+            ),
+        ],
+        debug_data={
+            "lead_id": lead.get("id"),
+            "scorecard_id": lead.get("scorecard_id"),
+            "priority_label": lead.get("priority_label"),
+            "score_total": lead.get("score_total"),
+            "extraction_result": extraction_result,
+            "score_items_detail": lead.get("score_items_detail") or [],
+            "score_criteria_source": "scoring_schema" if scoring_schema else "model_criteria",
+            "score_criteria_keys": [
+                c.get("criterion_key")
+                for c in ((scoring_schema or {}).get("criteria") or lead.get("model_criteria") or [])
+                if isinstance(c, dict)
+            ],
+        },
     )
+
+
+def _build_v2_tabs(
+    score_rows: List[Dict[str, Any]],
+    lead: Dict[str, Any],
+    extraction_result: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": "tab-info",
+            "label": "Información",
+            "icon": "ri-information-line",
+            "active": True,
+            "content": [
+                DashboardComponent(
+                    type="card",
+                    class_="border-0 shadow-none",
+                    components=[
+                        DashboardComponent(
+                            type="row",
+                            class_="border-0",
+                            components=[
+                                DashboardComponent(type="col", size=12, components=score_rows),
+                            ],
+                        )
+                    ],
+                ).model_dump()
+            ],
+        },
+        {
+            "id": "tab-audit",
+            "label": "Audit",
+            "icon": "ri-file-list-3-line",
+            "content": [
+                DashboardComponent(
+                    type="audit-split-view",
+                    properties=_build_v2_audit_props(lead, extraction_result),
+                ).model_dump()
+            ],
+        },
+        {
+            "id": "tab-source",
+            "label": "Fuente",
+            "icon": "ri-links-line",
+            "content": [
+                DashboardComponent(
+                    type="card",
+                    components=[
+                        DashboardComponent(
+                            type="empty-state",
+                            properties={
+                                "title": "Origen del Lead",
+                                "message": "Información detallada de la fuente se mostrará aquí.",
+                                "icon": "ri-links-line",
+                            },
+                        )
+                    ],
+                ).model_dump()
+            ],
+        },
+    ]
+
+
+def _format_extracted_label(raw_key: str) -> str:
+    key = str(raw_key or "").strip()
+    if key.startswith("extracted_"):
+        key = key[len("extracted_") :]
+    key = key.replace("_", " ").strip()
+    return key.capitalize() if key else "Campo"
+
+
+def _normalize_ui_value(value: Any) -> Any:
+    if value is None:
+        return "-"
+    if isinstance(value, (str, int, float, bool, dict, list)):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _normalize_messages(raw_messages: Any) -> List[Dict[str, Any]]:
+    if isinstance(raw_messages, str):
+        try:
+            parsed = json.loads(raw_messages)
+            raw_messages = parsed
+        except json.JSONDecodeError:
+            raw_messages = []
+    if not isinstance(raw_messages, list):
+        return []
+
+    messages: List[Dict[str, Any]] = []
+    for idx, item in enumerate(raw_messages):
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or item.get("sender") or item.get("author") or "").strip().lower()
+        content = str(item.get("content") or item.get("text") or item.get("message") or "").strip()
+        if not content:
+            continue
+        timestamp = item.get("timestamp") or item.get("created_at") or item.get("sent_at")
+        messages.append(
+            {
+                "id": f"m-{idx}",
+                "role": role or "system",
+                "content": content,
+                "timestamp": _normalize_ui_value(timestamp) if timestamp is not None else "",
+            }
+        )
+    return messages
+
+
+def _build_v2_audit_props(lead: Dict[str, Any], extraction_result: Dict[str, Any]) -> Dict[str, Any]:
+    extracted_fields: List[Dict[str, Any]] = []
+    for key, value in extraction_result.items():
+        extracted_fields.append(
+            {
+                "key": str(key),
+                "label": _format_extracted_label(str(key)),
+                "value": _normalize_ui_value(value),
+            }
+        )
+
+    evidence_groups: List[Dict[str, Any]] = []
+    for item in (lead.get("score_items_detail") or []):
+        if not isinstance(item, dict):
+            continue
+        extracted_data = item.get("extracted_data")
+        if not isinstance(extracted_data, dict) or not extracted_data:
+            continue
+        evidence_groups.append(
+            {
+                "criterion_key": item.get("criterion_key") or "criterio",
+                "criterion_label": item.get("criterion_key") or "Criterio",
+                "data": extracted_data,
+            }
+        )
+
+    latest_conversation = lead.get("latest_conversation") or {}
+    if not isinstance(latest_conversation, dict):
+        latest_conversation = {}
+
+    return {
+        "left_title": "Extracted data",
+        "right_title": "Reconstruccion del chat",
+        "extracted_fields": extracted_fields,
+        "evidence_groups": evidence_groups,
+        "chat_messages": _normalize_messages(latest_conversation.get("messages")),
+        "chat_meta": {
+            "platform": latest_conversation.get("platform") or "N/A",
+            "total_messages": latest_conversation.get("total_messages") or 0,
+            "lead_messages": latest_conversation.get("lead_messages") or 0,
+            "bot_messages": latest_conversation.get("bot_messages") or 0,
+            "last_message_at": _normalize_ui_value(latest_conversation.get("last_message_at")),
+            "summary": _normalize_ui_value(latest_conversation.get("summary") or ""),
+        },
+    }
+
+
+def _parse_extraction_result(lead: Dict[str, Any]) -> Dict[str, Any]:
+    extraction_result = lead.get("extraction_result")
+    if isinstance(extraction_result, dict):
+        return extraction_result
+    if isinstance(extraction_result, str):
+        try:
+            parsed = json.loads(extraction_result)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _resolve_appointment_intent(extraction_result: Dict[str, Any]) -> tuple[str, str, str]:
+    intent = (extraction_result.get("extracted_appointment_intent") or "uncertain").strip().lower()
+    appointment_type = (extraction_result.get("extracted_appointment_type") or "").strip()
+
+    if intent == "positive":
+        value = "Quiere agendar"
+        if appointment_type:
+            value = f"Quiere agendar ({appointment_type})"
+        return value, "ri-calendar-check-line", PALETTE_HIGH
+    if intent == "negative":
+        return "No desea agendar", "ri-calendar-close-line", PALETTE_LOW
+    return "Intención no confirmada", "ri-question-line", PALETTE_MEDIUM
+
+
+def _resolve_priority_color(priority_label: str) -> str:
+    normalized = (priority_label or "").strip().lower()
+    if not normalized:
+        return PALETTE_NEUTRAL
+
+    if normalized in {"alta", "high"} or "alta" in normalized:
+        return PALETTE_HIGH
+    if normalized in {"media", "medium"} or "media" in normalized:
+        return PALETTE_MEDIUM
+    if normalized in {"baja", "low"} or "baja" in normalized:
+        return PALETTE_LOW
+    return PALETTE_NEUTRAL
+
+
+def _build_v2_score_rows(
+    lead: Dict[str, Any],
+    scoring_schema: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    score_items = lead.get("score_items_detail") or []
+    if not isinstance(score_items, list):
+        score_items = []
+
+    schema_criteria = (scoring_schema or {}).get("criteria") or []
+    model_criteria = schema_criteria or lead.get("model_criteria") or []
+    if not isinstance(model_criteria, list):
+        model_criteria = []
+
+    score_items_by_key = {}
+    for item in score_items:
+        if isinstance(item, dict) and item.get("criterion_key"):
+            score_items_by_key[item["criterion_key"]] = item
+
+    rows: List[Dict[str, Any]] = []
+    if model_criteria:
+        sorted_criteria = sorted(
+            [c for c in model_criteria if isinstance(c, dict)],
+            key=lambda c: c.get("display_order", 9999),
+        )
+        for criterion in sorted_criteria:
+            key = criterion.get("criterion_key")
+            if not key:
+                continue
+            item = score_items_by_key.get(key, {})
+            rows.append(
+                DashboardComponent(
+                    type="score-row",
+                    properties={
+                        "title": criterion.get("label") or key,
+                        "score": float(item.get("score") or 0),
+                        "max_score": float(criterion.get("max_score") or 100),
+                        # Keep icon contract identical to grid columns (criterion icon).
+                        "icon": criterion.get("icon") or "ri-star-line",
+                        # Keep color contract identical to grid cells (band color).
+                        "color": item.get("band_color") or "thermal-none",
+                        "label": item.get("band_label") or "-",
+                        "explanation": item.get("explanation") or "",
+                    },
+                ).model_dump()
+            )
+        return rows
+
+    # Fallback when model criteria is unavailable.
+    for item in score_items:
+        if not isinstance(item, dict):
+            continue
+        key = item.get("criterion_key") or "Criterio"
+        rows.append(
+            DashboardComponent(
+                type="score-row",
+                properties={
+                    "title": str(key).replace("_", " ").title(),
+                    "score": float(item.get("score") or 0),
+                    "max_score": 100.0,
+                    "icon": item.get("band_icon") or "ri-star-line",
+                    "color": item.get("band_color") or "thermal-none",
+                    "label": item.get("band_label") or "-",
+                    "explanation": item.get("explanation") or "",
+                },
+            ).model_dump()
+        )
+    return rows
+
+
+def _build_v2_profile_header_props(
+    lead: Dict[str, Any],
+    intent_value: str,
+    intent_icon: str,
+    intent_color: str,
+) -> Dict[str, Any]:
+    score_total = float(lead.get("score_total") or 0)
+    priority_label = lead.get("priority_label") or "Sin prioridad"
+    priority_color = _resolve_priority_color(priority_label)
+
+    return {
+        "full_name": lead.get("full_name") or "Sin Nombre",
+        "email": lead.get("email") or "Sin email",
+        "phone": lead.get("phone") or "Sin teléfono",
+        "reasoning": lead.get("reasoning") or "",
+        "score_value": score_total,
+        "score_color": priority_color or PALETTE_NEUTRAL,
+        "intent_label": intent_value,
+        "intent_color": intent_color,
+        "intent_icon": intent_icon,
+        "status_label": priority_label,
+        "status_color": priority_color,
+        "status_icon": "ri-speed-line",
+    }

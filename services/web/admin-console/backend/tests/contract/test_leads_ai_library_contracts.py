@@ -60,7 +60,7 @@ def test_leads_me_view_contract(client, monkeypatch):
     assert grid["type"] == "custom-leads-grid"
     assert props["data_url"] == "/leads/me/data"
     assert len(actions) == 2
-    assert actions[0]["action_url"] == "/dashboard/leads/{id}"
+    assert actions[0]["action_url"] == "/dashboard/leads_v2/{id}"
     assert actions[1]["action_url"] == "/dashboard/leads/{id}/chat"
 
 

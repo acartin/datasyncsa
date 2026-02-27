@@ -10,10 +10,12 @@ services:
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-infra-postgres
     restart: always
+    command: ["postgres", "-c", "timezone=${TZ:-UTC}"]
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
+      TZ: ${TZ:-UTC}
     ports:
       - "${DB_PORT}:5432"
     volumes:
@@ -27,6 +29,8 @@ services:
     container_name: ${ENV_PREFIX}-infra-redis
     restart: always
     command: redis-server --appendonly yes
+    environment:
+      TZ: ${TZ:-UTC}
     volumes:
       - redis_data:/data
     networks:
@@ -45,6 +49,8 @@ services:
       - portainer_data:/data
     ports:
       - "${PORTAINER_PORT}:9000"
+    environment:
+      TZ: ${TZ:-UTC}
     networks:
       - internal_network
 
@@ -58,17 +64,32 @@ services:
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-backend-inference-v2
     restart: always
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${INFERENCE_WEB_CONCURRENCY:-3}
     ports:
       - "${INFERENCE_V2_PORT}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
       - REDIS_URL=redis://redis:6379/0
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
+      - CHAT_HISTORY_CONTEXT_MAX_CHARS=${CHAT_HISTORY_CONTEXT_MAX_CHARS:-1800}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
       - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
       - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
@@ -90,6 +111,7 @@ services:
     command: ["python", "worker.py"]
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
       - REDIS_URL=redis://redis:6379/0
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
@@ -97,9 +119,13 @@ services:
       - LLM_MODEL=${LLM_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
       - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
       - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
       - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
       - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
       - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
     volumes:
@@ -123,6 +149,7 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=${TZ:-UTC}
       - INFERENCE_CORE_URL=http://inference-core-v2:8000
       - DATABASE_URL=${DATABASE_URL}
       - TABLE_VECTORS=${TABLE_VECTORS}
@@ -144,6 +171,7 @@ services:
     ports:
       - "${ETL_DOCS_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
@@ -175,6 +203,7 @@ services:
     restart: always
     command: ["rq", "worker", "docs", "--url", "redis://redis:6379/0"]
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
@@ -213,6 +242,7 @@ services:
     ports:
       - "${ADMIN_CONSOLE_API_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_PORT=5432
       - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
@@ -238,6 +268,7 @@ services:
       - ./services/web/admin-console/frontend:/usr/share/nginx/html:ro
       - ./services/web/admin-console/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
+      - TZ=${TZ:-UTC}
       - API_HOST=${ENV_PREFIX}-web-admin-console-api
       - APP_VERSION=${APP_VERSION}
     depends_on:
@@ -255,6 +286,7 @@ services:
     ports:
       - "${REALTOR_BRIDGE_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
@@ -287,6 +319,7 @@ services:
     ports:
       - "${GENERIC_BRIDGE_V2_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - INFERENCE_V2_URL=http://inference-core-v2:8000
       - INFERENCE_V2_API_PREFIX=/api/v2
       - REQUEST_TIMEOUT=30
@@ -308,6 +341,7 @@ services:
     ports:
       - "${REALTOR_BRIDGE_V2_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - INFERENCE_V2_URL=http://inference-core-v2:8000
       - INFERENCE_V2_API_PREFIX=/api/v2
       - REQUEST_TIMEOUT=30
@@ -330,6 +364,7 @@ services:
       - ./services/web/realtor-chat/frontend:/usr/share/nginx/html:ro
       - ./services/web/realtor-chat/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
+      - TZ=${TZ:-UTC}
       - API_HOST=realtor-api
     depends_on:
       - realtor-api
@@ -343,6 +378,8 @@ services:
     restart: unless-stopped
     ports:
       - "${CORPORATE_WEB_PORT}:80"
+    environment:
+      - TZ=${TZ:-UTC}
     volumes:
       - ./services/web/datasyncsa:/usr/share/nginx/html:ro
     networks:
@@ -355,6 +392,8 @@ services:
     restart: unless-stopped
     ports:
       - "${TEST_UI_PORT}:80"
+    environment:
+      - TZ=${TZ:-UTC}
     volumes:
       - ./services/web/tests:/usr/share/nginx/html:ro
     networks:

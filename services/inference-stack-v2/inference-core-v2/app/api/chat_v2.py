@@ -6,6 +6,7 @@ from app.models.chat_v2 import (
     ChatV2Request,
     ChatV2Response,
     ScoringJobResponse,
+    ScoringOpsSummaryResponse,
     ScorecardResponse,
     ActiveModelResponse,
     InternalMemoryResetRequest,
@@ -138,6 +139,24 @@ async def get_scoring_job(
         raise
     except Exception:
         logger.exception("Error getting scoring job %s", job_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
+async def get_scoring_ops_summary(
+    request: Request,
+    window_minutes: int = Query(60, ge=5, le=1440, description="Rolling window for rate/p95 metrics"),
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Internal endpoint with scoring queue/SLO metrics."""
+    _assert_internal_token(request)
+    try:
+        orchestrator = ScoringOrchestrator(db_session)
+        return await orchestrator.get_scoring_ops_summary(window_minutes=window_minutes)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error getting scoring ops summary")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

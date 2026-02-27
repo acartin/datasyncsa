@@ -38,7 +38,17 @@ class ScoringEngine:
         self._model_id = settings.llm_model
         self._temperature = settings.llm_temperature
         self._max_retries = max(1, int(settings.scoring_llm_max_retries or 1))
-        self._timeout = settings.scoring_llm_timeout_secs
+        configured_timeout = max(1, int(settings.scoring_llm_timeout_secs or 1))
+        hard_timeout_cap = max(1, int(settings.scoring_llm_hard_timeout_secs or configured_timeout))
+        self._timeout = min(configured_timeout, hard_timeout_cap)
+        self._max_output_tokens = max(128, int(settings.scoring_llm_max_output_tokens or 512))
+        if configured_timeout > self._timeout:
+            logger.warning(
+                "SCORING_LLM_TIMEOUT_CAPPED configured_timeout_secs=%s hard_cap_secs=%s effective_timeout_secs=%s",
+                configured_timeout,
+                hard_timeout_cap,
+                self._timeout,
+            )
     
     @property
     def client(self):
@@ -121,13 +131,15 @@ class ScoringEngine:
         except Exception:
             schema_chars = 0
         logger.info(
-            "SCORING_INPUT model=%s criteria=%s conversation_chars=%s conversation_lines=%s prompt_chars=%s schema_chars=%s",
+            "SCORING_INPUT model=%s criteria=%s conversation_chars=%s conversation_lines=%s prompt_chars=%s schema_chars=%s timeout_secs=%s max_output_tokens=%s",
             self._model_id,
             len(criteria),
             len(conversation_text or ""),
             len((conversation_text or "").splitlines()),
             len(system_prompt or ""),
             schema_chars,
+            self._timeout,
+            self._max_output_tokens,
         )
 
         used_fallback = False
@@ -171,6 +183,7 @@ class ScoringEngine:
         scores, explanations, missing_score_keys = self._extract_scores_and_explanations(
             criteria=criteria,
             payload=result,
+            missing_score_policy=schema_config.get("missing_score_policy"),
         )
         if missing_score_keys:
             used_fallback = True
@@ -259,6 +272,7 @@ class ScoringEngine:
         *,
         criteria: List[Dict[str, Any]],
         payload: Dict[str, Any],
+        missing_score_policy: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Dict[str, float], Dict[str, str], List[str]]:
         raw_scores = payload.get("scores") if isinstance(payload, dict) else {}
         if not isinstance(raw_scores, dict):
@@ -278,7 +292,12 @@ class ScoringEngine:
                 continue
             min_score = float(criterion.get("min_score", 0))
             max_score = float(criterion.get("max_score", 10))
-            conservative_default = (min_score + max_score) / 2.0
+            conservative_default = self._resolve_missing_score_default(
+                criterion_key=criterion_key,
+                min_score=min_score,
+                max_score=max_score,
+                missing_score_policy=missing_score_policy,
+            )
 
             raw_value = raw_scores.get(criterion_key)
             criterion_reason = ""
@@ -316,6 +335,55 @@ class ScoringEngine:
             explanations[criterion_key] = criterion_reason
 
         return scores, explanations, missing
+
+    def _resolve_missing_score_default(
+        self,
+        *,
+        criterion_key: str,
+        min_score: float,
+        max_score: float,
+        missing_score_policy: Optional[Dict[str, Any]],
+    ) -> float:
+        policy = missing_score_policy if isinstance(missing_score_policy, dict) else {}
+        by_criterion = policy.get("by_criterion")
+        if isinstance(by_criterion, dict):
+            criterion_cfg = by_criterion.get(criterion_key)
+            resolved = self._resolve_missing_score_from_cfg(criterion_cfg)
+            if resolved is not None:
+                return max(min_score, min(max_score, resolved))
+
+        global_cfg = policy.get("global")
+        resolved = self._resolve_missing_score_from_cfg(global_cfg)
+        if resolved is not None:
+            return max(min_score, min(max_score, resolved))
+
+        fallback_mode = str(policy.get("fallback_mode") or "min_score").strip().lower()
+        if fallback_mode == "midpoint":
+            return (min_score + max_score) / 2.0
+        return min_score
+
+    def _resolve_missing_score_from_cfg(self, cfg: Any) -> Optional[float]:
+        if cfg is None:
+            return None
+        if isinstance(cfg, (int, float)):
+            return float(cfg)
+        if isinstance(cfg, str):
+            return self._coerce_float(cfg)
+        if not isinstance(cfg, dict):
+            return None
+
+        value = self._coerce_float(cfg.get("value"))
+        if value is not None:
+            return value
+
+        min_value = self._coerce_float(cfg.get("min"))
+        max_value = self._coerce_float(cfg.get("max"))
+        if min_value is not None and max_value is not None:
+            low = min(min_value, max_value)
+            high = max(min_value, max_value)
+            return (low + high) / 2.0
+
+        return None
 
     def _enrich_extraction_from_text(self, conversation_text: str, extraction: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(extraction or {})
@@ -436,6 +504,7 @@ class ScoringEngine:
                 temperature=self._temperature,
                 response_mime_type="application/json",
                 response_schema=response_schema,
+                max_output_tokens=self._max_output_tokens,
             ),
         )
         gen_ms = (time.perf_counter() - call_start) * 1000.0
@@ -550,10 +619,46 @@ class ScoringEngine:
             slot_hints_schema = self._build_slot_hints_schema_from_config(deterministic_config)
         slot_hints_schema = self._sanitize_schema_for_gemini(slot_hints_schema)
 
+        missing_score_policy: Dict[str, Any] = {
+            "global": None,
+            "by_criterion": {},
+            "fallback_mode": "min_score",
+        }
+        scoring_contract = schema.get("scoring_contract")
+        if isinstance(scoring_contract, dict):
+            fallback_mode = str(scoring_contract.get("missing_score_fallback_mode") or "").strip().lower()
+            if fallback_mode in {"min_score", "midpoint"}:
+                missing_score_policy["fallback_mode"] = fallback_mode
+
+            criteria_defaults = scoring_contract.get("missing_score_defaults_by_criterion")
+            if isinstance(criteria_defaults, dict):
+                clean_criteria_defaults: Dict[str, Any] = {}
+                for raw_key, raw_cfg in criteria_defaults.items():
+                    key = str(raw_key or "").strip()
+                    if not key:
+                        continue
+                    clean_criteria_defaults[key] = raw_cfg
+                if clean_criteria_defaults:
+                    missing_score_policy["by_criterion"] = clean_criteria_defaults
+
+            global_default = scoring_contract.get("missing_score_default")
+            if global_default is not None:
+                missing_score_policy["global"] = global_default
+
+            missing_raw = scoring_contract.get("missing_evidence_default_range")
+            if isinstance(missing_raw, dict):
+                min_value = self._coerce_float(missing_raw.get("min"))
+                max_value = self._coerce_float(missing_raw.get("max"))
+                if min_value is not None and max_value is not None:
+                    low = min(min_value, max_value)
+                    high = max(min_value, max_value)
+                    missing_score_policy["global"] = {"min": low, "max": high}
+
         return {
             "extraction_fields": fields,
             "slot_hints_schema": slot_hints_schema,
             "response_schema_override": response_schema_override,
+            "missing_score_policy": missing_score_policy,
         }
 
     @staticmethod

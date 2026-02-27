@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-02-26T22:15:27Z`
+- Generated UTC: `2026-02-27T04:15:53Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-25`
-- Git commit: `100923b`
+- Git branch: `HETZNER-LOCAL-2026-02-27`
+- Git commit: `5b22270`
 - Policy: High-signal only; assets/binarios excluidos.
 
 ## Contexto Maestro
@@ -14,10 +14,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-02-26T22:15:27Z`
+- Generated UTC: `2026-02-27T04:15:53Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-25`
-- Git commit: `100923b`
+- Git branch: `HETZNER-LOCAL-2026-02-27`
+- Git commit: `5b22270`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 
@@ -123,6 +123,15 @@ services:
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-backend-inference-v2
     restart: always
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${INFERENCE_WEB_CONCURRENCY:-3}
     ports:
       - "${INFERENCE_V2_PORT}:8000"
     environment:
@@ -133,7 +142,12 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
+      - CHAT_HISTORY_CONTEXT_MAX_CHARS=${CHAT_HISTORY_CONTEXT_MAX_CHARS:-1800}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
       - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
       - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
@@ -162,9 +176,13 @@ services:
       - LLM_MODEL=${LLM_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
       - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
       - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
       - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
       - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
       - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
     volumes:
@@ -265,24 +283,6 @@ services:
   # ---------------------------------------------------------------------------
   # WEB SERVICES (Frontend + BFF)
   # ---------------------------------------------------------------------------
-
-  # Admin Console API (BFF) - Renamed from AiFirst
-  admin-console-api:
-    build:
-      context: ./services/web/admin-console/backend
-      dockerfile: Dockerfile
-      args:
-        INSTALL_DEV_DEPS: "true"
-    container_name: ${ENV_PREFIX}-web-admin-console-api
-    restart: unless-stopped
-    ports:
-      - "${ADMIN_CONSOLE_API_PORT}:8000"
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
-      - INFERENCE_CORE_URL=http://inference-core-v2:8000
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
 ```
 ### `.env.example`
 
@@ -322,7 +322,7 @@ ALLOWED_ORIGINS=http://admin-console.local:8085,http://admin-console-web:80,http
 # --- AI CONFIGURATION ---
 EMBEDDING_MODEL=models/gemini-embedding-001
 VISION_MODEL=gemini-2.0-flash
-LLM_MODEL=gemini-2.0-flash
+LLM_MODEL=gemini-2.5-flash-lite
 LLM_TIMEOUT_SECS=30
 RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
 RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
@@ -596,7 +596,7 @@ services/realtor-bridge-v2/main.py:354:    uvicorn.run(
 services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
 services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
 services/web/realtor-chat/backend/app/main.py:10:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
-services/inference-stack-v2/inference-core-v2/worker.py:23:if __name__ == "__main__":
+services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
 services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
 services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
@@ -620,12 +620,13 @@ services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
-services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
+services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -644,20 +645,20 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 ```
 
 ## Rutas API Detectadas
 
 ```text
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:34:@router.post("/chat", response_model=ChatV2Response)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:76:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:98:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:125:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:144:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:191:@router.post("/cache/invalidate")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:220:@router.get("/health")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:240:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
 services/inference-stack__reference_disabled/semantic-adapter/app/api.py:45:@router.get("/health")
@@ -751,6 +752,13 @@ services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.ge
 services/web/admin-console/backend/app/modules/leads_v2/router.py:134:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:182:@router.get("/{lead_id}/scoring", response_model=ScoringValuesV2)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:203:@router.get("/schema/current", response_model=ScoringSchemaV2)
+services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/users/router.py:20:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/users/router.py:98:@router.get("/data", response_model=List[UserRow])
 services/web/admin-console/backend/app/modules/users/router.py:102:@router.get("/roles/simple-list")
@@ -765,19 +773,13 @@ services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.
 services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:8:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:10:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:15:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:19:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:36:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 ```
 
 ## Contratos/Modelos Críticos
@@ -789,6 +791,16 @@ services/web/realtor-chat/backend/app/schemas/ui.py:76:class SDUIResponse(BaseMo
 services/web/realtor-chat/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
 services/web/realtor-chat/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
 services/web/realtor-chat/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
+services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
+services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
+services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
+services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
+services/etl-docs/src/shared/schemas.py:73:class SemanticItem(BaseModel):
+services/etl-docs/src/shared/schemas.py:88:class RAGFilters(BaseModel):
+services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
+services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
+services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
+services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
@@ -801,25 +813,16 @@ services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class Scor
 services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
-services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
-services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
-services/etl-docs/src/shared/schemas.py:73:class SemanticItem(BaseModel):
-services/etl-docs/src/shared/schemas.py:88:class RAGFilters(BaseModel):
-services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
-services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
-services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
-services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:74:class ScoringJobResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:102:class ScorecardResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:124:class ActiveModelResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:137:class InternalMemoryResetRequest(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:142:class InternalMemoryResetResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:102:class ScoringOpsSummaryResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:125:class ScorecardResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:147:class ActiveModelResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:160:class InternalMemoryResetRequest(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:165:class InternalMemoryResetResponse(BaseModel):
 ```
 
 ## Tablas/SQL Referenciadas (DB Map)
@@ -881,6 +884,8 @@ services/inference-stack-v2/inference-core-v2/tests/unit/test_hybrid_chat_contex
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_job_service.py -> lead_id
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_job_service.py -> lead_messages
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_id
+services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_id
+services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_messages
 services/inference-stack-v2/semantic-adapter-v2/app/vector_repo.py -> ai_vectors
 services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_ai_prompts
 services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_contact_preferences
@@ -909,10 +914,13 @@ services/legacy-ETL_DOCS/shared/vector_store.py -> ai_vectors
 services/realtor-bridge-v2/main.py -> lead_scoring
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_by_id
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_id
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_service
 services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_detail_schema
+services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_detail_schema_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_id
 services/web/admin-console/backend/app/main.py -> ai_library
 services/web/admin-console/backend/app/main.py -> ai_library_router
@@ -2436,12 +2444,10 @@ import logging
 import json
 import asyncio
 import re
-import unicodedata
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from app.core.config import settings
-from app.services.deterministic_scoring import deterministic_scoring_service
 from app.services.prompt_builder import PromptBuilder
 from app.services.prompt_linter import PromptLinter
 
@@ -2467,8 +2473,18 @@ class ScoringEngine:
         self._client = None
         self._model_id = settings.llm_model
         self._temperature = settings.llm_temperature
-        self._max_retries = settings.llm_max_retries
-        self._timeout = settings.scoring_llm_timeout_secs
+        self._max_retries = max(1, int(settings.scoring_llm_max_retries or 1))
+        configured_timeout = max(1, int(settings.scoring_llm_timeout_secs or 1))
+        hard_timeout_cap = max(1, int(settings.scoring_llm_hard_timeout_secs or configured_timeout))
+        self._timeout = min(configured_timeout, hard_timeout_cap)
+        self._max_output_tokens = max(128, int(settings.scoring_llm_max_output_tokens or 512))
+        if configured_timeout > self._timeout:
+            logger.warning(
+                "SCORING_LLM_TIMEOUT_CAPPED configured_timeout_secs=%s hard_cap_secs=%s effective_timeout_secs=%s",
+                configured_timeout,
+                hard_timeout_cap,
+                self._timeout,
+            )
     
     @property
     def client(self):
@@ -2529,9 +2545,6 @@ class ScoringEngine:
             extraction_fields,
             DEFAULT_EXTRACTION_FIELDS,
         )
-        deterministic_config = schema_config["deterministic_config"]
-        if not deterministic_config:
-            raise ValueError("DETERMINISTIC_SCORING_CONFIG_MISSING")
         
         system_prompt = builder.build_prompt(
             vertical_name=vertical_name,
@@ -2547,19 +2560,22 @@ class ScoringEngine:
             criteria,
             extraction_fields,
             slot_hints_schema=schema_config["slot_hints_schema"],
+            response_schema_override=schema_config["response_schema_override"],
         )
         try:
             schema_chars = len(json.dumps(response_schema, ensure_ascii=False, default=str))
         except Exception:
             schema_chars = 0
         logger.info(
-            "SCORING_INPUT model=%s criteria=%s conversation_chars=%s conversation_lines=%s prompt_chars=%s schema_chars=%s",
+            "SCORING_INPUT model=%s criteria=%s conversation_chars=%s conversation_lines=%s prompt_chars=%s schema_chars=%s timeout_secs=%s max_output_tokens=%s",
             self._model_id,
             len(criteria),
             len(conversation_text or ""),
             len((conversation_text or "").splitlines()),
             len(system_prompt or ""),
             schema_chars,
+            self._timeout,
+            self._max_output_tokens,
         )
 
         used_fallback = False
@@ -2578,14 +2594,14 @@ class ScoringEngine:
             result = llm_response.get("payload", {}) if isinstance(llm_response, dict) else {}
             llm_meta = llm_response.get("meta", llm_meta) if isinstance(llm_response, dict) else llm_meta
         except Exception as exc:
-            logger.error("LLM extraction unavailable, continuing with deterministic scoring: %s", exc)
+            logger.error("LLM scoring unavailable, using conservative fallback: %s", exc)
             used_fallback = True
         
-        scores: Dict[str, float] = {}
-        explanations: Dict[str, str] = {}
         extraction_result: Dict[str, Any] = {}
-        slot_state: Dict[str, str] = {}
+        slot_state: Dict[str, Any] = {}
         confidence = None
+        if isinstance(result.get("slot_hints"), dict):
+            slot_state = result.get("slot_hints") or {}
         
         extracted_data_container = result.get("extracted_data", {})
         if not isinstance(extracted_data_container, dict):
@@ -2600,26 +2616,33 @@ class ScoringEngine:
                 extraction_result[key] = value
 
         extraction_result = self._enrich_extraction_from_text(conversation_text, extraction_result)
-        deterministic = deterministic_scoring_service.evaluate(
-            conversation_text=conversation_text,
-            extracted_data=extraction_result,
+        scores, explanations, missing_score_keys = self._extract_scores_and_explanations(
             criteria=criteria,
-            deterministic_config=deterministic_config,
+            payload=result,
+            missing_score_policy=schema_config.get("missing_score_policy"),
         )
-        scores = deterministic.get("scores", {})
-        explanations = deterministic.get("explanations", {})
-        slot_state = deterministic.get("slot_state", {})
+        if missing_score_keys:
+            used_fallback = True
+            logger.warning(
+                "LLM payload missing/invalid scores for criteria=%s; conservative defaults applied",
+                ",".join(missing_score_keys),
+            )
         
         if "confidence" in result and result["confidence"] is not None:
-            confidence = float(result["confidence"])
+            parsed_conf = self._coerce_float(result["confidence"])
+            if parsed_conf is not None:
+                confidence = max(0.0, min(1.0, parsed_conf))
 
         reasoning_parts = []
         llm_reasoning = (result.get("reasoning") or "").strip() if isinstance(result, dict) else ""
-        deterministic_reasoning = (deterministic.get("reasoning") or "").strip()
         if llm_reasoning:
             reasoning_parts.append(llm_reasoning)
-        if deterministic_reasoning:
-            reasoning_parts.append(deterministic_reasoning)
+        elif used_fallback:
+            reasoning_parts.append("Scoring conservador por ausencia de salida valida del LLM.")
+        if missing_score_keys:
+            reasoning_parts.append(
+                f"Criteria con default conservador: {', '.join(missing_score_keys)}."
+            )
         final_reasoning = " | ".join(reasoning_parts)
 
         total_ms = (time.perf_counter() - analysis_start) * 1000.0
@@ -2631,21 +2654,6 @@ class ScoringEngine:
             len(extraction_result),
             len(slot_state),
             llm_meta.get("json_valid"),
-            llm_meta.get("response_chars"),
-        )
-        
-        return {
-            "scores": scores,
-            "explanations": explanations,
-            "extraction_result": extraction_result,
-            "reasoning": final_reasoning,
-            "confidence": confidence,
-            "prompt_snapshot": system_prompt,
-            "fallback_used": used_fallback,
-            "slot_state": slot_state,
-            "json_valid": bool(llm_meta.get("json_valid")),
-            "response_chars": llm_meta.get("response_chars"),
-            "latency_ms": int(total_ms),
 ```
 ### `services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py`
 
@@ -2801,6 +2809,7 @@ class PromptBuilder:
         criteria: List[Dict[str, Any]],
         extraction_fields: Optional[List[Dict[str, Any]]] = None,
         slot_hints_schema: Optional[Dict[str, Any]] = None,
+        response_schema_override: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build JSON schema for structured LLM response.
@@ -2815,6 +2824,11 @@ class PromptBuilder:
         Returns:
             JSON schema dict for the response
         """
+        if isinstance(response_schema_override, dict) and response_schema_override:
+            schema = dict(response_schema_override)
+            schema.setdefault("type", "object")
+            return schema
+
         extraction_properties = {}
         if extraction_fields:
             for field in extraction_fields:
@@ -2824,46 +2838,46 @@ class PromptBuilder:
                 
                 if key:
                     extraction_properties[key] = {
-                        "type": field_type if field_type in ["string", "number", "boolean"] else "string",
+                        "type": field_type if field_type in ["string", "number", "boolean", "integer"] else "string",
                         "description": description,
                         "nullable": True
                     }
 
+        score_properties: Dict[str, Any] = {}
+        required_scores: List[str] = []
+        for criterion in criteria or []:
+            criterion_key = str(criterion.get("criterion_key") or "").strip()
+            if not criterion_key:
+                continue
+            min_score = float(criterion.get("min_score", 0))
+            max_score = float(criterion.get("max_score", 10))
+            score_properties[criterion_key] = {
+                "type": "number",
+                "minimum": min_score,
+                "maximum": max_score,
+            }
+            required_scores.append(criterion_key)
+
         slot_hints_object_schema = slot_hints_schema if isinstance(slot_hints_schema, dict) else {
             "type": "object",
-            "additionalProperties": {"type": "string"},
         }
+        scores_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": score_properties,
+        }
+        if required_scores:
+            scores_schema["required"] = required_scores
         
         properties = {
             "reasoning": {
                 "type": "string",
                 "description": "Brief explanation of the scoring decision"
             },
+            "scores": scores_schema,
             "extracted_data": {
                 "type": "object",
                 "properties": extraction_properties,
                 "description": "Extracted data from conversation",
-            },
-            "slot_hints": {
-                **slot_hints_object_schema,
-                "description": "Optional slot-level hints inferred by the LLM",
-            },
-            "confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "Confidence score for the evaluation"
-            }
-        }
-        
-        # Root contract: keep payload minimal and deterministic-ready.
-        required = ["extracted_data"]
-        
-        return {
-            "type": "object",
-            "properties": properties,
-            "required": required
-        }
 ```
 ### `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
 

@@ -22,6 +22,7 @@ import { LinkInfoRow } from '../../components/ui/InfoRow.js';
 import { LinkProfileHeader } from '../../components/ui/ProfileHeader.js';
 import { LinkBackLink } from '../../components/ui/BackLink.js';
 import { LinkEmptyState } from '../../components/ui/EmptyState.js';
+import { LinkAuditSplitView } from '../../components/ui/AuditSplitView.js';
 
 // Simple Wrapper for Custom Grid Container
 import { LinkCustomGridContainer } from '../../components/grids/CustomGridContainer.js';
@@ -55,7 +56,8 @@ const registry = {
     'info-row': LinkInfoRow,
     'profile-header': LinkProfileHeader,
     'back-link': LinkBackLink,
-    'empty-state': LinkEmptyState
+    'empty-state': LinkEmptyState,
+    'audit-split-view': LinkAuditSplitView
 };
 
 // --- GLOBAL FORM HANDLERS (Moved from FormContainer to ensure execution) ---

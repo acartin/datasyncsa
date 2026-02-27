@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from uuid import UUID
 
@@ -18,6 +18,13 @@ class ScoringJobService:
     def _utc_now() -> datetime:
         return datetime.now(timezone.utc)
 
+    @staticmethod
+    def _compute_scheduled_for(now: datetime) -> datetime:
+        debounce_secs = max(0.0, float(settings.scoring_job_debounce_secs or 0.0))
+        if debounce_secs <= 0:
+            return now
+        return now + timedelta(seconds=debounce_secs)
+
     async def enqueue_post_chat_scoring(
         self,
         *,
@@ -28,8 +35,8 @@ class ScoringJobService:
         model_id: Optional[UUID],
         prompt_id: Optional[UUID],
     ) -> Dict[str, Any]:
-        # Queue immediately on each incoming message; no idle debounce.
-        scheduled_for = self._utc_now()
+        # Small debounce to coalesce bursty user turns and avoid stale LLM runs.
+        scheduled_for = self._compute_scheduled_for(self._utc_now())
         return await self.repo.upsert_scoring_job(
             lead_id=lead_id,
             conversation_id=conversation_id,
@@ -43,3 +50,6 @@ class ScoringJobService:
 
     async def get_job(self, job_id: UUID) -> Optional[Dict[str, Any]]:
         return await self.repo.get_scoring_job(job_id)
+
+    async def get_ops_summary(self, *, window_minutes: int = 60) -> Dict[str, Any]:
+        return await self.repo.get_scoring_ops_summary(window_minutes=window_minutes)

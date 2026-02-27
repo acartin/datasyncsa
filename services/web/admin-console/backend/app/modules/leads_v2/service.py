@@ -173,10 +173,11 @@ class LeadsV2Service:
             model_criteria AS (
                 SELECT 
                     lsc.model_id,
-                    json_agg(
-                        json_build_object(
+                    jsonb_agg(
+                        jsonb_build_object(
                             'criterion_key', lsc.criterion_key,
                             'label', lsc.label,
+                            'icon', lsc.icon,
                             'weight', lsc.weight,
                             'min_score', lsc.min_score,
                             'max_score', lsc.max_score,
@@ -193,10 +194,10 @@ class LeadsV2Service:
                 l.*,
                 ls.id as scorecard_id, ls.score_total, ls.priority_label, ls.reasoning,
                 ls.model_id, ls.model_version, ls.prompt_version, ls.created_at as scored_at,
-                ls.raw_payload,
+                ls.raw_payload, ls.extraction_result,
                 COALESCE(
-                    json_agg(
-                        json_build_object(
+                    jsonb_agg(
+                        jsonb_build_object(
                             'id', sid.id,
                             'criterion_key', sid.criterion_key,
                             'score', sid.score,
@@ -207,9 +208,9 @@ class LeadsV2Service:
                             'explanation', sid.explanation,
                             'extracted_data', sid.extracted_data
                         )
-                    ) FILTER (WHERE sid.id IS NOT NULL), '[]'::json
+                    ) FILTER (WHERE sid.id IS NOT NULL), '[]'::jsonb
                 ) as score_items_detail,
-                COALESCE(mc.criteria, '[]'::json) as model_criteria,
+                COALESCE(mc.criteria, '[]'::jsonb) as model_criteria,
                 st.name as status_label, st.color as status_color, st.icon as status_icon,
                 cp.name as cp_label, cp.icon as cp_icon, cp.color as cp_color,
                 src.name as source_label, src.icon as source_icon
@@ -222,14 +223,52 @@ class LeadsV2Service:
             LEFT JOIN lead_sources src ON l.source_id = src.id
             WHERE l.id = :id AND l.deleted_at IS NULL
             {access_filter}
-            GROUP BY l.id, ls.id, mc.criteria, st.name, st.color, st.icon, 
-                     cp.name, cp.icon, cp.color, src.name, src.icon
+            GROUP BY
+                l.id,
+                ls.id, ls.score_total, ls.priority_label, ls.reasoning,
+                ls.model_id, ls.model_version, ls.prompt_version, ls.created_at,
+                ls.raw_payload, ls.extraction_result,
+                mc.criteria,
+                st.name, st.color, st.icon,
+                cp.name, cp.icon, cp.color,
+                src.name, src.icon
         """)
         
         async with engine.connect() as conn:
             result = await conn.execute(query_str, params)
             row = result.fetchone()
-            return dict(row._mapping) if row else None
+            if not row:
+                return None
+
+            lead_data = dict(row._mapping)
+
+            conversation_query = text(
+                """
+                SELECT
+                    c.id,
+                    c.platform,
+                    c.conversation_id,
+                    c.messages,
+                    c.summary,
+                    c.sentiment,
+                    c.started_at,
+                    c.ended_at,
+                    c.last_message_at,
+                    c.total_messages,
+                    c.lead_messages,
+                    c.bot_messages
+                FROM lead_conversations c
+                WHERE c.lead_id = :lead_id
+                  AND c.deleted_at IS NULL
+                ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC
+                LIMIT 1
+                """
+            )
+            conversation_result = await conn.execute(conversation_query, {"lead_id": lead_id})
+            conversation_row = conversation_result.mappings().first()
+            lead_data["latest_conversation"] = dict(conversation_row) if conversation_row else None
+
+            return lead_data
     
     async def _fallback_to_legacy_detail(
         self,

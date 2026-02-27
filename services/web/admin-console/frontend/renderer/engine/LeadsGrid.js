@@ -34,14 +34,118 @@ export class LeadsGrid extends GridBase {
                 </div>
             </div>
             <style>
-                .custom-grid-wrapper th { cursor: pointer; user-select: none; transition: all 0.2s ease; background-color: var(--vz-light); color: var(--vz-body-color); }
+                .custom-grid-wrapper th {
+                    cursor: pointer;
+                    user-select: none;
+                    transition: all 0.2s ease;
+                    background-color: var(--vz-light);
+                    color: var(--vz-body-color);
+                    font-size: 13px;
+                    font-weight: 600;
+                    letter-spacing: 0.01em;
+                    text-transform: none;
+                    white-space: nowrap;
+                    vertical-align: middle;
+                }
                 .custom-grid-wrapper th:hover { background-color: var(--vz-secondary-bg-subtle) !important; color: var(--vz-secondary) !important; }
                 .badge-pill-custom { padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; display: inline-block; min-width: 80px; text-align: center; background: transparent !important; }
                 .sort-icon { margin-left: 5px; opacity: 0.5; font-size: 20px; font-weight: bold; }
                 .active-sort { opacity: 1; color: var(--vz-primary); font-size: 20px; font-weight: bold; }
                 .custom-grid-wrapper th.sorted-column { background-color: var(--vz-secondary-bg-subtle) !important; }
+                .grid-head-icon {
+                    font-size: 1.15em;
+                    line-height: inherit;
+                    opacity: 0.7;
+                    vertical-align: -1px;
+                }
+                .grid-head-sort {
+                    margin-left: 6px;
+                    font-size: 13px;
+                    opacity: 0.85;
+                    display: inline-block;
+                    line-height: 1;
+                }
+                .lead-identity-wrap { min-width: 0; }
+                .lead-score-btn {
+                    min-width: 40px;
+                    height: 28px;
+                    padding: 0 10px;
+                    flex-shrink: 0;
+                    border-radius: 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 1;
+                    font-variant-numeric: tabular-nums;
+                }
             </style>
         `;
+    }
+
+    _isCssColor(value) {
+        if (typeof value !== 'string') return false;
+        const c = value.trim();
+        return (
+            c.startsWith('#') ||
+            c.startsWith('rgb(') ||
+            c.startsWith('rgba(') ||
+            c.startsWith('hsl(') ||
+            c.startsWith('hsla(') ||
+            c.startsWith('var(')
+        );
+    }
+
+    _resolveIdentityColor(rawColor, score) {
+        if (this._isCssColor(rawColor)) return rawColor;
+
+        const token = String(rawColor || '').trim().toLowerCase();
+        const thermalPalette = {
+            'thermal-extreme': '#f06548',
+            'thermal-high': '#f7b84b',
+            'thermal-mid': '#4b38b3',
+            'thermal-low': '#0ab39c',
+            'thermal-none': 'var(--vz-secondary-color)',
+            'thermal-info': '#299cdb'
+        };
+        if (thermalPalette[token]) return thermalPalette[token];
+
+        const bootstrapToken = new Set([
+            'primary', 'secondary', 'success', 'info', 'warning', 'danger', 'light', 'dark'
+        ]);
+        if (bootstrapToken.has(token)) return `var(--vz-${token})`;
+
+        if (score >= 8) return '#0AB39C';
+        if (score >= 4) return '#F7B84B';
+        return '#4F7CF3';
+    }
+
+    _formatScore(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return '0';
+        const clamped = Math.max(0, Math.min(10, numeric));
+        if (Math.abs(clamped - Math.round(clamped)) < 0.05) return String(Math.round(clamped));
+        return clamped.toFixed(1);
+    }
+
+    _formatHeaderLabel(value) {
+        const text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        const hasUpperLetters = /[A-ZÀ-Þ]/.test(text);
+        const hasLowerLetters = /[a-zà-ÿ]/.test(text);
+
+        // Normalize "ALL CAPS" labels into sentence case.
+        if (hasUpperLetters && !hasLowerLetters && text === text.toUpperCase()) {
+            const lowered = text.toLowerCase();
+            return lowered.charAt(0).toUpperCase() + lowered.slice(1);
+        }
+
+        // Also normalize fully lowercase labels from dynamic DB columns.
+        if (!hasUpperLetters && hasLowerLetters && text === text.toLowerCase()) {
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+        return text;
     }
 
     // Override: Define how to retrieve values for sorting specific columns
@@ -66,7 +170,7 @@ export class LeadsGrid extends GridBase {
         const renderHeaderIcon = (icon) => {
             if (!icon) return '';
             if (typeof icon === 'string' && icon.startsWith('ri-')) {
-                return `<i class="${icon} me-1 text-muted"></i>`;
+                return `<i class="${icon} grid-head-icon me-1 text-muted"></i>`;
             }
             return `<span class="me-1 text-muted">${icon}</span>`;
         };
@@ -75,8 +179,9 @@ export class LeadsGrid extends GridBase {
         const thead = this.config.columns.map(c => {
             const isSorted = this.sortState.colId === c.id;
             const icon = renderHeaderIcon(c.icon);
+            const label = this._formatHeaderLabel(c.label || c.name);
             return `<th onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')">
-                ${icon}${c.label || c.name} ${isSorted ? pageIcons[this.sortState.direction] : ''}
+                ${icon}${label}${isSorted ? `<span class="grid-head-sort">${pageIcons[this.sortState.direction]}</span>` : ''}
             </th>`;
         }).join('') + '<th></th>';
 
@@ -101,17 +206,23 @@ export class LeadsGrid extends GridBase {
         // Identity Column
         if (col.id === 'identity' || col.type === 'gauge-identity') {
             const identity = row.identity || {};
-            const score = identity.score || row.score_total || 0;
+            const score = Number(identity.score ?? row.score_total ?? 0);
             const name = identity.name || row.full_name || 'Unknown';
             const email = row.email || '-';
-            const colorClass = identity.color || (score > 80 ? 'success' : score > 50 ? 'warning' : 'danger');
+            const displayScore = this._formatScore(score);
+            const normalized = Math.max(0, Math.min(10, Number.isFinite(score) ? score : 0));
+            const toneColor = this._resolveIdentityColor(identity.color, normalized);
+            const scoreButtonStyle = [
+                `color:${toneColor}`,
+                `border:1px solid ${toneColor}`,
+                'background-color: transparent',
+                `background: color-mix(in srgb, ${toneColor}, transparent 88%)`
+            ].join(';');
 
             return `
-                <div class="d-flex align-items-center">
-                    <div class="text-${colorClass} border-${colorClass}" style="width:32px; height:32px; border-radius:50%; background:#222; border:2px solid currentColor; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px; font-size:12px;">
-                        ${score}
-                    </div>
-                    <div>
+                <div class="d-flex align-items-center lead-identity-wrap">
+                    <span class="lead-score-btn me-2" style="${scoreButtonStyle}" title="Score: ${displayScore}/10">${displayScore}</span>
+                    <div style="min-width:0;">
                         <div class="fw-bold" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">
                             <a href="#" onclick="event.preventDefault(); window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)" class="text-reset text-decoration-none">${name}</a>
                         </div>

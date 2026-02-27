@@ -104,7 +104,7 @@ export async function navigateTo(href, pushState = true) {
 
     // PERSISTENCE LOGIC START
     // If we are leaving a grid view (e.g. /leads/me) to go to a detail view, save the grid URL.
-    const isDetailView = /\/leads\/[0-9a-fA-F-]{36}/.test(href);
+    const isDetailView = /\/leads(?:_v2)?\/[0-9a-fA-F-]{36}/.test(href);
     if (isDetailView && window.location.pathname !== href) {
         localStorage.setItem('last_active_grid_url', window.location.pathname);
     }
