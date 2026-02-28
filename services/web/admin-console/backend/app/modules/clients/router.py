@@ -221,7 +221,7 @@ async def get_client_dashboard(client_id: UUID, current_user: AuthUser = Depends
                 "type": "grid-visual",
                 "label": "Directorio de Contactos",
                 "properties": {
-                    "data_url": f"/contacts?client_id={client_id}",
+                    "data_url": f"/contacts/data?client_id={client_id}",
                     "primary_key": "id",
                     "columns": [
                         {"id": "first_name", "label": "Nombre", "type": "text", "sortable": True},

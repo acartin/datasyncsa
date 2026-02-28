@@ -20,7 +20,7 @@ export function LinkFormContainer(component) {
         } else if (field.type === 'textarea') {
             inputHtml = `<textarea class="form-control" id="${fieldID}" name="${field.name}" rows="3" ${field.required ? 'required' : ''}></textarea>`;
         } else if (field.type === 'color') {
-            inputHtml = `<input type="color" class="form-control form-control-color w-100" id="${fieldID}" name="${field.name}" value="${field.value || '#000000'}" title="Choose your color">`;
+            inputHtml = `<input type="color" class="form-control form-control-color w-100" id="${fieldID}" name="${field.name}" value="${field.value || ('#' + '000000')}" title="Choose your color">`;
         } else if (field.type === 'file') {
             inputHtml = `
                 <input type="file" class="form-control" id="${fieldID}" name="${field.name}" accept="${field.accept || '*/*'}" 

@@ -26,6 +26,11 @@ export class GridBase {
         this.pollingInterval = null;
         this.lastDataSignature = null;
         this.selectedRowId = null;
+        this.didAutoSelectInitial = false;
+        this.isInitialized = false;
+        this.dataUrlTemplate = config.data_url_template || config.data_url || '';
+        this.masterValue = null;
+        this.masterSelectionListener = null;
 
         // 1. Registry
         this.registerInstance();
@@ -34,6 +39,8 @@ export class GridBase {
         if (this.config.enableFilters) {
             this.filters = new GridFilters(this);
         }
+
+        this.setupMasterDetailBinding();
     }
 
     registerInstance() {
@@ -55,6 +62,8 @@ export class GridBase {
 
             this.applySort();
             this.render();
+            this.maybeAutoSelectFirstRow();
+            this.isInitialized = true;
 
             // Setup Polling if enabled
             if (this.config.polling && !this.pollingInterval) {
@@ -72,6 +81,7 @@ export class GridBase {
 
                                 this.applySort();
                                 this.render();
+                                this.maybeAutoSelectFirstRow();
                             });
                         } else {
                             this.stopPolling();
@@ -94,6 +104,13 @@ export class GridBase {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
         try {
+            if (this.config.empty_until_master && this.config.master_grid_id && !this.masterValue) {
+                this.data = [];
+                this.filteredData = [];
+                this.lastDataSignature = '[]';
+                return true;
+            }
+
             // Append version/timestamp to avoid cache if needed, simplified here
             const url = `${window.AppConfig.API_BASE_URL}${this.config.data_url}`;
             const res = await fetch(url, { headers });
@@ -124,6 +141,9 @@ export class GridBase {
             this.lastDataSignature = nextSignature;
             this.data = nextData;
             this.filteredData = [...this.data];
+            if (this.selectedRowId && !this.data.some((item) => String(item?.id ?? '') === String(this.selectedRowId))) {
+                this.selectedRowId = null;
+            }
 
             // Re-apply filters if they exist (e.g. on refresh)
             if (this.filters && this.filters.hasActiveFilters()) {
@@ -262,8 +282,14 @@ export class GridBase {
         this.selectedRowId = rowId;
         this.render();
 
+        const row = this.data.find((item) => String(item?.id ?? '') === String(rowId));
+        window.__sduiGridSelection = window.__sduiGridSelection || {};
+        window.__sduiGridSelection[this.container.id] = { rowId, row: row || null };
+        window.dispatchEvent(new CustomEvent('sdui:grid-row-selected', {
+            detail: { gridId: this.container.id, rowId, row: row || null },
+        }));
+
         if (this.config.navigate_on_click) {
-            const row = this.data.find((item) => String(item?.id ?? '') === String(rowId));
             if (row) {
                 const navigateAction = this.config.actions?.find((a) => a.action === 'navigate');
                 const navigateUrlTemplate = this.config.navigate_url;
@@ -333,6 +359,7 @@ export class GridBase {
         await this.fetchData();
         this.applySort();
         this.render();
+        this.maybeAutoSelectFirstRow();
     }
 
     stopPolling() {
@@ -340,6 +367,68 @@ export class GridBase {
             clearInterval(this.pollingInterval);
             this.pollingInterval = null;
         }
+        if (this.masterSelectionListener) {
+            window.removeEventListener('sdui:grid-row-selected', this.masterSelectionListener);
+            this.masterSelectionListener = null;
+        }
+    }
+
+    setupMasterDetailBinding() {
+        const masterGridId = String(this.config.master_grid_id || '').trim();
+        if (!masterGridId) return;
+
+        this.masterSelectionListener = (event) => {
+            const detail = event?.detail || {};
+            if (String(detail.gridId || '') !== masterGridId) return;
+            this.applyMasterSelection(detail);
+        };
+
+        window.addEventListener('sdui:grid-row-selected', this.masterSelectionListener);
+
+        const remembered = window.__sduiGridSelection?.[masterGridId];
+        if (remembered && remembered.row) {
+            this.applyMasterSelection({
+                gridId: masterGridId,
+                rowId: remembered.rowId,
+                row: remembered.row,
+            });
+        }
+    }
+
+    applyMasterSelection(detail) {
+        const row = detail?.row || {};
+        const sourceField = String(this.config.master_row_field || 'id');
+        const nextMasterValue = row ? row[sourceField] : null;
+        this.masterValue = nextMasterValue ?? null;
+        this.config.context = {
+            ...(this.config.context || {}),
+            master_id: this.masterValue || '',
+            master_contact_name: String(row?.full_name || row?.name || '').trim(),
+        };
+
+        const token = String(this.config.master_url_token || '{master_id}');
+        const encoded = encodeURIComponent(String(this.masterValue || ''));
+        const template = this.dataUrlTemplate || this.config.data_url || '';
+        this.config.data_url = template.replaceAll(token, encoded);
+
+        this.currentPage = 1;
+        this.selectedRowId = null;
+        if (!this.isInitialized) return;
+        this.forceRender();
+    }
+
+    maybeAutoSelectFirstRow() {
+        if (!this.config.auto_select_first_row) return;
+        if (this.selectedRowId) return;
+        if (!Array.isArray(this.filteredData) || this.filteredData.length === 0) return;
+
+        const firstRow = this.filteredData[0] || {};
+        const rowKey = String(this.config.row_key || 'id');
+        const firstRowId = firstRow[rowKey] ?? firstRow.id;
+        if (!firstRowId) return;
+
+        this.didAutoSelectInitial = true;
+        this.handleRowClick(String(firstRowId));
     }
 
     // ABSTRACT METHODS

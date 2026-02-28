@@ -3,6 +3,7 @@
  * Contains the visual logic for specific column types (Pills, Gauges, Badges).
  * Used by hydration.js to keep the core engine generic.
  */
+import { ensureDynamicClass, isCssColor, resolveGaugeRampColorFrom100 } from './themeTokens.js';
 
 // Helper to find the row ID column index safely
 const getRowId = (row, gridColumns) => {
@@ -18,12 +19,18 @@ export const formatters = {
     scoringPillar: (cell, row, gridColumns) => {
         const score = (typeof cell === 'object') ? (cell.score || 0) : (parseInt(cell) || 0);
         const label = (typeof cell === 'object') ? (cell.label || '-') : '-';
-        const colorClass = (typeof cell === 'object') ? (cell.color || 'thermal-none') : 'thermal-none';
+        const color = (typeof cell === 'object') ? (cell.color || 'thermal-none') : 'thermal-none';
+        const isCustomColor = isCssColor(color);
+        const isThermalClass = typeof color === 'string' && color.startsWith('thermal-');
         const rowId = getRowId(row, gridColumns);
+        const customPillClass = isCustomColor ? ensureDynamicClass('fmtpill', `color:${color};border-color:${color} !important;`) : '';
+        const visualClass = isCustomColor
+            ? `thermal-pill ${customPillClass}`
+            : `thermal-pill ${isThermalClass ? color : `text-${color}`}`;
 
         return `
             <div class="text-center" title="Score: ${score}">
-                <a href="javascript:void(0)" onclick="window.navigateTo('/dashboard/leads/${rowId}')" class="thermal-pill ${colorClass}">${label}</a>
+                <a href="javascript:void(0)" onclick="window.navigateTo('/dashboard/leads/${rowId}')" class="${visualClass}">${label}</a>
             </div>
         `;
     },
@@ -37,11 +44,7 @@ export const formatters = {
         const name = (typeof cell === 'object') ? (cell.name || '') : '';
         const rowId = getRowId(row, gridColumns);
 
-        let color = '#475569';
-        if (score >= 90) color = '#f06548'; // Danger
-        else if (score >= 70) color = '#f7b84b'; // Warning
-        else if (score >= 50) color = '#4b38b3'; // Primary
-        else if (score >= 20) color = '#0ab39c'; // Success
+        const color = resolveGaugeRampColorFrom100(score);
 
         const r = 14;
         const c = 2 * Math.PI * r;
@@ -49,16 +52,16 @@ export const formatters = {
 
         return `
             <a href="javascript:void(0)" onclick="window.navigateTo('/dashboard/leads/${rowId}')" class="d-flex align-items-center text-decoration-none shadow-none">
-                <div class="me-2 position-relative" style="width: 32px; height: 32px; cursor: pointer;">
+                <div class="me-2 position-relative gauge-id-wrap">
                     <svg width="32" height="32" viewBox="0 0 32 32">
-                        <circle cx="16" cy="16" r="${r}" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity: 0.1"></circle>
+                        <circle class="gauge-id-track" cx="16" cy="16" r="${r}" fill="none" stroke="currentColor" stroke-width="2.5"></circle>
                         <circle cx="16" cy="16" r="${r}" fill="none" stroke="${color}" stroke-width="2.5" 
                             stroke-dasharray="${c}" stroke-dashoffset="${offset}" 
                             stroke-linecap="round" transform="rotate(-90 16 16)"></circle>
                         <text x="50%" y="50%" text-anchor="middle" dy=".35em" font-size="10.5" font-weight="700" fill="currentColor">${score}</text>
                     </svg>
                 </div>
-                <div><h6 class="mb-0 fs-13 fw-medium text-body text-truncate" style="max-width: 180px;">${name}</h6></div>
+                <div><h6 class="mb-0 fs-13 fw-medium text-body text-truncate gauge-id-name">${name}</h6></div>
             </a>
         `;
     },
@@ -68,9 +71,13 @@ export const formatters = {
      * Supports mapping values to specific colors.
      */
     badge: (cell, col) => {
-        const label = (typeof cell === 'object') ? (cell.label || cell.name || JSON.stringify(cell)) : cell;
+        const rawLabel = (typeof cell === 'object') ? (cell.label || cell.name || JSON.stringify(cell)) : cell;
+        const normalizedLabel = String(rawLabel ?? '').trim();
+        const label = (normalizedLabel && normalizedLabel.toLowerCase() !== 'undefined' && normalizedLabel.toLowerCase() !== 'null')
+            ? normalizedLabel
+            : '-';
         const color = (typeof cell === 'object' && cell.color) ? cell.color : (col.color || 'primary');
-        const mapKey = String(label);
+        const mapKey = String(label).toLowerCase();
         const badgeColor = (col.badge_map && col.badge_map[mapKey]) ? col.badge_map[mapKey] : color;
         const displayLabel = col.uppercase ? String(label).toUpperCase() : label;
         return `<span class="badge bg-${badgeColor}-subtle text-${badgeColor} border border-${badgeColor}-subtle px-2 py-1">${displayLabel}</span>`;
@@ -85,7 +92,8 @@ export const formatters = {
             const maxWidth = Number(col.max_width) || 520;
             const trimmed = cell.length > limit ? `${cell.substring(0, limit)}...` : cell;
             const safeTitle = cell.replace(/"/g, '&quot;');
-            return `<span class="d-inline-block text-truncate align-middle" style="max-width:${maxWidth}px;" title="${safeTitle}">${trimmed}</span>`;
+            const maxWidthClass = ensureDynamicClass('fmttrunc', `max-width:${maxWidth}px;`);
+            return `<span class="d-inline-block text-truncate align-middle ${maxWidthClass}" title="${safeTitle}">${trimmed}</span>`;
         }
         return cell;
     }

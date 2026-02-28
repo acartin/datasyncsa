@@ -84,14 +84,14 @@ async function init() {
         console.error('Render Error:', error);
         // EMERGENCY MODE UI
         document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#222; color:#fff; font-family:sans-serif;">
-                <h1 style="color:#ff6b6b">⚠️ EMERGENCY MODE</h1>
+            <div class="ac-emergency-screen">
+                <h1 class="ac-emergency-title">⚠️ EMERGENCY MODE</h1>
                 <p>The Application failed to initialize.</p>
-                <div style="background:#334; padding:15px; border-radius:5px; margin:20px 0; width: 80%; max-width: 800px;">
-                    <textarea readonly style="width:100%; height:150px; background:#111; color:#ffeb3b; border:1px solid #555; padding:10px; font-family:monospace; font-size:12px; resize:none;">${(error.stack || error.message || JSON.stringify(error) || "Unknown Error")}</textarea>
-                    <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='COPIED!'" style="display:block; width:100%; margin-top:10px; padding:10px; background:#00bd9d; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">COPY ERROR TO CLIPBOARD</button>
+                <div class="ac-emergency-box">
+                    <textarea readonly class="ac-emergency-textarea">${(error.stack || error.message || JSON.stringify(error) || "Unknown Error")}</textarea>
+                    <button type="button" class="ac-emergency-copy-btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='COPIED!'">COPY ERROR TO CLIPBOARD</button>
                 </div>
-                <button onclick="window.location.reload()" style="padding:10px 20px; background:#4b38b3; color:white; border:none; border-radius:4px; cursor:pointer;">
+                <button class="ac-emergency-retry-btn" onclick="window.location.reload()">
                     Retry Connection
                 </button>
             </div>

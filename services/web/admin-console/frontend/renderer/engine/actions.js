@@ -333,6 +333,7 @@ export async function openGenericModal(schema, url, method, title, data = {}) {
         await hydrateSelect(select);
     }
     bindDependentSelects(modalEl);
+    bindDynamicPlaceholders(modalEl);
     initJsonEditors(modalEl);
 }
 
@@ -375,6 +376,33 @@ function bindDependentSelects(modalEl) {
             depSelect.dataset.value = '';
             await hydrateSelect(depSelect);
         });
+    });
+}
+
+function bindDynamicPlaceholders(modalEl) {
+    const placeholderInputs = modalEl.querySelectorAll('input[data-placeholder-source][data-placeholder-map]');
+    placeholderInputs.forEach((input) => {
+        const sourceName = input.dataset.placeholderSource;
+        if (!sourceName) return;
+        const sourceField = modalEl.querySelector(`[name="${sourceName}"]`);
+        if (!sourceField) return;
+
+        let map = {};
+        try {
+            map = JSON.parse(input.dataset.placeholderMap || '{}');
+        } catch (_error) {
+            map = {};
+        }
+        const fallback = input.getAttribute('placeholder') || '';
+
+        const applyPlaceholder = () => {
+            const key = String(sourceField.value || '').trim().toLowerCase();
+            const next = map[key] || map.other || fallback;
+            input.setAttribute('placeholder', next || '');
+        };
+
+        sourceField.addEventListener('change', applyPlaceholder);
+        applyPlaceholder();
     });
 }
 
@@ -580,7 +608,7 @@ window.addRepeaterItem = async (name, source) => {
     const container = document.querySelector(`#repeater-${name} .repeater-list`);
     const itemHtml = `
         <div class="repeater-item d-flex gap-2 mb-2 align-items-center">
-            <select class="form-select form-select-sm category-select" style="width: 140px;" data-source="${source}">
+            <select class="form-select form-select-sm category-select category-select-width" data-source="${source}">
                 <option value="">Category...</option>
             </select>
             <input type="text" class="form-control form-control-sm value-input" placeholder="Value...">

@@ -2,6 +2,7 @@
 import { GridBase } from './GridBase.js';
 import { formatters } from './formatters.js';
 import { resolveActionUrl, resolveSchemaB64 } from './actionContract.js';
+import { ensureDynamicClass } from './themeTokens.js';
 
 /**
  * TableGrid - Generic Grid Implementation
@@ -26,18 +27,18 @@ export class TableGrid extends GridBase {
 
     renderSkeleton() {
         this.container.innerHTML = `
-            <div class="table-grid-wrapper" style="min-height: 500px; display: flex; flex-direction: column; width: 100%; max-width: 100%; min-width: 0; overflow: hidden;">
+            <div class="table-grid-wrapper table-grid-shell">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 grid-header-controls">
                     <!-- Filters will inject here -->
                     <div class="grid-header-actions d-flex gap-2"></div>
-                    <div id="${this.container.id}-loader" class="text-muted small ms-auto" style="display:none;">Loading...</div>
+                    <div id="${this.container.id}-loader" class="text-muted small ms-auto table-grid-loader">Loading...</div>
                 </div>
-                <div class="table-responsive" style="flex: 1; width: 100%; max-width: 100%; min-width: 0; overflow-x: auto;">
-                    <table class="table table-hover align-middle mb-0" style="width: 100%;">
+                <div class="table-responsive table-grid-responsive">
+                    <table class="table table-hover align-middle mb-0 table-grid-table">
                         <thead class="table-light text-muted">
                             <tr>${this.config.columns.map(c => `
-                                <th class="sortable text-uppercase" onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')" style="cursor:pointer; font-size:11px; font-weight:600;">
-                                    ${c.label || c.name}
+                                <th class="sortable text-uppercase table-grid-head" onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')">
+                                    ${this.getColumnHeaderLabel(c)}
                                 </th>`).join('')}
                                 ${this.actions.length > 0 ? '<th></th>' : ''}
                             </tr>
@@ -78,10 +79,10 @@ export class TableGrid extends GridBase {
             const sortIcon = isSorted ? `<span class="ms-1 text-primary">${pageIcons[this.sortState.direction]}</span>` : '';
             return `
                         <th class="sortable cursor-pointer" onclick="window.gridInstances['${this.container.id}'].handleSort('${c.id}')">
-                            ${c.label || c.name} ${sortIcon}
+                            ${this.getColumnHeaderLabel(c)} ${sortIcon}
                         </th>`;
         }).join('')}
-                ${this.actions.length > 0 ? '<th style="width: 50px;"></th>' : ''}
+                ${this.actions.length > 0 ? '<th class="table-grid-actions-col"></th>' : ''}
             </tr>
         `;
 
@@ -91,7 +92,7 @@ export class TableGrid extends GridBase {
             const isSelected = String(this.selectedRowId ?? '') === String(rowId);
             const selectedClass = isSelected ? 'grid-row-selected' : '';
             return `
-            <tr class="${selectedClass}" style="cursor: pointer;" onclick="window.gridInstances['${this.container.id}'].handleRowClick('${rowId}', event)" ondblclick="window.gridInstances['${this.container.id}'].handleRowDoubleClick('${rowId}', event)">
+            <tr class="${selectedClass} table-grid-row-clickable" onclick="window.gridInstances['${this.container.id}'].handleRowClick('${rowId}', event)" ondblclick="window.gridInstances['${this.container.id}'].handleRowDoubleClick('${rowId}', event)">
                 ${this.config.columns.map(col => `<td>${this.renderCell(row, col)}</td>`).join('')}
                 ${this.actions.length > 0 ? `<td>${this.renderActions(row)}</td>` : ''}
             </tr>
@@ -126,16 +127,32 @@ export class TableGrid extends GridBase {
 
         const encodeB64 = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj || {}))));
 
-        const contextTokens = this.config.context || {};
+        const contextTokens = {
+            ...(this.config.context || {}),
+            ...(this.masterValue ? { master_id: this.masterValue } : {}),
+        };
 
         const buttons = this.headerActions.map(act => {
+            if (act.requires_master && !contextTokens.master_id) {
+                if (act.show_disabled_when_locked) {
+                    const lockedColor = act.color || 'secondary';
+                    const lockedIcon = act.icon || 'ri-lock-line';
+                    const lockedLabel = act.locked_label || act.label || 'Bloqueado';
+                    return `
+                        <button class="btn btn-${lockedColor} btn-sm waves-effect waves-light" disabled>
+                            <i class="${lockedIcon} me-1 align-bottom"></i> ${lockedLabel}
+                        </button>
+                    `;
+                }
+                return '';
+            }
             const schemaToPass = resolveSchemaB64(act, {
                 formSchema: this.config.form_schema,
                 fallbackSchema: this.schemaStr
             });
 
-            const url = resolveActionUrl(act);
-            const modalTitle = act.modal_title || act.label;
+            const url = resolveActionUrl(act, contextTokens);
+            const modalTitle = resolveTokens(act.modal_title || act.label, contextTokens);
             const color = act.color || 'primary';
             const icon = act.icon || 'ri-add-line';
 
@@ -164,6 +181,13 @@ export class TableGrid extends GridBase {
         container.innerHTML = buttons;
     }
 
+    getColumnHeaderLabel(col) {
+        if (col && Object.prototype.hasOwnProperty.call(col, 'label')) {
+            return col.label ?? '';
+        }
+        return col?.name ?? '';
+    }
+
     renderCell(row, col) {
         let cellValue = row[col.id];
 
@@ -177,8 +201,9 @@ export class TableGrid extends GridBase {
 
         // Color Swatch Renderer
         if (col.type === 'color') {
+            const dynamicColorClass = ensureDynamicClass('tblswatch', `background-color:${cellValue};`);
             return `<div class="d-flex align-items-center gap-2">
-                <div style="width: 24px; height: 24px; border-radius: 4px; background-color: ${cellValue}; border: 1px solid rgba(0,0,0,0.1);"></div>
+                <div class="table-grid-color-swatch ${dynamicColorClass}"></div>
                 <span class="text-muted small">${cellValue}</span>
             </div>`;
         }
@@ -186,9 +211,12 @@ export class TableGrid extends GridBase {
         // Icon Renderer (expects Remix class like ri-*)
         if (col.type === 'icon') {
             if (typeof cellValue === 'string' && cellValue.startsWith('ri-')) {
+                if (col.icon_only) {
+                    return `<span class="d-inline-flex align-items-center"><i class="${cellValue} fs-18"></i></span>`;
+                }
                 return `<span class="d-inline-flex align-items-center gap-2"><i class="${cellValue} fs-18"></i><span class="text-muted small">${cellValue}</span></span>`;
             }
-            return `<span class="text-muted small">${cellValue}</span>`;
+            return col.icon_only ? '' : `<span class="text-muted small">${cellValue}</span>`;
         }
 
         if (col.truncate && formatters.truncate) {

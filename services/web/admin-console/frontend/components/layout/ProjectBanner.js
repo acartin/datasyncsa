@@ -48,7 +48,7 @@ export function LinkProjectBanner(data) {
                                 </div>
                             </div>
 
-                            <ul class="nav nav-tabs-custom border-bottom-0" role="tablist">
+                            <ul class="nav nav-tabs-custom nav-success border-bottom-0" role="tablist">
                                 <li class="nav-item">
                                     <a class="nav-link active fw-semibold" data-bs-toggle="tab" href="#project-overview" role="tab">
                                         Resumen

@@ -68,6 +68,7 @@ async function _hydrateStandardGrids(grids) {
         const instance = new TableGrid(container, {
             grid_id: gridId,
             data_url: container.dataset.url,
+            data_url_template: container.dataset.urlTemplate || '',
             // StandardGrid expected these in the constructor, but TableGrid/GridBase wants them in config
             columns: JSON.parse(container.dataset.columns || '[]'),
             actions: JSON.parse(container.dataset.actions || '[]'),
@@ -76,6 +77,11 @@ async function _hydrateStandardGrids(grids) {
             navigate_on_click: container.dataset.navigateOnClick === 'true',
             navigate_url: container.dataset.navigateUrl || '',
             filterConfig: JSON.parse(container.dataset.filterConfig || '{}'),
+            master_grid_id: container.dataset.masterGridId || '',
+            master_row_field: container.dataset.masterRowField || 'id',
+            master_url_token: container.dataset.masterUrlToken || '{master_id}',
+            empty_until_master: container.dataset.emptyUntilMaster === 'true',
+            auto_select_first_row: container.dataset.autoSelectFirstRow === 'true',
             form_schema: (() => {
                 const s = container.dataset.schema;
                 if (!s) return [];

@@ -49,7 +49,7 @@ function MenuItem(item) {
 
         return `
             <li class="nav-item">
-                <a class="nav-link menu-link" href="#sidebar${itemID}" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebar${itemID}">
+                <a class="nav-link menu-link collapsed" href="#sidebar${itemID}" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebar${itemID}">
                     ${item.icon ? `<i class="${item.icon}"></i>` : ''} 
                     <span data-key="t-${itemID}">${item.label}</span>
                 </a>

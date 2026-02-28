@@ -100,7 +100,6 @@ export function LinkAuditSplitView(component) {
     const meta = (props.chat_meta && typeof props.chat_meta === 'object') ? props.chat_meta : {};
     const leftTitle = escapeHtml(String(props.left_title || 'Extracted data'));
     const rightTitle = escapeHtml(String(props.right_title || 'Reconstruccion del chat'));
-    const auditId = `audit-${Math.random().toString(36).slice(2, 8)}`;
 
     const fieldsHtml = fields.length
         ? fields.map((field) => `
@@ -126,20 +125,54 @@ export function LinkAuditSplitView(component) {
         : '';
 
     const messagesHtml = messages.length
-        ? messages.map((message) => `
-            <div class="audit-msg-row audit-msg-${message.roleKey}">
-                <div class="audit-msg-bubble">
-                    <div class="audit-msg-role">${message.roleLabel}</div>
-                    <div class="audit-msg-text">${message.content}</div>
-                    ${message.timestamp ? `<div class="audit-msg-time">${message.timestamp}</div>` : ''}
-                </div>
-            </div>
-        `).join('')
+        ? messages.map((message) => {
+            if (message.roleKey === 'system') {
+                return `
+                    <li class="chat-day-title">
+                        <span class="title">${message.content}</span>
+                    </li>
+                `;
+            }
+
+            const sideClass = message.roleKey === 'user' ? 'right' : 'left';
+            const avatarHtml = message.roleKey === 'user'
+                ? ''
+                : `
+                    <div class="chat-avatar">
+                        <div class="avatar-xs">
+                            <div class="avatar-title rounded-circle ${message.roleKey === 'assistant' ? 'bg-info-subtle text-info' : 'bg-secondary-subtle text-secondary'}">
+                                ${message.roleKey === 'assistant' ? 'IA' : 'SYS'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            return `
+                <li class="chat-list ${sideClass}" id="audit-${escapeHtml(message.id)}">
+                    <div class="conversation-list">
+                        ${avatarHtml}
+                        <div class="user-chat-content">
+                            <div class="ctext-wrap">
+                                <div class="ctext-wrap-content">
+                                    <p class="mb-0 ctext-content">${message.content}</p>
+                                </div>
+                            </div>
+                            <div class="conversation-name">
+                                <span class="d-none name">${message.roleLabel}</span>
+                                ${message.timestamp ? `<small class="text-muted time">${message.timestamp}</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </li>
+            `;
+        }).join('')
         : `
-            <div class="audit-empty-chat">
-                <i class="ri-chat-off-line fs-2 text-muted"></i>
-                <p class="mb-0 mt-2 text-muted">No hay mensajes para reconstruir.</p>
-            </div>
+            <li>
+                <div class="audit-empty-chat">
+                    <i class="ri-chat-off-line fs-2 text-muted"></i>
+                    <p class="mb-0 mt-2 text-muted">No hay mensajes para reconstruir.</p>
+                </div>
+            </li>
         `;
 
     const chatMeta = [
@@ -153,183 +186,7 @@ export function LinkAuditSplitView(component) {
         : '';
 
     return `
-        <style>
-            .audit-layout-${auditId} {
-                display: grid;
-                grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
-                gap: 16px;
-            }
-            .audit-panel {
-                border: 1px solid var(--vz-border-color);
-                border-radius: 12px;
-                background: var(--vz-secondary-bg);
-                min-height: 560px;
-                overflow: hidden;
-            }
-            .audit-panel-head {
-                padding: 12px 14px;
-                border-bottom: 1px solid var(--vz-border-color);
-                background: color-mix(in srgb, var(--vz-body-bg), transparent 25%);
-            }
-            .audit-panel-title {
-                margin: 0;
-                font-size: 12px;
-                font-weight: 700;
-                letter-spacing: 0.04em;
-                text-transform: uppercase;
-                color: var(--vz-secondary-color);
-            }
-            .audit-left-scroll {
-                max-height: 515px;
-                overflow-y: auto;
-                padding: 12px;
-            }
-            .audit-block {
-                border: 1px solid var(--vz-border-color);
-                border-radius: 10px;
-                background: var(--vz-body-bg);
-                padding: 10px;
-            }
-            .audit-field-row + .audit-field-row {
-                margin-top: 10px;
-                padding-top: 10px;
-                border-top: 1px dashed var(--vz-border-color-translucent, var(--vz-border-color));
-            }
-            .audit-field-label {
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.04em;
-                color: var(--vz-secondary-color);
-                margin-bottom: 4px;
-            }
-            .audit-field-value {
-                font-size: 14px;
-                color: var(--vz-body-color);
-                word-break: break-word;
-            }
-            .audit-section-title {
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.04em;
-                color: var(--vz-secondary-color);
-                margin-bottom: 8px;
-            }
-            .audit-evidence-item + .audit-evidence-item {
-                margin-top: 10px;
-            }
-            .audit-evidence-title {
-                font-size: 12px;
-                font-weight: 600;
-                color: var(--vz-body-color);
-                margin-bottom: 6px;
-            }
-            .audit-json {
-                max-height: 180px;
-                overflow: auto;
-                padding: 8px;
-                border-radius: 8px;
-                border: 1px solid var(--vz-border-color);
-                background: var(--vz-body-bg);
-                color: var(--vz-body-color);
-                font-size: 12px;
-            }
-            .audit-chat-meta {
-                margin-top: 4px;
-                font-size: 12px;
-                color: var(--vz-secondary-color);
-            }
-            .audit-chat-summary {
-                margin-top: 8px;
-                font-size: 12px;
-                color: var(--vz-body-color);
-            }
-            .audit-chat-body {
-                max-height: 515px;
-                overflow-y: auto;
-                padding: 14px;
-                background:
-                    radial-gradient(circle at 15% 15%, color-mix(in srgb, var(--vz-primary), transparent 92%), transparent 45%),
-                    radial-gradient(circle at 85% 85%, color-mix(in srgb, var(--vz-info), transparent 93%), transparent 45%),
-                    var(--vz-body-bg);
-            }
-            .audit-msg-row {
-                display: flex;
-                margin-bottom: 10px;
-            }
-            .audit-msg-row.audit-msg-user {
-                justify-content: flex-end;
-            }
-            .audit-msg-row.audit-msg-assistant {
-                justify-content: flex-start;
-            }
-            .audit-msg-row.audit-msg-system {
-                justify-content: center;
-            }
-            .audit-msg-bubble {
-                max-width: min(88%, 720px);
-                border-radius: 12px;
-                border: 1px solid var(--vz-border-color);
-                padding: 10px 12px;
-                background: var(--vz-secondary-bg);
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            }
-            .audit-msg-user .audit-msg-bubble {
-                background: color-mix(in srgb, var(--vz-success), transparent 88%);
-                border-color: color-mix(in srgb, var(--vz-success), transparent 60%);
-            }
-            .audit-msg-assistant .audit-msg-bubble {
-                background: color-mix(in srgb, var(--vz-info), transparent 90%);
-                border-color: color-mix(in srgb, var(--vz-info), transparent 62%);
-            }
-            .audit-msg-system .audit-msg-bubble {
-                background: color-mix(in srgb, var(--vz-secondary-color), transparent 90%);
-            }
-            .audit-msg-role {
-                font-size: 10px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: var(--vz-secondary-color);
-                margin-bottom: 4px;
-            }
-            .audit-msg-text {
-                white-space: pre-wrap;
-                overflow-wrap: anywhere;
-                color: var(--vz-body-color);
-                font-size: 14px;
-                line-height: 1.42;
-            }
-            .audit-msg-time {
-                margin-top: 6px;
-                font-size: 11px;
-                color: var(--vz-secondary-color);
-            }
-            .audit-empty-chat {
-                min-height: 240px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                border: 1px dashed var(--vz-border-color);
-                border-radius: 10px;
-                background: var(--vz-secondary-bg);
-            }
-            @media (max-width: 992px) {
-                .audit-layout-${auditId} {
-                    grid-template-columns: 1fr;
-                }
-                .audit-panel {
-                    min-height: 420px;
-                }
-                .audit-left-scroll,
-                .audit-chat-body {
-                    max-height: 360px;
-                }
-            }
-        </style>
-        <div class="audit-layout-${auditId}">
+        <div class="audit-layout">
             <section class="audit-panel">
                 <div class="audit-panel-head">
                     <h6 class="audit-panel-title">${leftTitle}</h6>
@@ -348,8 +205,10 @@ export function LinkAuditSplitView(component) {
                     ${chatMeta ? `<div class="audit-chat-meta">${chatMeta}</div>` : ''}
                     ${summaryHtml}
                 </div>
-                <div class="audit-chat-body">
-                    ${messagesHtml}
+                <div class="chat-conversation p-3 p-lg-4 audit-chat-body">
+                    <ul class="list-unstyled chat-conversation-list mb-0">
+                        ${messagesHtml}
+                    </ul>
                 </div>
             </section>
         </div>

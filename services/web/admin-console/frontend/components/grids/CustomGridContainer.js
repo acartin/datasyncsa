@@ -14,7 +14,7 @@ export function LinkCustomGridContainer(component) {
              data-filter-config='${JSON.stringify(filterConfig)}'>
              <div class="card-body p-3">
                 <!-- Engine will hydrate here -->
-                <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+                <div class="d-flex justify-content-center align-items-center custom-grid-loading">
                     <span class="spinner-border text-primary me-2"></span> Initializing Beta Engine...
                 </div>
              </div>

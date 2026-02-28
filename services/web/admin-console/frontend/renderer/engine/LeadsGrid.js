@@ -1,6 +1,7 @@
 
 import { GridBase } from './GridBase.js';
 import { resolveActionUrl } from './actionContract.js';
+import { ensureDynamicClass, isCssColor, resolveScoreTierColor, resolveUiColor } from './themeTokens.js';
 
 export class LeadsGrid extends GridBase {
     constructor(container, config) {
@@ -33,92 +34,13 @@ export class LeadsGrid extends GridBase {
                     <ul id="${this.container.id}-pager" class="pagination pagination-sm mb-0"></ul>
                 </div>
             </div>
-            <style>
-                .custom-grid-wrapper th {
-                    cursor: pointer;
-                    user-select: none;
-                    transition: all 0.2s ease;
-                    background-color: var(--vz-light);
-                    color: var(--vz-body-color);
-                    font-size: 13px;
-                    font-weight: 600;
-                    letter-spacing: 0.01em;
-                    text-transform: none;
-                    white-space: nowrap;
-                    vertical-align: middle;
-                }
-                .custom-grid-wrapper th:hover { background-color: var(--vz-secondary-bg-subtle) !important; color: var(--vz-secondary) !important; }
-                .badge-pill-custom { padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; display: inline-block; min-width: 80px; text-align: center; background: transparent !important; }
-                .sort-icon { margin-left: 5px; opacity: 0.5; font-size: 20px; font-weight: bold; }
-                .active-sort { opacity: 1; color: var(--vz-primary); font-size: 20px; font-weight: bold; }
-                .custom-grid-wrapper th.sorted-column { background-color: var(--vz-secondary-bg-subtle) !important; }
-                .grid-head-icon {
-                    font-size: 1.15em;
-                    line-height: inherit;
-                    opacity: 0.7;
-                    vertical-align: -1px;
-                }
-                .grid-head-sort {
-                    margin-left: 6px;
-                    font-size: 13px;
-                    opacity: 0.85;
-                    display: inline-block;
-                    line-height: 1;
-                }
-                .lead-identity-wrap { min-width: 0; }
-                .lead-score-btn {
-                    min-width: 40px;
-                    height: 28px;
-                    padding: 0 10px;
-                    flex-shrink: 0;
-                    border-radius: 8px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    font-weight: 700;
-                    line-height: 1;
-                    font-variant-numeric: tabular-nums;
-                }
-            </style>
         `;
     }
 
-    _isCssColor(value) {
-        if (typeof value !== 'string') return false;
-        const c = value.trim();
-        return (
-            c.startsWith('#') ||
-            c.startsWith('rgb(') ||
-            c.startsWith('rgba(') ||
-            c.startsWith('hsl(') ||
-            c.startsWith('hsla(') ||
-            c.startsWith('var(')
-        );
-    }
-
     _resolveIdentityColor(rawColor, score) {
-        if (this._isCssColor(rawColor)) return rawColor;
-
-        const token = String(rawColor || '').trim().toLowerCase();
-        const thermalPalette = {
-            'thermal-extreme': '#f06548',
-            'thermal-high': '#f7b84b',
-            'thermal-mid': '#4b38b3',
-            'thermal-low': '#0ab39c',
-            'thermal-none': 'var(--vz-secondary-color)',
-            'thermal-info': '#299cdb'
-        };
-        if (thermalPalette[token]) return thermalPalette[token];
-
-        const bootstrapToken = new Set([
-            'primary', 'secondary', 'success', 'info', 'warning', 'danger', 'light', 'dark'
-        ]);
-        if (bootstrapToken.has(token)) return `var(--vz-${token})`;
-
-        if (score >= 8) return '#0AB39C';
-        if (score >= 4) return '#F7B84B';
-        return '#4F7CF3';
+        const resolved = resolveUiColor(rawColor, '');
+        if (resolved) return resolved;
+        return resolveScoreTierColor(score);
     }
 
     _formatScore(value) {
@@ -187,7 +109,7 @@ export class LeadsGrid extends GridBase {
 
         // Render Body
         const tbody = rows.map(row => `
-            <tr onclick="window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)" style="cursor: pointer;">
+            <tr class="custom-grid-row-clickable" onclick="window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)">
                 ${this.config.columns.map(col => `<td>${this.renderCell(row, col)}</td>`).join('')}
                 <td onclick="event.stopPropagation()">${this.renderActions(row)}</td>
             </tr>
@@ -212,21 +134,19 @@ export class LeadsGrid extends GridBase {
             const displayScore = this._formatScore(score);
             const normalized = Math.max(0, Math.min(10, Number.isFinite(score) ? score : 0));
             const toneColor = this._resolveIdentityColor(identity.color, normalized);
-            const scoreButtonStyle = [
-                `color:${toneColor}`,
-                `border:1px solid ${toneColor}`,
-                'background-color: transparent',
-                `background: color-mix(in srgb, ${toneColor}, transparent 88%)`
-            ].join(';');
+            const scoreButtonClass = ensureDynamicClass(
+                'leadscorebtn',
+                `color:${toneColor};border:1px solid ${toneColor};background-color:transparent;background:color-mix(in srgb, ${toneColor}, transparent 88%);`
+            );
 
             return `
                 <div class="d-flex align-items-center lead-identity-wrap">
-                    <span class="lead-score-btn me-2" style="${scoreButtonStyle}" title="Score: ${displayScore}/10">${displayScore}</span>
-                    <div style="min-width:0;">
-                        <div class="fw-bold" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">
+                    <span class="lead-score-btn me-2 ${scoreButtonClass}" title="Score: ${displayScore}/10">${displayScore}</span>
+                    <div class="lead-identity-meta">
+                        <div class="fw-bold lead-identity-name">
                             <a href="#" onclick="event.preventDefault(); window.gridInstances['${this.container.id}'].handleRowNavigate('${row.id}', event)" class="text-reset text-decoration-none">${name}</a>
                         </div>
-                        <div class="text-muted" style="font-size:10px;">${email}</div>
+                        <div class="text-muted lead-identity-email">${email}</div>
                     </div>
                 </div>
             `;
@@ -237,19 +157,14 @@ export class LeadsGrid extends GridBase {
             const item = row[col.id] || {};
             const label = item.label || null;
             const rawColor = item.color || 'secondary';
-            const isCssColor = typeof rawColor === 'string' && (
-                rawColor.startsWith('#') ||
-                rawColor.startsWith('rgb(') ||
-                rawColor.startsWith('rgba(') ||
-                rawColor.startsWith('hsl(') ||
-                rawColor.startsWith('hsla(') ||
-                rawColor.startsWith('var(')
-            );
+            const isCustomColor = isCssColor(rawColor);
+            const isThermalClass = typeof rawColor === 'string' && rawColor.startsWith('thermal-');
             const icon = item.icon || '';
+            const customIconClass = isCustomColor ? ensureDynamicClass('leadicon', `color:${rawColor};`) : '';
             const iconHtml = icon
                 ? (
                     icon.startsWith('ri-')
-                        ? `<i class="${icon} me-2 align-middle fs-22 ${isCssColor ? '' : `text-${rawColor}`}" ${isCssColor ? `style="color:${rawColor};"` : ''}></i>`
+                        ? `<i class="${icon} me-2 align-middle fs-22 ${isCustomColor ? customIconClass : (isThermalClass ? rawColor : `text-${rawColor}`)}"></i>`
                         : `<span class="me-2 align-middle">${icon}</span>`
                 )
                 : '';
@@ -262,8 +177,12 @@ export class LeadsGrid extends GridBase {
 
             // Default Pill Style
             const displayLabel = label || '-';
-            if (isCssColor) {
-                return `<span class="badge-pill-custom border" style="color:${rawColor}; border-color:${rawColor} !important;">${displayLabel.toUpperCase()}</span>`;
+            if (isCustomColor) {
+                const customPillClass = ensureDynamicClass('leadpill', `color:${rawColor};border-color:${rawColor} !important;`);
+                return `<span class="badge-pill-custom border ${customPillClass}">${displayLabel.toUpperCase()}</span>`;
+            }
+            if (isThermalClass) {
+                return `<span class="badge-pill-custom border badge-pill-thermal ${rawColor}">${displayLabel.toUpperCase()}</span>`;
             }
             return `<span class="badge-pill-custom text-${rawColor} border border-${rawColor}">${displayLabel.toUpperCase()}</span>`;
         }

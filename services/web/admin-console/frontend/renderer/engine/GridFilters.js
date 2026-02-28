@@ -4,6 +4,26 @@
  */
 import { resolveActionUrl, resolveSchemaB64 } from './actionContract.js';
 
+function cssVar(name, fallback = '') {
+    if (typeof window === 'undefined' || !window.getComputedStyle) return fallback;
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+}
+
+function getSwalThemeOptions() {
+    return {
+        background: cssVar('--vz-body-bg', 'var(--vz-body-bg)'),
+        color: cssVar('--vz-body-color', 'var(--vz-body-color)'),
+    };
+}
+
+function getSwalActionColors() {
+    return {
+        confirmButtonColor: cssVar('--ac-color-danger', 'var(--ac-color-danger)'),
+        cancelButtonColor: cssVar('--ac-color-muted', 'var(--ac-color-muted)'),
+    };
+}
+
 class GridFilters {
     constructor(grid) {
         this.grid = grid;
@@ -26,8 +46,6 @@ class GridFilters {
     showToast(icon, title, text) {
         if (!window.Swal) return;
 
-        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-
         window.Swal.fire({
             icon: icon,
             title: title,
@@ -36,8 +54,7 @@ class GridFilters {
             showConfirmButton: false,
             position: 'top-end',
             toast: true,
-            background: isDark ? '#2a2f34' : '#fff',
-            color: isDark ? '#adb5bd' : '#495057'
+            ...getSwalThemeOptions()
         });
     }
 
@@ -67,7 +84,7 @@ class GridFilters {
         const html = `
             <div class="filter-bar mb-3">
                 <div class="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center grid-filter-topbar">
-                    <div class="grid-filter-search flex-grow-1" style="min-width: 260px;">
+                    <div class="grid-filter-search flex-grow-1 grid-filter-search-min">
                         <div class="search-box position-relative">
                             <input type="text" 
                                    class="form-control search ps-5" 
@@ -82,7 +99,7 @@ class GridFilters {
                             <button class="btn btn-ghost-secondary btn-sm fs-13 fw-normal dropdown-toggle text-body" type="button" data-bs-toggle="dropdown">
                                 <i class="icon"></i> Vistas
                             </button>
-                            <div class="dropdown-menu dropdown-menu-end" style="min-width: 200px;">
+                            <div class="dropdown-menu dropdown-menu-end grid-filter-dropdown-menu">
                                 <h6 class="dropdown-header fs-11 text-muted text-uppercase fw-semibold">Vistas Guardadas</h6>
                                 ${this.presets.length > 0 ? this.presets.map(p => {
             // Check if icon is a Remix Icon class or emoji
@@ -91,24 +108,14 @@ class GridFilters {
                 : (p.icon || '📁');
 
             return `
-                                    <div class="dropdown-item-wrapper position-relative" style="padding: 0;">
-                                        <style>
-                                            .dropdown-item-wrapper:hover .delete-preset-btn {
-                                                opacity: 1;
-                                            }
-                                            .delete-preset-btn {
-                                                opacity: 0;
-                                                transition: opacity 0.2s ease;
-                                            }
-                                        </style>
+                                    <div class="dropdown-item-wrapper position-relative grid-preset-item-wrapper">
                                         <a class="dropdown-item d-flex justify-content-between align-items-center fs-13 fw-normal py-2 pe-5" 
                                            href="javascript:void(0);" 
                                            onclick="window.gridInstances['${this.grid.container.id}'].filters.applyPreset('${p.id}')">
                                             <span>${iconHtml} <span class="ms-1">${p.name}</span></span>
                                             ${p.is_default ? '<span class="badge bg-success-subtle text-success ms-2 fs-10 fw-semibold text-uppercase">Pre-determinada</span>' : ''}
                                         </a>
-                                        <button class="btn btn-sm btn-ghost-danger delete-preset-btn position-absolute end-0 top-50 translate-middle-y me-2" 
-                                                style="padding: 2px 6px; font-size: 12px;"
+                                        <button class="btn btn-sm btn-ghost-danger delete-preset-btn grid-preset-delete-btn position-absolute end-0 top-50 translate-middle-y me-2" 
                                                 onclick="event.stopPropagation(); window.gridInstances['${this.grid.container.id}'].filters.deletePreset('${p.id}', '${p.name}')">
                                             <i class="ri-delete-bin-line"></i>
                                         </button>
@@ -367,18 +374,13 @@ class GridFilters {
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
-                            <div class="filter-groups-container d-flex flex-wrap" style="gap: 1.5rem;">
+                            <div class="filter-groups-container d-flex flex-wrap grid-filter-groups">
                                 ${this.config.filterableColumns?.map(column => {
             const options = columnOptions[column.id] || [];
             if (options.length === 0) return '';
 
             return `
-                                        <div class="filter-group-item" style="flex: 1 1 200px; min-width: 100%;">
-                                            <style>
-                                                @media (min-width: 576px) {
-                                                    .filter-group-item { min-width: 200px !important; }
-                                                }
-                                            </style>
+                                        <div class="filter-group-item grid-filter-group-item">
                                             <h6 class="text-muted mb-4 fs-15 text-uppercase fw-semibold d-flex align-items-center">
                                                 <i class="icon ${column.icon} me-2 fs-24 text-primary"></i>${column.label}
                                             </h6>
@@ -389,16 +391,6 @@ class GridFilters {
 
                 return `
                                                         <div class="form-check mb-3 d-flex align-items-center custom-check-thermal">
-                                                            <style>
-                                                                .custom-check-thermal .form-check-input {
-                                                                    margin-top: 0 !important;
-                                                                    flex-shrink: 0;
-                                                                }
-                                                                .custom-check-thermal .form-check-label {
-                                                                    margin-bottom: 0 !important;
-                                                                    padding-top: 0 !important;
-                                                                }
-                                                            </style>
                                                             <input class="form-check-input me-3" 
                                                                    type="checkbox" 
                                                                    id="filter-${column.id}-${opt.label.replace(/\s+/g, '-')}"
@@ -407,7 +399,7 @@ class GridFilters {
                                                                    ${isChecked ? 'checked' : ''}>
                                                             <label class="form-check-label fs-13 fw-normal d-flex align-items-center m-0 p-0" 
                                                                    for="filter-${column.id}-${opt.label.replace(/\s+/g, '-')}">
-                                                                <i class="${opt.icon} me-2 fs-20 ${colorClass} align-middle" style="line-height:1;"></i> 
+                                                                <i class="${opt.icon} me-2 fs-20 ${colorClass} align-middle grid-filter-opt-icon"></i> 
                                                                 <span class="text-body">${opt.label}</span>
                                                             </label>
                                                         </div>
@@ -637,33 +629,8 @@ class GridFilters {
                             <div class="mb-4">
                                 <label class="form-label fs-13 fw-semibold text-muted mb-3">Selecciona un Icono</label>
                                 <div class="d-flex flex-wrap gap-2 icon-selector-grid">
-                                    <style>
-                                        .icon-option {
-                                            width: 42px;
-                                            height: 42px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            border-radius: 8px;
-                                            cursor: pointer;
-                                            font-size: 20px;
-                                            transition: all 0.2s ease;
-                                            border: 2px solid transparent;
-                                            background: var(--vz-light);
-                                        }
-                                        .icon-option:hover {
-                                            background: var(--vz-secondary-bg-subtle);
-                                            transform: translateY(-2px);
-                                        }
-                                        .icon-option.active {
-                                            border-color: var(--vz-primary);
-                                            background: var(--vz-primary-bg-subtle);
-                                            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-                                        }
-                                        .text-orange { color: #f06548; }
-                                    </style>
                                     ${availableIcons.map((item, idx) => `
-                                        <div class="icon-option ${idx === 0 ? 'active' : ''} text-${item.color}" 
+                                        <div class="grid-icon-option ${idx === 0 ? 'active' : ''} text-${item.color}" 
                                              data-icon="${item.icon}"
                                              onclick="window.gridInstances['${this.grid.container.id}'].filters.selectPresetIcon(this)">
                                             <i class="${item.icon}"></i>
@@ -695,7 +662,7 @@ class GridFilters {
         // Define selection helper globally for this session
         this.selectPresetIcon = (element) => {
             const container = element.closest('.icon-selector-grid');
-            container.querySelectorAll('.icon-option').forEach(opt => opt.classList.remove('active'));
+            container.querySelectorAll('.grid-icon-option').forEach(opt => opt.classList.remove('active'));
             element.classList.add('active');
 
             // Store full class: "ri-icon-name text-color"
@@ -758,8 +725,7 @@ class GridFilters {
                         icon: 'error',
                         title: 'Error al Guardar',
                         text: 'No se pudo guardar la vista. Por favor intenta de nuevo.',
-                        background: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#2a2f34' : '#fff',
-                        color: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#adb5bd' : '#495057'
+                        ...getSwalThemeOptions()
                     });
                 }
             }
@@ -782,12 +748,10 @@ class GridFilters {
                 html: `¿Estás seguro de que deseas eliminar la vista <strong>"${presetName}"</strong>?<br><small class="text-muted">Esta acción no se puede deshacer.</small>`,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#f06548',
-                cancelButtonColor: '#6c757d',
+                ...getSwalActionColors(),
                 confirmButtonText: '<i class="ri-delete-bin-line me-1"></i> Sí, Eliminar',
                 cancelButtonText: 'Cancelar',
-                background: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#2a2f34' : '#fff',
-                color: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#adb5bd' : '#495057'
+                ...getSwalThemeOptions()
             });
 
             if (!result.isConfirmed) {

@@ -200,17 +200,8 @@ def _build_v2_tabs(
             "icon": "ri-links-line",
             "content": [
                 DashboardComponent(
-                    type="card",
-                    components=[
-                        DashboardComponent(
-                            type="empty-state",
-                            properties={
-                                "title": "Origen del Lead",
-                                "message": "Información detallada de la fuente se mostrará aquí.",
-                                "icon": "ri-links-line",
-                            },
-                        )
-                    ],
+                    type="lead-source-view",
+                    properties=_build_v2_source_props(lead),
                 ).model_dump()
             ],
         },
@@ -233,6 +224,66 @@ def _normalize_ui_value(value: Any) -> Any:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _is_supported_icon_class(raw_icon: str) -> bool:
+    icon = str(raw_icon or "").strip()
+    if not icon:
+        return False
+
+    tokens = icon.split()
+    for token in tokens:
+        if token.startswith("ri-"):
+            return True
+        if token == "mdi" or token.startswith("mdi-"):
+            return True
+        if token in {"bx", "bxs", "bxl"} or token.startswith("bx-") or token.startswith("bxs-") or token.startswith("bxl-"):
+            return True
+        if token in {"las", "lar", "lab"} or token.startswith("la-"):
+            return True
+    return False
+
+
+def _resolve_source_icon(source_label: Any, source_icon: Any) -> str:
+    raw_icon = str(source_icon or "").strip()
+    if _is_supported_icon_class(raw_icon):
+        return raw_icon
+
+    legacy_icon = raw_icon.lower()
+    legacy_map = {
+        "globe": "ri-seo-line",
+        "facebook": "ri-facebook-fill",
+        "instagram": "ri-instagram-line",
+        "home": "ri-home-4-line",
+        "users": "ri-user-shared-line",
+        "qr-code": "ri-qr-code-line",
+        "message-circle": "ri-whatsapp-line",
+        "laptop": "ri-window-line",
+        "heroicon-m-identification": "ri-walk-line",
+    }
+    if legacy_icon in legacy_map:
+        return legacy_map[legacy_icon]
+
+    label = str(source_label or "").strip().lower()
+    if "google" in label and ("sem" in label or "ads" in label):
+        return "ri-megaphone-line"
+    if "google" in label or "seo" in label:
+        return "ri-seo-line"
+    if "facebook" in label:
+        return "ri-facebook-fill"
+    if "instagram" in label:
+        return "ri-instagram-line"
+    if "whatsapp" in label:
+        return "ri-whatsapp-line"
+    if "walk" in label:
+        return "ri-walk-line"
+    if "refer" in label or "referral" in label:
+        return "ri-user-shared-line"
+    if any(token in label for token in ("zillow", "encuentra24", "propiedad", "property")):
+        return "ri-home-4-line"
+    if any(token in label for token in ("website", "web", "site")):
+        return "ri-window-line"
+    return "ri-links-line"
 
 
 def _normalize_messages(raw_messages: Any) -> List[Dict[str, Any]]:
@@ -309,6 +360,50 @@ def _build_v2_audit_props(lead: Dict[str, Any], extraction_result: Dict[str, Any
             "last_message_at": _normalize_ui_value(latest_conversation.get("last_message_at")),
             "summary": _normalize_ui_value(latest_conversation.get("summary") or ""),
         },
+    }
+
+
+def _build_v2_source_props(lead: Dict[str, Any]) -> Dict[str, Any]:
+    source_label = _normalize_ui_value(lead.get("source_label"))
+    source_icon = _resolve_source_icon(lead.get("source_label"), lead.get("source_icon"))
+    click_id_value = _normalize_ui_value(lead.get("click_id"))
+    click_id_type_value = _normalize_ui_value(lead.get("click_id_type"))
+    brand_project_raw = lead.get("brand_project")
+    brand_project_kind = "json" if isinstance(brand_project_raw, (dict, list)) else "text"
+
+    return {
+        "source_label": source_label,
+        "source_icon": source_icon,
+        "business_domain": _normalize_ui_value(lead.get("business_domain")),
+        "click_id": click_id_value,
+        "click_id_type": click_id_type_value,
+        "utm_items": [
+            {"key": "utm_source", "label": "UTM Source", "value": _normalize_ui_value(lead.get("utm_source")), "icon": "ri-global-line"},
+            {"key": "utm_medium", "label": "UTM Medium", "value": _normalize_ui_value(lead.get("utm_medium")), "icon": "ri-shapes-line"},
+            {"key": "utm_campaign", "label": "UTM Campaign", "value": _normalize_ui_value(lead.get("utm_campaign")), "icon": "ri-megaphone-line"},
+            {"key": "utm_term", "label": "UTM Term", "value": _normalize_ui_value(lead.get("utm_term")), "icon": "ri-price-tag-3-line"},
+            {"key": "utm_content", "label": "UTM Content", "value": _normalize_ui_value(lead.get("utm_content")), "icon": "ri-article-line"},
+        ],
+        "origin_items": [
+            {"key": "landing_page_url", "label": "Landing URL", "value": _normalize_ui_value(lead.get("landing_page_url")), "icon": "ri-link", "kind": "url"},
+            {"key": "referrer_url", "label": "Referrer URL", "value": _normalize_ui_value(lead.get("referrer_url")), "icon": "ri-route-line", "kind": "url"},
+            {"key": "source_property_url", "label": "Source Property URL", "value": _normalize_ui_value(lead.get("source_property_url")), "icon": "ri-home-8-line", "kind": "url"},
+            {"key": "source_property_ref", "label": "Source Property Ref", "value": _normalize_ui_value(lead.get("source_property_ref")), "icon": "ri-hashtag"},
+            {"key": "click_id", "label": "Click ID", "value": click_id_value, "icon": "ri-fingerprint-line", "kind": "mono"},
+            {"key": "click_id_type", "label": "Click ID Type", "value": click_id_type_value, "icon": "ri-price-tag-2-line"},
+        ],
+        "technical_items": [
+            {"key": "ip_address", "label": "IP Address", "value": _normalize_ui_value(lead.get("ip_address")), "icon": "ri-radar-line", "kind": "mono"},
+            {"key": "user_agent", "label": "User Agent", "value": _normalize_ui_value(lead.get("user_agent")), "icon": "ri-macbook-line", "kind": "mono"},
+            {
+                "key": "brand_project",
+                "label": "Brand Project",
+                "value": _normalize_ui_value(brand_project_raw),
+                "icon": "ri-building-4-line",
+                "kind": brand_project_kind,
+            },
+            {"key": "created_at", "label": "Lead Created At", "value": _normalize_ui_value(lead.get("created_at")), "icon": "ri-calendar-event-line"},
+        ],
     }
 
 

@@ -52,3 +52,64 @@ class ContactRead(ContactBase):
 class ContactConvert(BaseModel):
     email: EmailStr
     password: str
+
+
+class ContactGridRow(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: Optional[str] = None
+    name: str
+    full_name: str
+    position: Optional[str] = None
+    primary_channel: str = "-"
+    primary_email: Optional[str] = None
+    channels_count: int = 0
+    is_active: str = "false"
+
+
+class ContactChannelManageBase(BaseModel):
+    category_id: Optional[int] = None
+    type: str = "other"
+    value: str
+    label: Optional[str] = None
+    is_primary: bool = False
+    is_verified: bool = False
+
+
+class ContactChannelManageCreate(ContactChannelManageBase):
+    pass
+
+
+class ContactChannelManageUpdate(BaseModel):
+    category_id: Optional[int] = None
+    type: Optional[str] = None
+    value: Optional[str] = None
+    label: Optional[str] = None
+    is_primary: Optional[bool] = None
+    is_verified: Optional[bool] = None
+
+
+class ContactChannelManageRow(BaseModel):
+    id: UUID
+    contact_id: UUID
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    category_icon: Optional[str] = None
+    type: str
+    value: str
+    label: Optional[str] = None
+    is_primary: str = "false"
+    is_verified: str = "false"
+
+
+class ContactChannelListRow(BaseModel):
+    id: UUID
+    contact_id: UUID
+    contact_name: str
+    category_icon: Optional[str] = None
+    category_name: Optional[str] = None
+    type: str
+    value: str
+    label: Optional[str] = None
+    is_primary: str = "false"
+    is_verified: str = "false"

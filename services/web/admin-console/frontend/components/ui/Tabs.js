@@ -39,7 +39,7 @@ export function LinkTabs(data) {
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <ul class="nav nav-tabs-custom card-header-tabs border-bottom-0" role="tablist">
+                    <ul class="nav nav-tabs-custom nav-success card-header-tabs border-bottom-0" role="tablist">
                         ${navItems}
                     </ul>
                 </div>

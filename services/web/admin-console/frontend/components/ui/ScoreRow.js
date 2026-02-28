@@ -1,4 +1,6 @@
 
+import { ensureDynamicClass, isCssColor } from '../../renderer/engine/themeTokens.js';
+
 export function LinkScoreRow(component) {
     const props = component.properties || {};
 
@@ -15,40 +17,26 @@ export function LinkScoreRow(component) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-    const isCssColor = typeof rawColor === 'string' && (
-        rawColor.startsWith('#') ||
-        rawColor.startsWith('rgb(') ||
-        rawColor.startsWith('rgba(') ||
-        rawColor.startsWith('hsl(') ||
-        rawColor.startsWith('hsla(') ||
-        rawColor.startsWith('var(')
-    );
+    const hasCustomColor = isCssColor(rawColor);
     const isThermalClass = typeof rawColor === 'string' && rawColor.startsWith('thermal-');
 
     // Calculate percentage, capped at 100
     const percentage = Math.min(100, Math.max(0, (score / maxScore) * 100));
 
-    // Unique ID for animation style scope if needed (though transition works without it)
-    const animId = `score-anim-${Math.random().toString(36).substr(2, 5)}`;
+    const rowClasses = ['mb-4', 'score-row-component', 'score-row-layout'];
+    const dynamicVars = [`--sr-percentage:${percentage}%;`];
 
-    let iconClass = 'avatar-title rounded-3 fs-3';
-    let iconStyle = '';
-    let badgeClass = 'badge border';
-    let badgeStyle = 'font-size: 10px;';
-    let progressClass = 'progress-bar';
-    let progressInlineColor = '';
+    let iconClass = 'avatar-title rounded-3 fs-3 score-row-icon';
+    let badgeClass = 'badge border score-row-badge';
+    let progressClass = 'progress-bar score-row-progress-bar';
 
-    if (isCssColor) {
-        iconStyle = `color:${rawColor}; background: rgba(148, 163, 184, 0.16);`;
-        badgeStyle += ` color:${rawColor}; border-color:${rawColor} !important; background: transparent;`;
-        progressInlineColor = `background-color:${rawColor};`;
+    if (hasCustomColor) {
+        rowClasses.push('score-row-custom-color');
+        dynamicVars.push(`--score-row-color:${rawColor};`);
     } else if (isThermalClass) {
         iconClass += ` ${rawColor}`;
-        iconStyle = 'background: rgba(148, 163, 184, 0.16);';
         badgeClass += ` ${rawColor}`;
-        badgeStyle += ' border-color: currentColor !important; background: transparent;';
         progressClass += ` ${rawColor}`;
-        progressInlineColor = 'background-color: currentColor;';
     } else {
         iconClass += ` bg-${rawColor}-subtle text-${rawColor}`;
         badgeClass += ` bg-${rawColor}-subtle text-${rawColor} border-${rawColor}-subtle`;
@@ -56,59 +44,39 @@ export function LinkScoreRow(component) {
     }
 
     const explanationHtml = `
-        <div class="score-row-explanation" style="min-width: 0; padding-left: 22px;">
-            <p class="mb-0 fs-14 text-muted text-break" style="white-space: normal; overflow-wrap: anywhere;" title="${explanation}">${explanation || '-'}</p>
+        <div class="score-row-explanation">
+            <p class="mb-0 fs-14 text-muted text-break score-row-explanation-text" title="${explanation}">${explanation || '-'}</p>
         </div>
     `;
+    const dynamicClass = ensureDynamicClass('srvars', dynamicVars.join(''));
+    if (dynamicClass) rowClasses.push(dynamicClass);
 
     return `
-        <style>
-            .score-row-layout-${animId} {
-                display: grid;
-                grid-template-columns: minmax(180px, 21%) 150px 70px minmax(0, 1fr);
-                column-gap: 6px;
-                align-items: center;
-            }
-            @media (max-width: 992px) {
-                .score-row-layout-${animId} {
-                    grid-template-columns: minmax(160px, 1fr) 130px 60px;
-                    row-gap: 8px;
-                }
-                .score-row-layout-${animId} .score-row-explanation {
-                    grid-column: 1 / -1;
-                }
-            }
-            @keyframes grow-${animId} {
-                from { width: 0; }
-                to { width: ${percentage}%; }
-            }
-        </style>
-        <div class="mb-4 score-row-component score-row-layout-${animId}">
+        <div class="${rowClasses.join(' ')}">
             <!-- Pillar -->
-            <div class="d-flex align-items-center" style="min-width: 0;">
+            <div class="d-flex align-items-center score-row-main">
                 <div class="avatar-sm flex-shrink-0 me-3">
-                    <div class="${iconClass}" style="${iconStyle}">
+                    <div class="${iconClass}">
                         <i class="${icon}"></i>
                     </div>
                 </div>
-                <div style="min-width: 0;">
+                <div class="score-row-title-wrap">
                     <div class="d-flex align-items-center flex-wrap gap-2">
                         <h5 class="fs-13 mb-0 text-muted text-uppercase">${title}</h5>
-                        <span class="${badgeClass}" style="${badgeStyle}">${label}</span>
+                        <span class="${badgeClass}">${label}</span>
                     </div>
                 </div>
             </div>
 
             <!-- Thermometer -->
-            <div class="progress border" style="height: 20px; background-color: #cad3dc; width: 150px;">
+            <div class="progress border score-row-progress">
                 <div class="${progressClass}" role="progressbar" 
-                     style="width: ${percentage}%; animation: grow-${animId} 1s ease-out forwards; ${progressInlineColor}" 
                      aria-valuenow="${score}" aria-valuemin="0" aria-valuemax="${maxScore}">
                 </div>
             </div>
 
             <!-- Score -->
-            <div class="text-start" style="width: 64px;">
+            <div class="text-start score-row-score">
                 <h5 class="mb-0 fw-bold fs-4 text-muted">${score} <span class="fs-12 text-muted fw-normal">/${maxScore}</span></h5>
             </div>
 

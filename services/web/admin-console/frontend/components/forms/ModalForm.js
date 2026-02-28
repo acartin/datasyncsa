@@ -1,10 +1,12 @@
 
+import { ensureDynamicClass } from '../../renderer/engine/themeTokens.js';
+
 export function LinkModalForm(id, title, formHtml, saveActionUrl, method = 'POST', dialogClass = '', dialogStyle = '') {
     const dialogClassAttr = dialogClass ? ` ${dialogClass}` : '';
-    const dialogStyleAttr = dialogStyle ? ` style="${dialogStyle}"` : '';
+    const dialogDynamicClass = dialogStyle ? ` ${ensureDynamicClass('modaldialog', dialogStyle)}` : '';
     return `
     <div class="modal fade" id="${id}" tabindex="-1" aria-labelledby="${id}Label" aria-hidden="true">
-        <div class="modal-dialog${dialogClassAttr}"${dialogStyleAttr}>
+        <div class="modal-dialog${dialogClassAttr}${dialogDynamicClass}">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="${id}Label">${title}</h5>
@@ -56,7 +58,7 @@ function renderJsonEditorField(label, name, textValue, required, validation, att
                 <button type="button" class="btn btn-light btn-sm js-json-compact">Compact</button>
                 <span class="small text-muted js-json-status">Preparando editor JSON...</span>
             </div>
-            <div id="${editorHostId}" class="js-json-editor-host border rounded" style="height: 360px;"></div>
+            <div id="${editorHostId}" class="js-json-editor-host js-json-editor-host-fixed border rounded"></div>
             <textarea class="form-control d-none js-json-source" id="${name}" name="${name}" rows="${rows}"
                 ${requiredAttr} ${attrs} ${readonlyAttr}>${textValue}</textarea>
             <textarea class="form-control d-none js-json-fallback mt-2" id="${fallbackId}" rows="${rows}"
@@ -421,7 +423,7 @@ export function renderInput(label, name, value = '', type = 'text', required = f
         const items = Array.isArray(value) ? value : [];
         const itemsHtml = items.map((item, index) => `
             <div class="repeater-item d-flex gap-2 mb-2 align-items-center" data-index="${index}">
-                <select class="form-select form-select-sm category-select" style="width: 140px;" data-source="${sourceUrl}" data-value="${item.category_id || ''}">
+                <select class="form-select form-select-sm category-select category-select-width" data-source="${sourceUrl}" data-value="${item.category_id || ''}">
                     <option value="">Category...</option>
                 </select>
                 <input type="text" class="form-control form-control-sm value-input" placeholder="Value..." value="${item.value || ''}">
@@ -454,7 +456,7 @@ export function renderInput(label, name, value = '', type = 'text', required = f
                         const container = document.querySelector(\`#repeater-\${name} .repeater-list\`);
                         const itemHtml = \`
                             <div class="repeater-item d-flex gap-2 mb-2 align-items-center">
-                                <select class="form-select form-select-sm category-select" style="width: 140px;" data-source="\${source}">
+                                <select class="form-select form-select-sm category-select category-select-width" data-source="\${source}">
                                     <option value="">Category...</option>
                                 </select>
                                 <input type="text" class="form-control form-control-sm value-input" placeholder="Value...">
@@ -498,13 +500,15 @@ export function renderInput(label, name, value = '', type = 'text', required = f
     }
 
     const readonlyAttr = validation.readonly ? 'readonly' : '';
+    const placeholderAttr = validation.placeholder ? `placeholder="${validation.placeholder}"` : '';
+    const placeholderSourceAttr = validation.placeholder_source ? `data-placeholder-source="${validation.placeholder_source}"` : '';
+    const placeholderMapAttr = validation.placeholder_map ? `data-placeholder-map='${JSON.stringify(validation.placeholder_map)}'` : '';
     return `
         <div class="mb-3">
             <label for="${name}" class="form-label">${label}</label>
-            <input type="${type}" class="form-control ${type === 'color' ? 'form-control-color' : ''}" 
+            <input type="${type}" class="form-control ${type === 'color' ? 'form-control-color form-color-square' : ''}" 
                 id="${name}" name="${name}" value="${value}" 
-                style="${type === 'color' ? 'width: 50px; height: 50px; padding: 2px; aspect-ratio: 1/1;' : ''}"
-                ${isRequired} ${minLength} ${maxLength} ${pattern} ${readonlyAttr}>
+                ${isRequired} ${minLength} ${maxLength} ${pattern} ${readonlyAttr} ${placeholderAttr} ${placeholderSourceAttr} ${placeholderMapAttr}>
         </div>
     `;
 }
@@ -529,6 +533,9 @@ export function renderFormFromSchema(schema, data = {}) {
             rows: field.rows,
             source: field.source,
             options: field.options,
+            placeholder: field.placeholder,
+            placeholder_source: field.placeholder_source,
+            placeholder_map: field.placeholder_map,
             depends_on: field.depends_on,
             fields: field.fields,  // For group type
             layout: field.layout,  // For group type

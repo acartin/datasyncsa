@@ -23,6 +23,7 @@ import { LinkProfileHeader } from '../../components/ui/ProfileHeader.js';
 import { LinkBackLink } from '../../components/ui/BackLink.js';
 import { LinkEmptyState } from '../../components/ui/EmptyState.js';
 import { LinkAuditSplitView } from '../../components/ui/AuditSplitView.js';
+import { LinkLeadSourceView } from '../../components/ui/LeadSourceView.js';
 
 // Simple Wrapper for Custom Grid Container
 import { LinkCustomGridContainer } from '../../components/grids/CustomGridContainer.js';
@@ -57,7 +58,8 @@ const registry = {
     'profile-header': LinkProfileHeader,
     'back-link': LinkBackLink,
     'empty-state': LinkEmptyState,
-    'audit-split-view': LinkAuditSplitView
+    'audit-split-view': LinkAuditSplitView,
+    'lead-source-view': LinkLeadSourceView
 };
 
 // --- GLOBAL FORM HANDLERS (Moved from FormContainer to ensure execution) ---

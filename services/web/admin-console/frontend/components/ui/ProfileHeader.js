@@ -1,17 +1,5 @@
-
 import { LinkGauge } from './Gauge.js';
-
-function isCssColor(value) {
-    if (typeof value !== 'string') return false;
-    return (
-        value.startsWith('#') ||
-        value.startsWith('rgb(') ||
-        value.startsWith('rgba(') ||
-        value.startsWith('hsl(') ||
-        value.startsWith('hsla(') ||
-        value.startsWith('var(')
-    );
-}
+import { ensureDynamicClass, isCssColor } from '../../renderer/engine/themeTokens.js';
 
 function hexToRgba(hex, alpha = 0.16) {
     const normalized = String(hex || '').trim();
@@ -33,18 +21,19 @@ function hexToRgba(hex, alpha = 0.16) {
 function resolveTone(colorValue, fallbackToken) {
     const color = colorValue || fallbackToken;
     if (isCssColor(color)) {
+        const iconDynamicClass = ensureDynamicClass(
+            'phicon',
+            `background:${hexToRgba(color, 0.14)};color:${color};`
+        );
+        const valueDynamicClass = ensureDynamicClass('phvalue', `color:${color};`);
         return {
-            iconClass: 'd-inline-flex align-items-center justify-content-center rounded-3 fs-5',
-            iconStyle: `width:40px;height:40px;background:${hexToRgba(color, 0.14)};color:${color};`,
-            valueClass: '',
-            valueStyle: `color:${color};`,
+            iconClass: `d-inline-flex align-items-center justify-content-center rounded-3 fs-5 profile-tone-icon ${iconDynamicClass}`,
+            valueClass: valueDynamicClass || '',
         };
     }
     return {
-        iconClass: `d-inline-flex align-items-center justify-content-center rounded-3 fs-5 bg-${color}-subtle text-${color}`,
-        iconStyle: 'width:40px;height:40px;',
+        iconClass: `d-inline-flex align-items-center justify-content-center rounded-3 fs-5 profile-tone-icon bg-${color}-subtle text-${color}`,
         valueClass: `text-${color}`,
-        valueStyle: '',
     };
 }
 
@@ -62,9 +51,6 @@ export function LinkProfileHeader(component) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-    const panelStyle = 'background-color: var(--vz-secondary-bg); border-color: var(--vz-border-color);';
-    const signalRowStyle = 'background-color: var(--vz-body-bg); border: 1px solid var(--vz-border-color-translucent, var(--vz-border-color));';
-
     // Score Gauge Logic
     const gaugeHtml = LinkGauge({
         properties: {
@@ -103,12 +89,12 @@ export function LinkProfileHeader(component) {
                                 <p class="text-muted mb-0">${contactText}</p>
                             </div>
                         </div>
-                        <div class="p-3 rounded-3 border" style="${panelStyle}">
+                        <div class="p-3 rounded-3 border profile-signal-panel">
                             <div class="d-flex align-items-center mb-2">
                                 <i class="ri-lightbulb-flash-line text-warning me-2 fs-5"></i>
                                 <h6 class="mb-0 fs-12 text-uppercase text-muted">Razonamiento del score</h6>
                             </div>
-                            <p class="mb-0 fs-13 text-muted" style="line-height: 1.45;">
+                            <p class="mb-0 fs-13 text-muted profile-reasoning-text">
                                 ${reasoningText}
                             </p>
                         </div>
@@ -117,28 +103,28 @@ export function LinkProfileHeader(component) {
                     <!-- Column 2: Status & Intent -->
                     <div class="col-md-6">
                         <div class="d-flex flex-column align-items-stretch ps-md-4 pt-3 pt-md-0">
-                            <div class="p-3 rounded-3 border w-100" style="${panelStyle}">
+                            <div class="p-3 rounded-3 border w-100 profile-signal-panel">
                                 <div class="d-flex align-items-center mb-2">
                                     <i class="ri-focus-3-line text-muted me-2 fs-5"></i>
                                     <h6 class="mb-0 fs-12 text-uppercase text-muted">Señales clave</h6>
                                 </div>
                                 <div class="d-flex flex-column gap-2">
-                                    <div class="d-flex align-items-center gap-3 p-2 rounded-3" style="${signalRowStyle}">
-                                        <div class="${intentTone.iconClass}" style="${intentTone.iconStyle}">
+                                    <div class="d-flex align-items-center gap-3 p-2 rounded-3 profile-signal-row">
+                                        <div class="${intentTone.iconClass}">
                                             <i class="${intentIcon}"></i>
                                         </div>
-                                        <div class="flex-grow-1" style="min-width: 0;">
-                                            <div class="fs-11 text-muted text-uppercase mb-1" style="letter-spacing: .04em;">Intención</div>
-                                            <div class="fw-semibold ${intentTone.valueClass}" style="${intentTone.valueStyle}">${intentLabel}</div>
+                                        <div class="flex-grow-1 profile-signal-content">
+                                            <div class="fs-11 text-muted text-uppercase mb-1 profile-signal-label">Intención</div>
+                                            <div class="fw-semibold ${intentTone.valueClass}">${intentLabel}</div>
                                         </div>
                                     </div>
-                                    <div class="d-flex align-items-center gap-3 p-2 rounded-3" style="${signalRowStyle}">
-                                        <div class="${statusTone.iconClass}" style="${statusTone.iconStyle}">
+                                    <div class="d-flex align-items-center gap-3 p-2 rounded-3 profile-signal-row">
+                                        <div class="${statusTone.iconClass}">
                                             <i class="${statusIcon}"></i>
                                         </div>
-                                        <div class="flex-grow-1" style="min-width: 0;">
-                                            <div class="fs-11 text-muted text-uppercase mb-1" style="letter-spacing: .04em;">Prioridad</div>
-                                            <div class="fw-semibold ${statusTone.valueClass}" style="${statusTone.valueStyle}">${statusLabel}</div>
+                                        <div class="flex-grow-1 profile-signal-content">
+                                            <div class="fs-11 text-muted text-uppercase mb-1 profile-signal-label">Prioridad</div>
+                                            <div class="fw-semibold ${statusTone.valueClass}">${statusLabel}</div>
                                         </div>
                                     </div>
                                 </div>

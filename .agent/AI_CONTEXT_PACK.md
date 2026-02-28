@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-02-27T04:15:53Z`
+- Generated UTC: `2026-02-27T21:45:51Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-27`
-- Git commit: `5b22270`
+- Git branch: `HETZNER-LOCAL-2026-02-28`
+- Git commit: `9759548`
 - Policy: High-signal only; assets/binarios excluidos.
 
 ## Contexto Maestro
@@ -14,10 +14,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-02-27T04:15:53Z`
+- Generated UTC: `2026-02-27T21:45:51Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-27`
-- Git commit: `5b22270`
+- Git branch: `HETZNER-LOCAL-2026-02-28`
+- Git commit: `9759548`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 
@@ -75,10 +75,12 @@ services:
       dockerfile: Dockerfile
     container_name: ${ENV_PREFIX}-infra-postgres
     restart: always
+    command: ["postgres", "-c", "timezone=${TZ:-UTC}"]
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
+      TZ: ${TZ:-UTC}
     ports:
       - "${DB_PORT}:5432"
     volumes:
@@ -92,6 +94,8 @@ services:
     container_name: ${ENV_PREFIX}-infra-redis
     restart: always
     command: redis-server --appendonly yes
+    environment:
+      TZ: ${TZ:-UTC}
     volumes:
       - redis_data:/data
     networks:
@@ -110,6 +114,8 @@ services:
       - portainer_data:/data
     ports:
       - "${PORTAINER_PORT}:9000"
+    environment:
+      TZ: ${TZ:-UTC}
     networks:
       - internal_network
 
@@ -136,6 +142,7 @@ services:
       - "${INFERENCE_V2_PORT}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
       - REDIS_URL=redis://redis:6379/0
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
@@ -169,6 +176,7 @@ services:
     command: ["python", "worker.py"]
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
       - REDIS_URL=redis://redis:6379/0
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
@@ -206,6 +214,7 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=${TZ:-UTC}
       - INFERENCE_CORE_URL=http://inference-core-v2:8000
       - DATABASE_URL=${DATABASE_URL}
       - TABLE_VECTORS=${TABLE_VECTORS}
@@ -227,6 +236,7 @@ services:
     ports:
       - "${ETL_DOCS_PORT}:8000"
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
@@ -258,6 +268,7 @@ services:
     restart: always
     command: ["rq", "worker", "docs", "--url", "redis://redis:6379/0"]
     environment:
+      - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
@@ -272,23 +283,13 @@ services:
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
       - ${HOST_PATH_STAGING}:/app/data/staging
-      - ${HOST_PATH_STORAGE}:/app/data/storage
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # ---------------------------------------------------------------------------
-  # WEB SERVICES (Frontend + BFF)
-  # ---------------------------------------------------------------------------
 ```
 ### `.env.example`
 
 ```
 # --- INFRASTRUCTURE ---
 ENV_PREFIX=ds-dev
+TZ=UTC
 
 # DB Credentials
 DB_USER=postgres
@@ -544,19 +545,6 @@ services/inference-stack-v2/inference-core-v2/scripts
 services/inference-stack-v2/inference-core-v2/tests
 services/inference-stack-v2/semantic-adapter-v2
 services/inference-stack-v2/semantic-adapter-v2/app
-services/inference-stack__reference_disabled
-services/inference-stack__reference_disabled/inference-core
-services/inference-stack__reference_disabled/inference-core/app
-services/inference-stack__reference_disabled/inference-core/migrations
-services/inference-stack__reference_disabled/inference-core/temp
-services/inference-stack__reference_disabled/inference-core/tests
-services/inference-stack__reference_disabled/semantic-adapter
-services/inference-stack__reference_disabled/semantic-adapter/app
-services/inference-stack__reference_disabled/semantic-adapter/temp
-services/inference-stack__reference_disabled/semantic-adapter/tests
-services/legacy-ETL_DOCS
-services/legacy-ETL_DOCS/ETL_DOCS
-services/legacy-ETL_DOCS/shared
 services/realtor-bridge-v2
 services/realtor-bridge-v2/__pycache__
 services/web
@@ -593,39 +581,28 @@ services/etl-processor/main.py:3:app = FastAPI()
 services/realtor-bridge-v2/main.py:29:app = FastAPI(
 services/realtor-bridge-v2/main.py:348:if __name__ == "__main__":
 services/realtor-bridge-v2/main.py:354:    uvicorn.run(
-services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
-services/web/realtor-chat/backend/app/main.py:10:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
 services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
 services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
 services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
+services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
+services/web/realtor-chat/backend/app/main.py:10:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
 services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
 services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
 services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
 services/inference-stack-v2/semantic-adapter-v2/main.py:54:    uvicorn.run(app, host="0.0.0.0", port=8000)
-services/inference-stack__reference_disabled/semantic-adapter/tests/sandbox/test_embedding_diag.py:27:if __name__ == "__main__":
-services/inference-stack__reference_disabled/semantic-adapter/tests/smoke/test_smoke_search.py:31:if __name__ == "__main__":
-services/inference-stack__reference_disabled/semantic-adapter/main.py:21:app = FastAPI(
-services/inference-stack__reference_disabled/semantic-adapter/main.py:46:app.include_router(router, prefix="/api/v1")
-services/inference-stack__reference_disabled/semantic-adapter/main.py:52:if __name__ == "__main__":
-services/inference-stack__reference_disabled/semantic-adapter/main.py:54:    uvicorn.run(app, host="0.0.0.0", port=8000)
-services/inference-stack__reference_disabled/inference-core/tests/smoke/test_smoke_chat.py:32:if __name__ == "__main__":
-services/inference-stack__reference_disabled/inference-core/main.py:15:app = FastAPI(
-services/inference-stack__reference_disabled/inference-core/main.py:31:app.include_router(chat_router, prefix="/api/v1")
-services/inference-stack__reference_disabled/inference-core/main.py:37:if __name__ == "__main__":
-services/inference-stack__reference_disabled/inference-core/main.py:39:    uvicorn.run(app, host="0.0.0.0", port=8003)
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
-services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
-services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
-services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
+services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
+services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
+services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
@@ -650,23 +627,6 @@ services/web/admin-console/backend/app/main.py:78:app.include_router(grid_preset
 ## Rutas API Detectadas
 
 ```text
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
-services/inference-stack__reference_disabled/semantic-adapter/app/api.py:45:@router.get("/health")
-services/inference-stack__reference_disabled/semantic-adapter/app/api.py:66:@router.post("/search", response_model=SearchResponse)
-services/inference-stack__reference_disabled/inference-core/app/api/chat.py:18:@router.post("/chat", response_model=ChatMessageResponse)
-services/inference-stack__reference_disabled/inference-core/app/api/chat.py:31:@router.get("/chat/{conversation_id}")
-services/inference-stack__reference_disabled/inference-core/app/api/chat.py:43:@router.get("/health")
-services/inference-stack__reference_disabled/inference-core/app/api/chat.py:57:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/web/admin-console/backend/app/modules/contacts/router.py:15:@router.get("/contacts", response_model=List[schemas.ContactRead])
 services/web/admin-console/backend/app/modules/contacts/router.py:52:@router.get("/contacts/{contact_id}", response_model=schemas.ContactRead)
 services/web/admin-console/backend/app/modules/contacts/router.py:69:@router.post("/contacts", response_model=schemas.ContactRead)
@@ -695,6 +655,15 @@ services/web/admin-console/backend/app/modules/clients/router.py:517:@router.get
 services/web/admin-console/backend/app/modules/clients/router.py:545:@router.delete("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:567:@router.post("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:568:@router.put("/brand-config/{client_id}/item")  # Support PUT for edit action
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:13:@router.post("", response_model=GridPresetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:29:@router.get("/{grid_id}", response_model=List[GridPresetResponse])
 services/web/admin-console/backend/app/modules/grid_presets/router.py:41:@router.delete("/{preset_id}")
@@ -713,6 +682,8 @@ services/web/admin-console/backend/app/modules/countries/router.py:99:@router.pu
 services/web/admin-console/backend/app/modules/countries/router.py:106:@router.delete("/countries/{country_id}")
 services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
+services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
+services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
@@ -752,13 +723,6 @@ services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.ge
 services/web/admin-console/backend/app/modules/leads_v2/router.py:134:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:182:@router.get("/{lead_id}/scoring", response_model=ScoringValuesV2)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:203:@router.get("/schema/current", response_model=ScoringSchemaV2)
-services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/users/router.py:20:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/users/router.py:98:@router.get("/data", response_model=List[UserRow])
 services/web/admin-console/backend/app/modules/users/router.py:102:@router.get("/roles/simple-list")
@@ -773,13 +737,20 @@ services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.
 services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:8:@router.get("/manager", response_model=ManagerDashboardSchema)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:15:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:19:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:36:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 ```
 
 ## Contratos/Modelos Críticos
@@ -791,7 +762,19 @@ services/web/realtor-chat/backend/app/schemas/ui.py:76:class SDUIResponse(BaseMo
 services/web/realtor-chat/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
 services/web/realtor-chat/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
 services/web/realtor-chat/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
+services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
+services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
+services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
+services/web/admin-console/backend/app/contracts/ui_schema.py:34:class UIAppShell(BaseModel):
+services/web/admin-console/backend/app/contracts/ui_schema.py:39:class WebIAFirstResponse(BaseModel):
 services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
+services/web/admin-console/backend/app/contracts/scoring_schema.py:5:class ScoringBandV2(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:15:class ScoringCriterionV2(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:27:class ScoringSchemaV2(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class ScoreItemValueV2(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
+services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
 services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
 services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
 services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
@@ -801,18 +784,6 @@ services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
 services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
 services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
 services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:34:class UIAppShell(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:39:class WebIAFirstResponse(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:5:class ScoringBandV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:15:class ScoringCriterionV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:27:class ScoringSchemaV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class ScoreItemValueV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
 services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
@@ -887,41 +858,16 @@ services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrat
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_id
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_messages
 services/inference-stack-v2/semantic-adapter-v2/app/vector_repo.py -> ai_vectors
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_ai_prompts
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_contact_preferences
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_conversations
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_currencies
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_id
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_leads
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_messages
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_metadata
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_msgs
-services/inference-stack__reference_disabled/inference-core/app/repositories/conversation_repo.py -> lead_scores
-services/inference-stack__reference_disabled/inference-core/app/services/chat_orchestrator.py -> lead_analysis
-services/inference-stack__reference_disabled/inference-core/app/services/chat_orchestrator.py -> lead_analyzer
-services/inference-stack__reference_disabled/inference-core/app/services/chat_orchestrator.py -> lead_id
-services/inference-stack__reference_disabled/inference-core/app/services/chat_orchestrator.py -> lead_scores
-services/inference-stack__reference_disabled/inference-core/tests/integration/test_tenant_isolation.py -> lead_id
-services/inference-stack__reference_disabled/inference-core/tests/unit/test_conversation_repo.py -> lead_conversations
-services/inference-stack__reference_disabled/inference-core/tests/unit/test_conversation_repo.py -> lead_id
-services/inference-stack__reference_disabled/inference-core/tests/unit/test_conversation_repo.py -> lead_insert_params
-services/inference-stack__reference_disabled/inference-core/tests/unit/test_conversation_repo.py -> lead_insert_sql
-services/inference-stack__reference_disabled/inference-core/tests/unit/test_conversation_repo.py -> lead_leads
-services/inference-stack__reference_disabled/semantic-adapter/app/vector_repo.py -> ai_vectors
-services/legacy-ETL_DOCS/ETL_DOCS/processor.py -> ai_vectors
-services/legacy-ETL_DOCS/shared/vector_store.py -> ai_knowledge_documents
-services/legacy-ETL_DOCS/shared/vector_store.py -> ai_vectors
 services/realtor-bridge-v2/main.py -> lead_scoring
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_by_id
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard_v2_clone
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema_v2_clone
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_with_scoring_v2
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_id
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_service
-services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_detail_schema
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_v2_service
 services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_detail_schema_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_id
+services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_messages
 services/web/admin-console/backend/app/main.py -> ai_library
 services/web/admin-console/backend/app/main.py -> ai_library_router
 services/web/admin-console/backend/app/main.py -> auth_router
@@ -984,10 +930,12 @@ services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_by_id
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_client_verticals
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_clients
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_contact_preferences
+services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_conversations
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_data
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_detail_with_scoring_v2
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_id
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_leads
+services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_messages
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_score_items
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scorecards
 services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scoring_bands
@@ -1225,14 +1173,14 @@ async function init() {
         console.error('Render Error:', error);
         // EMERGENCY MODE UI
         document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#222; color:#fff; font-family:sans-serif;">
-                <h1 style="color:#ff6b6b">⚠️ EMERGENCY MODE</h1>
+            <div class="ac-emergency-screen">
+                <h1 class="ac-emergency-title">⚠️ EMERGENCY MODE</h1>
                 <p>The Application failed to initialize.</p>
-                <div style="background:#334; padding:15px; border-radius:5px; margin:20px 0; width: 80%; max-width: 800px;">
-                    <textarea readonly style="width:100%; height:150px; background:#111; color:#ffeb3b; border:1px solid #555; padding:10px; font-family:monospace; font-size:12px; resize:none;">${(error.stack || error.message || JSON.stringify(error) || "Unknown Error")}</textarea>
-                    <button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='COPIED!'" style="display:block; width:100%; margin-top:10px; padding:10px; background:#00bd9d; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">COPY ERROR TO CLIPBOARD</button>
+                <div class="ac-emergency-box">
+                    <textarea readonly class="ac-emergency-textarea">${(error.stack || error.message || JSON.stringify(error) || "Unknown Error")}</textarea>
+                    <button type="button" class="ac-emergency-copy-btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='COPIED!'">COPY ERROR TO CLIPBOARD</button>
                 </div>
-                <button onclick="window.location.reload()" style="padding:10px 20px; background:#4b38b3; color:white; border:none; border-radius:4px; cursor:pointer;">
+                <button class="ac-emergency-retry-btn" onclick="window.location.reload()">
                     Retry Connection
                 </button>
             </div>
@@ -1245,7 +1193,7 @@ export async function navigateTo(href, pushState = true) {
 
     // PERSISTENCE LOGIC START
     // If we are leaving a grid view (e.g. /leads/me) to go to a detail view, save the grid URL.
-    const isDetailView = /\/leads\/[0-9a-fA-F-]{36}/.test(href);
+    const isDetailView = /\/leads(?:_v2)?\/[0-9a-fA-F-]{36}/.test(href);
     if (isDetailView && window.location.pathname !== href) {
         localStorage.setItem('last_active_grid_url', window.location.pathname);
     }
@@ -1387,6 +1335,8 @@ import { LinkInfoRow } from '../../components/ui/InfoRow.js';
 import { LinkProfileHeader } from '../../components/ui/ProfileHeader.js';
 import { LinkBackLink } from '../../components/ui/BackLink.js';
 import { LinkEmptyState } from '../../components/ui/EmptyState.js';
+import { LinkAuditSplitView } from '../../components/ui/AuditSplitView.js';
+import { LinkLeadSourceView } from '../../components/ui/LeadSourceView.js';
 
 // Simple Wrapper for Custom Grid Container
 import { LinkCustomGridContainer } from '../../components/grids/CustomGridContainer.js';
@@ -1420,7 +1370,9 @@ const registry = {
     'info-row': LinkInfoRow,
     'profile-header': LinkProfileHeader,
     'back-link': LinkBackLink,
-    'empty-state': LinkEmptyState
+    'empty-state': LinkEmptyState,
+    'audit-split-view': LinkAuditSplitView,
+    'lead-source-view': LinkLeadSourceView
 };
 
 // --- GLOBAL FORM HANDLERS (Moved from FormContainer to ensure execution) ---
@@ -2884,7 +2836,7 @@ class PromptBuilder:
 ```
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
