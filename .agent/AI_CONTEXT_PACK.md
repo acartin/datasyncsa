@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-02-27T21:45:51Z`
+- Generated UTC: `2026-02-28T19:21:05Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-28`
-- Git commit: `9759548`
+- Git branch: `HETZNER-LOCAL-2026-02-28A`
+- Git commit: `6fe89d9`
 - Policy: High-signal only; assets/binarios excluidos.
 
 ## Contexto Maestro
@@ -14,10 +14,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-02-27T21:45:51Z`
+- Generated UTC: `2026-02-28T19:21:05Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-02-28`
-- Git commit: `9759548`
+- Git branch: `HETZNER-LOCAL-2026-02-28A`
+- Git commit: `6fe89d9`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 
@@ -581,14 +581,14 @@ services/etl-processor/main.py:3:app = FastAPI()
 services/realtor-bridge-v2/main.py:29:app = FastAPI(
 services/realtor-bridge-v2/main.py:348:if __name__ == "__main__":
 services/realtor-bridge-v2/main.py:354:    uvicorn.run(
+services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
+services/web/realtor-chat/backend/app/main.py:10:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
 services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
 services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
 services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
-services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
-services/web/realtor-chat/backend/app/main.py:10:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
 services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
 services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
 services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
@@ -627,13 +627,32 @@ services/web/admin-console/backend/app/main.py:78:app.include_router(grid_preset
 ## Rutas API Detectadas
 
 ```text
-services/web/admin-console/backend/app/modules/contacts/router.py:15:@router.get("/contacts", response_model=List[schemas.ContactRead])
-services/web/admin-console/backend/app/modules/contacts/router.py:52:@router.get("/contacts/{contact_id}", response_model=schemas.ContactRead)
-services/web/admin-console/backend/app/modules/contacts/router.py:69:@router.post("/contacts", response_model=schemas.ContactRead)
-services/web/admin-console/backend/app/modules/contacts/router.py:84:@router.put("/contacts/{contact_id}", response_model=schemas.ContactRead)
-services/web/admin-console/backend/app/modules/contacts/router.py:101:@router.delete("/contacts/{contact_id}")
-services/web/admin-console/backend/app/modules/contacts/router.py:117:@router.post("/contacts/{contact_id}/convert")
-services/web/admin-console/backend/app/modules/contacts/categories.py:16:@router.get("/contacts/categories", response_model=List[CategoryRead])
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
+services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
+services/web/admin-console/backend/app/modules/contacts/router.py:225:@router.get("/contacts", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/contacts/router.py:355:@router.get("/contacts/data", response_model=List[schemas.ContactGridRow])
+services/web/admin-console/backend/app/modules/contacts/router.py:374:@router.get("/contacts/channels/data", response_model=List[schemas.ContactChannelListRow])
+services/web/admin-console/backend/app/modules/contacts/router.py:393:@router.get("/contacts/channel-types")
+services/web/admin-console/backend/app/modules/contacts/router.py:398:@router.get("/contacts/{contact_id}", response_model=schemas.ContactRead)
+services/web/admin-console/backend/app/modules/contacts/router.py:410:@router.get("/contacts/{contact_id}/channels/data", response_model=List[schemas.ContactChannelManageRow])
+services/web/admin-console/backend/app/modules/contacts/router.py:423:@router.get("/contacts/{contact_id}/channels/{channel_id}", response_model=schemas.ContactChannelManageRow)
+services/web/admin-console/backend/app/modules/contacts/router.py:440:@router.post("/contacts", response_model=schemas.ContactRead)
+services/web/admin-console/backend/app/modules/contacts/router.py:453:@router.post("/contacts/{contact_id}/channels", response_model=schemas.ContactChannelManageRow)
+services/web/admin-console/backend/app/modules/contacts/router.py:469:@router.put("/contacts/{contact_id}", response_model=schemas.ContactRead)
+services/web/admin-console/backend/app/modules/contacts/router.py:485:@router.put("/contacts/{contact_id}/channels/{channel_id}", response_model=schemas.ContactChannelManageRow)
+services/web/admin-console/backend/app/modules/contacts/router.py:503:@router.delete("/contacts/{contact_id}")
+services/web/admin-console/backend/app/modules/contacts/router.py:518:@router.delete("/contacts/{contact_id}/channels/{channel_id}")
+services/web/admin-console/backend/app/modules/contacts/router.py:534:@router.post("/contacts/{contact_id}/convert")
+services/web/admin-console/backend/app/modules/contacts/categories.py:42:@router.get("/contacts/categories", response_model=List[CategoryRead])
 services/web/admin-console/backend/app/modules/roles/router.py:20:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/roles/router.py:62:@router.get("/data", response_model=List[RoleRow])
 services/web/admin-console/backend/app/modules/roles/router.py:66:@router.get("/{role_id}", response_model=RoleRow)
@@ -655,15 +674,6 @@ services/web/admin-console/backend/app/modules/clients/router.py:517:@router.get
 services/web/admin-console/backend/app/modules/clients/router.py:545:@router.delete("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:567:@router.post("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:568:@router.put("/brand-config/{client_id}/item")  # Support PUT for edit action
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:13:@router.post("", response_model=GridPresetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:29:@router.get("/{grid_id}", response_model=List[GridPresetResponse])
 services/web/admin-console/backend/app/modules/grid_presets/router.py:41:@router.delete("/{preset_id}")
@@ -682,8 +692,6 @@ services/web/admin-console/backend/app/modules/countries/router.py:99:@router.pu
 services/web/admin-console/backend/app/modules/countries/router.py:106:@router.delete("/countries/{country_id}")
 services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
@@ -744,13 +752,13 @@ services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("
 services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:8:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
 ```
 
 ## Contratos/Modelos Críticos

@@ -76,8 +76,8 @@ def test_build_scorecard_from_result_clamps_scores_and_sets_priority():
     assert scorecard.model_version == 3
     assert len(scorecard.score_items) == 2
     assert scorecard.score_items[0].score == 10.0
-    # Band upper bound is exclusive, so score==max_score currently yields no band.
-    assert scorecard.score_items[0].band_key is None
+    # Score 10.0 should now match band 'high' (max_score=10 is inclusive with epsilon)
+    assert scorecard.score_items[0].band_key == "high"
     assert scorecard.score_items[1].score == 0.0
     assert scorecard.priority_label == "Media"
 

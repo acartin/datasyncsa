@@ -17,8 +17,7 @@ from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
 
-DEFAULT_CHAT_SYSTEM_PROMPT = """Eres un asistente inmobiliario profesional. 
-Ayuda al usuario a encontrar propiedades y responder preguntas sobre el mercado."""
+MISCONFIGURED_CHAT_MESSAGE = "Lo siento, no puedo conversar, estoy desconfigurado."
 
 
 class ScoringOrchestrator:
@@ -131,6 +130,11 @@ class ScoringOrchestrator:
             prompt_config = snapshot.get("scoring_prompt") or {}
             client_prompt_text = snapshot.get("client_prompt_text")
             if vertical_ctx and model_data and prompt_config:
+                if not client_prompt_text:
+                    client_prompt_text = await self.repo.get_client_system_prompt(
+                        request.client_id,
+                        slug="primary_chat",
+                    )
                 return {
                     "vertical_ctx": vertical_ctx,
                     "model_data": model_data,
@@ -488,7 +492,7 @@ class ScoringOrchestrator:
                 )
             
             if not system_prompt:
-                system_prompt = DEFAULT_CHAT_SYSTEM_PROMPT
+                raise ValueError("CLIENT_CHAT_PROMPT_NOT_CONFIGURED")
             
             vector_section = hybrid_ctx["vector_chunks"]
             structured_section = hybrid_ctx["structured_facts"]
@@ -567,7 +571,20 @@ class ScoringOrchestrator:
             prompt_config = runtime_ctx["prompt_config"]
             client_prompt_text = runtime_ctx.get("client_prompt_text")
             if not client_prompt_text:
-                client_prompt_text = DEFAULT_CHAT_SYSTEM_PROMPT
+                logger.error(
+                    "Missing chat system prompt for client_id=%s; conversation blocked by policy",
+                    request.client_id,
+                )
+                return ChatV2Response(
+                    answer=MISCONFIGURED_CHAT_MESSAGE,
+                    conversation_id=conversation_id,
+                    lead_id=None,
+                    scorecard_id=None,
+                    scorecard=None,
+                    scoring_status="disabled",
+                    scoring_job_id=None,
+                    scoring_eta=None,
+                )
             
             # Generate chat response using hybrid context (history + placeholders for retrieval)
             answer = await self._generate_chat_response(
@@ -834,8 +851,13 @@ class ScoringOrchestrator:
             score = min(max(float(score), min_score), max_score)
             
             band_key = None
-            for band in criterion.get("bands", []):
-                if float(band.get("min_score", 0)) <= score < float(band.get("max_score", 10)):
+            bands = criterion.get("bands", [])
+            for idx, band in enumerate(bands):
+                band_min = float(band.get("min_score", 0))
+                band_max = float(band.get("max_score", 10))
+                is_last_band = idx == len(bands) - 1
+                epsilon = 0.001
+                if score >= band_min - epsilon and (score < band_max or (is_last_band and score <= band_max + epsilon)):
                     band_key = band.get("band_key")
                     break
             

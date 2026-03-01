@@ -2,10 +2,10 @@
 Benchmark de latencia Gemini para scoring con contrato JSON (sandbox).
 
 Base de conversaciones:
-- Escenarios inspirados en `tests/sandbox/simulate_multichat_realtor.py`
+- Escenarios inspirados en `tests/sandbox/realtor/simulate_multichat_realtor.py`
 
 Uso:
-  RUN_GEMINI_BENCH=1 python3 -m pytest -q tests/sandbox/test_gemini_latency_realtor_contract.py -s
+  RUN_GEMINI_BENCH=1 python3 -m pytest -q tests/sandbox/realtor/test_gemini_latency_realtor_contract.py -s
 
 Opcionales:
   GEMINI_BENCH_REPEATS=3

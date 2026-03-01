@@ -333,8 +333,10 @@ def _transform_leads_to_dynamic_rows(leads: List[dict], schema: Optional[Scoring
                 
                 # Find matching band
                 band_info = {}
+                epsilon = 0.001
                 for band in criterion.bands:
-                    if band.min_score <= score < band.max_score:
+                    is_last_band = band == criterion.bands[-1]
+                    if band.min_score - epsilon <= score <= band.max_score + epsilon if is_last_band else band.min_score - epsilon <= score < band.max_score:
                         band_info = {
                             "label": band.label,
                             "icon": band.icon,

@@ -1,27 +1,29 @@
 # Scoring V2 Schema Reference
 
-## Estado actual (2026-02-25)
+## Estado actual (2026-03-01)
 
-Scoring v2 opera con este flujo real:
+Scoring v2 opera hoy con flujo **async + LLM-first**:
 
 1. `POST /api/v2/chat` responde primero el mensaje conversacional.
-2. El scoring se agenda en background en `lead_scoring_jobs`.
-3. Un worker toma el job luego del idle delay.
-4. El LLM extrae datos (`extracted_data`) y hints opcionales (`slot_hints`).
-5. El score final se calcula de forma determinista desde `extraction_schema.deterministic_scoring`.
-6. Se persiste `lead_scorecards` + `lead_score_items` y se actualiza `lead_leads.current_scorecard_id`.
+2. Se encola/actualiza un job en `lead_scoring_jobs` (unico por `conversation_id`).
+3. El worker hace polling y claim atomico del job.
+4. El LLM devuelve `scores` + `extracted_data` (y opcionalmente `score_reasons`, `slot_hints`, `confidence`).
+5. El backend aplica defaults conservadores por criterio si faltan scores validos.
+6. Se hace upsert de `lead_scorecards` + replace de `lead_score_items`.
+7. Se actualiza `lead_leads.current_scorecard_id`.
 
-`lead_type` ya no se usa en v2 (fue removido de `lead_leads`). El enrutamiento es por `client_id`.
+`lead_type` ya no se usa en v2 (fue removido de `lead_leads`). El enrutamiento es por tenant (`client_id`) y contexto `lead_clients.vertical_id + lead_clients.scoring_model_id`.
 
 ---
 
-## Principios de diseño
+## Principios operativos vigentes
 
-- Resolución de modelo por tenant: `lead_clients.vertical_id` + `lead_clients.scoring_model_id`.
-- Prompt orientado a extracción, no a scoring numérico.
-- Scoring determinista y configurable por BD.
-- Scoring asíncrono e invisible para el usuario final de chat.
-- Trazabilidad completa: `prompt_id`, `prompt_snapshot`, `raw_payload`, estado de job y latencias.
+- Resolucion de modelo por tenant: `lead_clients.vertical_id` + `lead_clients.scoring_model_id`.
+- Scoring asincrono: el chat no bloquea esperando score.
+- Un job por conversacion: `lead_scoring_jobs.conversation_id` es `UNIQUE`.
+- Proteccion anti-stale por generacion: `generation` + `running_generation`.
+- Trazabilidad: `prompt_id`, `prompt_snapshot`, `raw_payload`, estado de job, latencias.
+- Tenancy estricto en lecturas operativas (`client_id`).
 
 ---
 
@@ -37,20 +39,22 @@ lead_client_verticals (1) ──< lead_scoring_models (N)
 
 lead_clients (1) ──< lead_leads (N) ──< lead_conversations (N)
       │                 │
-      │                 ├──< lead_scorecards (N) ──< lead_score_items (N)
+      │                 ├──< lead_scorecards (N*) ──< lead_score_items (N)
       │                 │
-      │                 └──< lead_scoring_jobs (N)
+      │                 └──< lead_scoring_jobs (N, UNIQUE conversation_id)
       │
       └── scoring_model_id ───────────> lead_scoring_models.id
 ```
 
+`N*`: en runtime actual se usa `upsert` de scorecard por lead (no siempre inserta una nueva fila por corrida).
+
 ---
 
-## Tablas de configuración
+## Tablas de configuracion
 
 ### `lead_client_verticals`
 
-Define verticales (industria).
+Define verticales.
 
 Campos clave:
 - `id` (PK)
@@ -59,20 +63,17 @@ Campos clave:
 
 ### `lead_scoring_models`
 
-Define modelo de scoring por vertical/tenant scope.
+Define modelo por vertical.
 
 Campos clave:
 - `id` (PK)
 - `vertical_id` (FK)
-- `business_domain` (opcional)
 - `name`
 - `version`
-- `prompt_version` (legacy numérico)
+- `prompt_version` (legacy)
 - `is_active`
 - `normalization_strategy`
-
-Relación tenant:
-- `lead_clients.scoring_model_id` apunta al modelo que debe usar ese cliente.
+- `business_domain` (opcional, segun datos existentes)
 
 ### `lead_scoring_criteria`
 
@@ -100,7 +101,7 @@ Campos clave:
 
 ### `lead_scoring_prompts`
 
-Prompt versionado por modelo.
+Prompt activo/versionado por modelo.
 
 Campos clave:
 - `id`
@@ -111,7 +112,7 @@ Campos clave:
 - `is_active`
 - `created_by`
 
-#### Placeholders válidos en `prompt_template`
+#### Placeholders validos en `prompt_template`
 
 - `{vertical_name}`
 - `{criteria_text}`
@@ -124,55 +125,49 @@ Tokens legacy normalizados en runtime:
 - `{conversation_text}` -> eliminado
 - `{lead_type}` -> `{vertical_name}`
 
-#### Contrato de `extraction_schema`
+#### Contrato real de `extraction_schema`
 
-`extraction_schema` soporta:
-- `fields` o `properties`: campos a extraer.
-- `deterministic_scoring`: reglas para slots y scoring final.
+`extraction_schema` hoy soporta estas llaves (segun prompt + engine):
 
-Ejemplo mínimo:
+- `fields`: campos de `extracted_data`.
+- `response_schema`: override completo del schema esperado del LLM.
+- `slot_hints_schema`: schema de `slot_hints` (opcional).
+- `scoring_contract`: reglas de fallback para scores faltantes.
+- `deterministic_scoring`: configuracion legacy/auxiliar (hoy no gobierna el score final en runtime principal).
+
+Ejemplo de contrato alineado al runtime LLM-first:
 
 ```json
 {
   "fields": [
-    {"key": "extracted_name", "type": "string", "description": "Nombre"},
-    {"key": "extracted_email", "type": "string", "description": "Correo"},
-    {"key": "extracted_phone", "type": "string", "description": "Telefono"}
+    {"key": "extracted_name", "type": "string"},
+    {"key": "extracted_email", "type": "string"},
+    {"key": "extracted_phone", "type": "string"}
   ],
-  "deterministic_scoring": {
-    "slots": {
-      "intent": {
-        "default": "unknown",
-        "rules": [
-          {"set": "ready_to_advance", "contains_any": ["agendar", "visitar"]},
-          {"set": "interested", "contains_any": ["me interesa", "precio"]}
-        ]
-      }
-    },
-    "derived_slots": [
-      {
-        "slot": "contactability",
-        "type": "count_present_fields",
-        "fields": ["extracted_name", "extracted_email", "extracted_phone"],
-        "default": "none",
-        "thresholds": [
-          {"min": 2, "set": "full"},
-          {"min": 1, "set": "partial"}
-        ]
-      }
-    ],
-    "criteria_rules": {
-      "intent": {
-        "type": "slot_map",
-        "slot": "intent",
-        "default": 3.0,
-        "mapping": {
-          "ready_to_advance": 9.0,
-          "interested": 7.0,
-          "unknown": 3.0
+  "response_schema": {
+    "type": "object",
+    "required": ["reasoning", "scores", "extracted_data", "confidence"],
+    "properties": {
+      "reasoning": {"type": "string"},
+      "scores": {
+        "type": "object",
+        "required": ["engagement", "intent", "timeline", "match", "finance"],
+        "properties": {
+          "engagement": {"type": "number", "minimum": 0, "maximum": 10},
+          "intent": {"type": "number", "minimum": 0, "maximum": 10},
+          "timeline": {"type": "number", "minimum": 0, "maximum": 10},
+          "match": {"type": "number", "minimum": 0, "maximum": 10},
+          "finance": {"type": "number", "minimum": 0, "maximum": 10}
         }
-      }
+      },
+      "score_reasons": {"type": "object"},
+      "extracted_data": {"type": "object"},
+      "slot_hints": {"type": "object"},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}
     }
+  },
+  "scoring_contract": {
+    "missing_evidence_default_range": {"min": 4, "max": 5}
   }
 }
 ```
@@ -193,16 +188,16 @@ Campos relevantes para v2:
 - `current_scorecard_id`
 
 Notas:
-- `lead_type` fue removido de esta tabla.
-- Siguen existiendo columnas legacy v1 (`score_engagement`, `score_finance`, etc.) por compatibilidad.
+- `lead_type` fue removido.
+- Persisten columnas legacy v1 por compatibilidad historica.
 
 ### `lead_conversations`
 
-Conversación consolidada por lead.
+Conversacion consolidada por lead.
 
 Campos relevantes:
 - `id` (uuid interno)
-- `conversation_id` (id externo de sesión)
+- `conversation_id` (id externo)
 - `lead_id`
 - `messages` (jsonb)
 - `lead_messages`, `bot_messages`, `total_messages`
@@ -210,7 +205,7 @@ Campos relevantes:
 
 ### `lead_scoring_jobs`
 
-Cola persistente de scoring async.
+Cola persistente async (una fila por `conversation_id`).
 
 Campos clave:
 - `id`
@@ -218,16 +213,19 @@ Campos clave:
 - `conversation_id` (UNIQUE)
 - `client_id`
 - `model_id`, `prompt_id`
+- `generation`
+- `running_generation`
 - `expected_lead_messages`
 - `status`: `queued`, `running`, `rescheduled`, `completed`, `degraded`, `failed`, `cancelled`
 - `attempts`, `max_attempts`
 - `scheduled_for`, `started_at`, `finished_at`
 - `last_error_code`, `last_error_message`
 - `fallback_used`, `json_valid`, `latency_ms`, `response_chars`
+- `created_at`, `updated_at`
 
 ### `lead_scorecards`
 
-Resultado final por corrida de scoring.
+Resultado vigente de scoring para lead (upsert).
 
 Campos clave:
 - `id`
@@ -241,7 +239,7 @@ Campos clave:
 - `score_total`
 - `priority_label`
 - `reasoning`
-- `extraction_result`
+- `extraction_result` (se mergea de forma acumulativa)
 - `raw_payload`
 
 ### `lead_score_items`
@@ -258,18 +256,18 @@ Campos clave:
 
 ---
 
-## Flujo de ejecución
+## Flujo de ejecucion real
 
 ### 1) Chat request
 
 `POST /api/v2/chat`:
 
 1. Valida `client_id`.
-2. Resuelve contexto tenant (`vertical_id` y `scoring_model_id`).
+2. Resuelve contexto tenant (`vertical_id`, `scoring_model_id`).
 3. Carga modelo activo y prompt activo.
-4. Genera respuesta de chat (Gemini + RAG).
-5. Persiste mensaje y actualiza lead.
-6. Encola job en `lead_scoring_jobs` con `scheduled_for = now + SCORING_IDLE_CLOSE_SECS`.
+4. Genera respuesta de chat (Gemini + hybrid RAG).
+5. Persiste/actualiza conversacion y snapshot.
+6. Encola job en `lead_scoring_jobs` con debounce (`SCORING_JOB_DEBOUNCE_SECS`).
 7. Retorna respuesta sin bloquear por scoring.
 
 Respuesta incluye:
@@ -283,26 +281,39 @@ Worker (`worker.py` + `ScoringWorker`) hace polling (`SCORING_WORKER_POLL_SECS`)
 
 1. Claim del siguiente job runnable.
 2. Verifica staleness (`expected_lead_messages` vs contador actual).
-3. Construye `conversation_text` con solo turnos de usuario.
-4. Llama `ScoringEngine.analyze_conversation(...)`.
-5. Persiste `lead_scorecards` + `lead_score_items`.
-6. Marca job `completed` o `degraded`.
+3. Verifica ownership por `running_generation`.
+4. Construye `conversation_text` con solo turnos de usuario.
+5. Llama `ScoringEngine.analyze_conversation(...)`.
+6. Persiste scorecard/items.
+7. Marca job `completed` o `degraded`.
+
+Si entra un turno nuevo y el job queda viejo, se reschedulea o se descarta la escritura stale.
 
 ---
 
-## Contrato LLM de scoring v2
+## Contrato LLM de scoring v2 (actual)
 
-El LLM no decide el score final. Solo extrae señales.
+El contrato activo es **LLM-first con scores estructurados**.
 
-Payload esperado del LLM:
+Payload esperado (minimo practico):
 
 ```json
 {
   "reasoning": "texto breve",
+  "scores": {
+    "engagement": 7.5,
+    "intent": 8.0,
+    "timeline": 5.0,
+    "match": 7.0,
+    "finance": 6.0
+  },
   "extracted_data": {
     "extracted_name": "...",
     "extracted_email": "...",
     "extracted_phone": "..."
+  },
+  "score_reasons": {
+    "intent": "evidencia..."
   },
   "slot_hints": {
     "intent": "interested"
@@ -311,26 +322,35 @@ Payload esperado del LLM:
 }
 ```
 
-Reglas:
-- `extracted_data` es requerido.
-- `slot_hints`, `reasoning` y `confidence` son opcionales.
-- No se espera objeto `scores` desde el LLM.
-- El score final se calcula con `deterministic_scoring.criteria_rules`.
+Reglas runtime:
+- `scores` y `extracted_data` son requeridos por schema default del engine (o por `response_schema` override).
+- Si falta score valido por criterio, backend aplica default conservador (`missing_score_policy` / `scoring_contract`).
+- `score_reasons`, `slot_hints`, `reasoning`, `confidence` son opcionales.
+- `score_total` se calcula en backend como promedio ponderado por `weight` de criterios.
+- El score final **no** sale directo del LLM como total unico.
 
 ---
 
 ## Variables operativas clave
 
 - `SCORING_BG_ENABLED`
-- `SCORING_IDLE_CLOSE_SECS` (alias legacy: `SCORING_IDLE_DELAY_SECS`)
+- `SCORING_JOB_DEBOUNCE_SECS` (agenda `scheduled_for`)
 - `SCORING_WORKER_POLL_SECS`
+- `SCORING_WORKER_CONCURRENCY`
 - `SCORING_JOB_MAX_ATTEMPTS`
 - `SCORING_JOB_LOCK_TTL_SECS`
 - `SCORING_RETRY_DELAY_SECS`
+- `SCORING_LLM_TIMEOUT_SECS`
+- `SCORING_LLM_HARD_TIMEOUT_SECS`
+- `SCORING_LLM_MAX_RETRIES`
+- `SCORING_LLM_MAX_OUTPUT_TOKENS`
+
+Compat legacy en config:
+- `SCORING_IDLE_CLOSE_SECS` / `SCORING_IDLE_DELAY_SECS` existen como alias, pero el scheduling de jobs usa debounce.
 
 ---
 
-## Consultas de verificación
+## Consultas de verificacion
 
 ### Modelo activo por cliente
 
@@ -341,26 +361,28 @@ LEFT JOIN lead_scoring_models m ON m.id = c.scoring_model_id
 WHERE c.id = :client_id;
 ```
 
-### Prompt activo + deterministic config
+### Prompt activo + schema
 
 ```sql
 SELECT p.id, p.model_id, p.version, p.is_active,
+       (p.extraction_schema ? 'response_schema') AS has_response_schema,
        (p.extraction_schema ? 'deterministic_scoring') AS has_deterministic
 FROM lead_scoring_prompts p
 WHERE p.model_id = :model_id
 ORDER BY p.version DESC;
 ```
 
-### Timeline de job async
+### Timeline de job async (incluye generacion)
 
 ```sql
-SELECT id, status, attempts, scheduled_for, started_at, finished_at, latency_ms, response_chars
+SELECT id, status, generation, running_generation, attempts,
+       scheduled_for, started_at, finished_at, latency_ms, response_chars
 FROM lead_scoring_jobs
 WHERE conversation_id = :conversation_id
 ORDER BY created_at DESC;
 ```
 
-### Último scorecard
+### Scorecard vigente de un lead
 
 ```sql
 SELECT id, lead_id, score_total, priority_label, extraction_result, created_at
@@ -376,30 +398,36 @@ LIMIT 1;
 
 - `POST /api/v2/chat`
 - `GET /api/v2/scoring/jobs/{job_id}`
+- `GET /api/v2/scoring/ops/summary` (interno, token si `INTERNAL_API_TOKEN` esta configurado)
 - `GET /api/v2/leads/{lead_id}/scorecards/latest`
 - `GET /api/v2/leads/{lead_id}/scorecards/{scorecard_id}`
 - `GET /api/v2/scoring/models/active?client_id=...`
 - `POST /api/v2/cache/invalidate`
+- `GET /api/v2/health`
+- `POST /api/v2/internal/memory/reset` (interno)
 
 ---
 
 ## Notas de compatibilidad
 
-- `prompt_version` se conserva por compatibilidad histórica, pero la referencia exacta es `prompt_id` + `prompt_snapshot`.
-- Columnas v1 de score en `lead_leads` siguen presentes por compatibilidad, pero v2 persiste en `lead_scorecards` y `lead_score_items`.
-- Las plantillas de prompt en BD deben ser de extracción (no scoring numérico).
+- `prompt_version` se conserva por compatibilidad; referencia fuerte: `prompt_id` + `prompt_snapshot`.
+- `deterministic_scoring` puede existir en `extraction_schema`, pero el flujo principal actual calcula score desde `scores` del LLM con fallback conservador.
+- `extraction_result` se acumula (merge) en `upsert_scorecard` para no perder datos previos validos.
 
 ---
 
-## Referencias de implementación
+## Referencias de implementacion
 
+- `services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py`
 - `services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py`
 - `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
 - `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/deterministic_scoring.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
+- `services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py`
 - `services/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py`
 - `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
 - `migrations/2026-02-21_drop_lead_type_from_lead_leads.sql`
 - `migrations/2026-02-22_create_lead_scoring_jobs.sql`
-- `migrations/2026-02-25_seed_deterministic_scoring_config.sql`
+- `migrations/2026-02-26_add_generation_to_lead_scoring_jobs.sql`
+- `migrations/2026-02-26_update_realtor_prompt_v3_llm_first.sql`
 - `migrations/2026-02-26_update_lead_scoring_prompts_extraction_only.sql`
