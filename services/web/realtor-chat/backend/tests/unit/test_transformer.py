@@ -53,3 +53,29 @@ async def test_transform_builds_property_card_from_sources(monkeypatch):
     component_types = [comp.type for comp in response.components]
     assert "chat" in component_types
     assert "property-card" in component_types
+
+
+@pytest.mark.asyncio
+async def test_search_properties_for_query_maps_property_cards(monkeypatch):
+    monkeypatch.setattr(transformer_core.db_manager, "search_properties", lambda *_args, **_kwargs: [
+        {
+            "id": "p-2",
+            "title": "Apartamento Vista",
+            "price": 220000,
+            "address_city": "Escazu",
+            "address_state": "San Jose",
+            "images": ["https://example.com/p2.jpg"],
+            "features": {"highlights": ["2 habitaciones", "2 banos"]},
+        }
+    ])
+
+    transformer = SDUITransformer()
+    cards = await transformer.search_properties_for_query(
+        client_id="64f357a0-98eb-44f1-9f41-6e615ed26180",
+        query_text="busco apartamento en escazu",
+        limit=4,
+    )
+
+    assert len(cards) == 1
+    assert cards[0].type == "property-card"
+    assert cards[0].title == "Apartamento Vista"

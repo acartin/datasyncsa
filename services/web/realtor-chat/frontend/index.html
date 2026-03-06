@@ -465,8 +465,10 @@
                 renderer.showTyping();
 
                 const payload = {
-                    text: text,
+                    message_text: text,
                     client_id: clientId,
+                    channel: 'web_html',
+                    channel_user_id: `web_${clientId}_${Date.now()}`,
                     brand_project: brandProject,
                     source_property_ref: propertyId,
                     landing_page_url: window.location.href,

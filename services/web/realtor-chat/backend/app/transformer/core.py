@@ -139,19 +139,56 @@ class SDUITransformer:
         for prop_data in prop_results:
             if isinstance(prop_data, Exception) or not prop_data:
                 continue
-            try:
-                title = prop_data.get("title", "Propiedad Sugerida").replace("&#8211;", "-")
-                card = PropertyCard(
-                    id=str(prop_data.get("id")),
-                    title=title,
-                    price=float(prop_data.get("price", 0)),
-                    location=f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", "),
-                    image_url=prop_data["images"][0] if prop_data.get("images") else None,
-                    tags=prop_data.get("features", {}).get("highlights", []) if isinstance(prop_data.get("features"), dict) else [],
-                )
+            card = self._map_property_data_to_card(prop_data)
+            if card:
                 cards.append(card)
-            except Exception as e:
-                logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
-                continue
         
         return cards
+
+    async def search_properties_for_query(
+        self,
+        client_id: str,
+        query_text: str,
+        limit: int = 4,
+        include_terms: bool = True,
+    ) -> List[PropertyCard]:
+        properties = await asyncio.to_thread(
+            db_manager.search_properties,
+            client_id,
+            query_text,
+            limit,
+            include_terms,
+        )
+        cards: List[PropertyCard] = []
+        for prop_data in properties or []:
+            card = self._map_property_data_to_card(prop_data)
+            if card:
+                cards.append(card)
+        return cards
+
+    async def count_properties_for_query(self, client_id: str, query_text: str, include_terms: bool = True) -> int:
+        return await asyncio.to_thread(db_manager.count_properties, client_id, query_text, include_terms)
+
+    async def get_property_price_stats_for_query(self, client_id: str, query_text: str, include_terms: bool = False) -> Dict[str, Any]:
+        return await asyncio.to_thread(db_manager.get_property_price_stats, client_id, query_text, include_terms)
+
+    async def extract_property_filters_for_query(self, query_text: str) -> Dict[str, Any]:
+        return await asyncio.to_thread(db_manager.extract_property_filters, query_text)
+
+    def _map_property_data_to_card(self, prop_data: Dict[str, Any]) -> Union[PropertyCard, None]:
+        try:
+            title = (prop_data.get("title") or "Propiedad Sugerida").replace("&#8211;", "-")
+            location = f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", ")
+            features = prop_data.get("features") if isinstance(prop_data.get("features"), dict) else {}
+            tags = features.get("highlights", []) if isinstance(features, dict) else []
+            return PropertyCard(
+                id=str(prop_data.get("id")),
+                title=title,
+                price=float(prop_data.get("price", 0) or 0),
+                location=location,
+                image_url=prop_data["images"][0] if prop_data.get("images") else None,
+                tags=tags if isinstance(tags, list) else [],
+            )
+        except Exception as e:
+            logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
+            return None

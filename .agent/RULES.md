@@ -110,6 +110,13 @@ Regla:
 - No asumir que `lead_type` viene del cliente en v2; se resuelve por vertical del tenant.
 - Mutaciones de conocimiento (ETL sync/delete) deben disparar reset de memoria best-effort.
 
+## 8.1 Prohibición de Heurística Hardcodeada
+
+- Prohibido introducir heurística hardcodeada para inferir intención, ubicación, entidades o flujo de negocio.
+- Toda decisión de negocio/intent debe ser dinámica y provenir de configuración, prompts versionados o parámetros explícitos del runtime.
+- Si se requiere fallback, debe ser parametrizable (feature flag/config) y no lógica fija embebida en código.
+- Cualquier cambio que agregue `if/regex/keywords` ad-hoc para suplir clasificación/intención se considera regresión de arquitectura.
+
 ## 9. Testing Mínimo por Cambio
 
 Regla crítica de sincronización runtime (obligatoria para Inference v2):

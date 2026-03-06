@@ -157,6 +157,98 @@ class CacheService:
             logger.error(f"Error invalidating all models: {e}")
             return False
 
+    async def get_client_chat_prompt(self, client_id: UUID, slug: str) -> Optional[str]:
+        if not self.is_enabled():
+            return None
+        cache_key = self._build_key("chat_prompt", str(client_id), slug or "primary_chat")
+        try:
+            cached = await self.client.get(cache_key)
+            if cached:
+                logger.debug(f"Cache hit for chat prompt: {cache_key}")
+                return str(cached)
+            return None
+        except Exception as e:
+            logger.error(f"Error reading chat prompt cache: {e}")
+            return None
+
+    async def set_client_chat_prompt(self, client_id: UUID, slug: str, prompt_text: str) -> bool:
+        if not self.is_enabled():
+            return False
+        cache_key = self._build_key("chat_prompt", str(client_id), slug or "primary_chat")
+        try:
+            await self.client.setex(cache_key, settings.cache_ttl_seconds, prompt_text or "")
+            return True
+        except Exception as e:
+            logger.error(f"Error writing chat prompt cache: {e}")
+            return False
+
+    async def get_scoring_prompt(self, client_id: UUID, model_id: UUID) -> Optional[Dict[str, Any]]:
+        if not self.is_enabled():
+            return None
+        cache_key = self._build_key("scoring_prompt", str(client_id), str(model_id))
+        try:
+            cached = await self.client.get(cache_key)
+            if cached:
+                logger.debug(f"Cache hit for scoring prompt: {cache_key}")
+                return json.loads(cached)
+            return None
+        except Exception as e:
+            logger.error(f"Error reading scoring prompt cache: {e}")
+            return None
+
+    async def set_scoring_prompt(self, client_id: UUID, model_id: UUID, prompt_data: Dict[str, Any]) -> bool:
+        if not self.is_enabled():
+            return False
+        cache_key = self._build_key("scoring_prompt", str(client_id), str(model_id))
+        try:
+            await self.client.setex(
+                cache_key,
+                settings.cache_ttl_seconds,
+                json.dumps(prompt_data or {}, default=str),
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error writing scoring prompt cache: {e}")
+            return False
+
+    async def invalidate_client_prompts(self, client_id: UUID) -> bool:
+        if not self.is_enabled():
+            return False
+        try:
+            patterns = [
+                f"{self.prefix}:chat_prompt:{str(client_id)}:*",
+                f"{self.prefix}:scoring_prompt:{str(client_id)}:*",
+            ]
+            total_deleted = 0
+            for pattern in patterns:
+                keys = await self.client.keys(pattern)
+                if keys:
+                    total_deleted += await self.client.delete(*keys)
+            logger.debug("Invalidated prompt cache keys for client_id=%s deleted=%s", client_id, total_deleted)
+            return True
+        except Exception as e:
+            logger.error(f"Error invalidating client prompt cache: {e}")
+            return False
+
+    async def invalidate_all_prompts(self) -> bool:
+        if not self.is_enabled():
+            return False
+        try:
+            patterns = [
+                f"{self.prefix}:chat_prompt:*",
+                f"{self.prefix}:scoring_prompt:*",
+            ]
+            deleted = 0
+            for pattern in patterns:
+                keys = await self.client.keys(pattern)
+                if keys:
+                    deleted += await self.client.delete(*keys)
+            logger.debug("Invalidated all prompt cache keys deleted=%s", deleted)
+            return True
+        except Exception as e:
+            logger.error(f"Error invalidating all prompt cache: {e}")
+            return False
+
 
 # Global cache service instance
 cache_service = CacheService()

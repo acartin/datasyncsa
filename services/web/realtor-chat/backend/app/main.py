@@ -4,10 +4,15 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-from app.schemas.chat import ChatRequest, InitRequest, InternalMemoryResetRequest
+from app.schemas.chat import InitRequest, InternalMemoryResetRequest
+from app.schemas.internal_chat import InternalChatRequest
 from app.schemas.ui import SDUIResponse
+from app.planner.sql_planner import SQLPlanner
+from app.planner.llm_client import build_sql_planner_llm_client
 
 app = FastAPI(title="Realtor Chat Polymorphic Bridge")
+
+PROPERTY_SEARCH_LIMIT = max(1, min(int(os.getenv("REALTOR_PROPERTY_SEARCH_LIMIT", "4")), 12))
 
 cors_origins = [
     origin.strip()
@@ -74,13 +79,24 @@ async def dependencies_health():
 
 from app.core.inference_bridge import InferenceClient
 from app.core.memory_reset import MemoryResetClient
+from app.core.vertical_router import vertical_router
 from app.transformer.core import SDUITransformer
+from app.transformer.realtor_policy import RealtorRendererPolicy
+from app.transformer.generic_policy import GenericRendererPolicy
+from app.core.feature_flags import feature_flags
 from app.session.manager import SessionManager
 
 inference_client = InferenceClient()
 memory_reset_client = MemoryResetClient()
 transformer = SDUITransformer()
 session_manager = SessionManager()
+sql_planner = SQLPlanner(
+    search_limit=PROPERTY_SEARCH_LIMIT,
+    llm_client=build_sql_planner_llm_client(),
+)
+
+vertical_router.register_strategy("realtor", "web_html", RealtorRendererPolicy(channel="web_html"))
+vertical_router.register_strategy("generic", "web_html", GenericRendererPolicy(channel="web_html"))
 
 @app.post("/chat/init", response_model=SDUIResponse)
 async def chat_init(req: InitRequest):
@@ -95,77 +111,186 @@ async def chat_init(req: InitRequest):
 
 
 @app.post("/chat", response_model=SDUIResponse)
-async def chat_interaction(query: ChatRequest):
-    # Backwards compatibility: keep accepting is_init on /chat
-    if query.is_init:
-        return await chat_init(InitRequest(client_id=query.client_id, brand_project=query.brand_project))
-
-    client_id = str(query.client_id)
-
-    # 1. Recuperar contexto de Redis
-    session_data = await session_manager.get_session(client_id)
+async def chat_interaction(req: InternalChatRequest):
+    """
+    Canonical chat endpoint using InternalChatRequest contract.
+    This endpoint is explicitly limited to web_html for predictable SDUI output.
+    """
+    if req.channel != "web_html":
+        raise HTTPException(
+            status_code=422,
+            detail="/chat only supports channel='web_html'; use channel-specific endpoints for other channels",
+        )
     
-    # Mezclar contexto entrante (si el frontend envía datos frescos) con el guardado
-    # Importante: El frontend es la fuente de verdad de la INTENCIÓN, Redis del HISTORIAL.
+    client_id = str(req.client_id)
+    channel = req.channel
+    channel_user_id = req.channel_user_id
+
+    if feature_flags.SESSION_MULTICHANNEL_ENABLED:
+        session_data = await session_manager.get_session_multichannel(
+            client_id=client_id,
+            channel=channel,
+            channel_user_id=channel_user_id,
+        )
+    else:
+        session_data = await session_manager.get_session(client_id)
+    
     session_context = {
         "client_id": client_id,
-        "conversation_id": str(query.conversation_id) if query.conversation_id else session_data.get("conversation_id"),
+        "conversation_id": str(req.conversation_id) if req.conversation_id else session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
-        "brand_project": query.brand_project or session_data.get("brand_project"),
-        "utm_source": query.utm_source or session_data.get("utm_source"),
-        "utm_medium": query.utm_medium or session_data.get("utm_medium"),
-        "utm_campaign": query.utm_campaign or session_data.get("utm_campaign"),
-        "utm_content": query.utm_content or session_data.get("utm_content"),
-        "utm_term": query.utm_term or session_data.get("utm_term"),
-        "gclid": query.gclid or session_data.get("gclid"),
-        "fbclid": query.fbclid or session_data.get("fbclid"),
-        "ttclid": query.ttclid or session_data.get("ttclid"),
-        "msclkid": query.msclkid or session_data.get("msclkid"),
-        "li_fat_id": query.li_fat_id or session_data.get("li_fat_id"),
-        "gbraid": query.gbraid or session_data.get("gbraid"),
-        "wbraid": query.wbraid or session_data.get("wbraid"),
-        "referrer_url": query.referrer_url or session_data.get("referrer_url"),
-        "source_property_ref": query.source_property_ref or session_data.get("source_property_ref"),
-        "landing_page_url": query.landing_page_url or session_data.get("landing_page_url"),
+        "brand_project": req.brand_project or session_data.get("brand_project"),
+        "channel": channel,
+        "channel_user_id": channel_user_id,
     }
-
+    
+    if req.metadata:
+        session_context.update(req.metadata)
+    
     try:
-        # 2. Llamar al Cerebro Real
-        ai_response = await inference_client.chat(user_query=query.text, session=session_context)
+        ai_response = await inference_client.chat(user_query=req.message_text, session=session_context)
         
-        # 2.5 Actualizar Memoria (Guardamos el conversation_id nuevo si cambió)
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
         if new_conversation_id:
-            await session_manager.update_session(client_id, {
-                "conversation_id": new_conversation_id,
-                "brand_project": session_context.get("brand_project"),
-                "utm_source": session_context.get("utm_source"),
-                "utm_medium": session_context.get("utm_medium"),
-                "utm_campaign": session_context.get("utm_campaign"),
-                "utm_content": session_context.get("utm_content"),
-                "utm_term": session_context.get("utm_term"),
-                "gclid": session_context.get("gclid"),
-                "fbclid": session_context.get("fbclid"),
-                "ttclid": session_context.get("ttclid"),
-                "msclkid": session_context.get("msclkid"),
-                "li_fat_id": session_context.get("li_fat_id"),
-                "gbraid": session_context.get("gbraid"),
-                "wbraid": session_context.get("wbraid"),
-                "referrer_url": session_context.get("referrer_url"),
-                "source_property_ref": session_context.get("source_property_ref"),
-                "landing_page_url": session_context.get("landing_page_url"),
-                "last_interaction": datetime.now(timezone.utc).isoformat(),
-            })
+            if feature_flags.SESSION_MULTICHANNEL_ENABLED:
+                await session_manager.upsert_session(
+                    client_id=client_id,
+                    channel=channel,
+                    channel_user_id=channel_user_id,
+                    data={
+                        "conversation_id": new_conversation_id,
+                        "brand_project": session_context.get("brand_project"),
+                        "last_interaction": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            else:
+                await session_manager.update_session(
+                    client_id,
+                    {
+                        "conversation_id": new_conversation_id,
+                        "brand_project": session_context.get("brand_project"),
+                        "channel": channel,
+                        "channel_user_id": channel_user_id,
+                        "last_interaction": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+        
+        vertical = await vertical_router.resolve_vertical_for_client_async(client_id)
+        policy_handler = await vertical_router.get_handler_async(client_id, channel)
+        if not policy_handler:
+            raise HTTPException(status_code=500, detail="No renderer policy available for resolved vertical/channel")
+        
+        ai_text = ai_response.get("answer")
+        if isinstance(ai_text, dict):
+            ai_text = str(ai_text.get("text", str(ai_text)))
+        elif not isinstance(ai_text, str):
+            ai_text = str(ai_text) if ai_text is not None else ""
+        ai_text = (ai_text or "").strip()
+        deferred_footer_text = None
+        
+        extracted_components = []
+        sources = ai_response.get("sources", [])
+        if sources:
+            property_cards = await transformer._extract_properties_from_sources(sources)
+            if property_cards:
+                if len(property_cards) == 1:
+                    extracted_components.append(property_cards[0])
+                else:
+                    from app.schemas.ui import PropertyGrid
+                    extracted_components.append(PropertyGrid(
+                        title="Propiedades Relacionadas",
+                        properties=property_cards
+                    ))
 
-        # 3. Transformación Polimórfica (La Magia)
-        sdui_response = await transformer.transform(
-            ai_response,
-            str(new_conversation_id or "init"),
-            client_id,
-            brand_project=session_context.get("brand_project"),
+        if vertical == "realtor":
+            planner_session_data = dict(session_data or {})
+            planner_session_data["client_id"] = client_id
+            plan = await sql_planner.plan(req.message_text, session_data=planner_session_data)
+            planner_result = await sql_planner.execute(
+                plan=plan,
+                client_id=client_id,
+                transformer=transformer,
+            )
+
+            if planner_result.handled:
+                if plan.needs_clarification:
+                    extracted_components = []
+                    ai_text = planner_result.answer_override or ai_text
+                    deferred_footer_text = None
+                else:
+                    if planner_result.components:
+                        extracted_components = []
+                        if planner_result.answer_override:
+                            deferred_footer_text = planner_result.answer_override
+                            ai_text = ""
+                        for component_payload in planner_result.components:
+                            comp_type = component_payload.get("type")
+                            if comp_type == "property-card":
+                                from app.schemas.ui import PropertyCard
+                                extracted_components.append(PropertyCard(**component_payload))
+                            elif comp_type == "property-grid":
+                                from app.schemas.ui import PropertyGrid
+                                extracted_components.append(PropertyGrid(**component_payload))
+                    elif planner_result.answer_override:
+                        ai_text = planner_result.answer_override
+
+                if planner_result.session_updates:
+                    if feature_flags.SESSION_MULTICHANNEL_ENABLED:
+                        await session_manager.upsert_session(
+                            client_id=client_id,
+                            channel=channel,
+                            channel_user_id=channel_user_id,
+                            data=planner_result.session_updates,
+                        )
+                    else:
+                        await session_manager.update_session(client_id, planner_result.session_updates)
+        
+        if "cita" in ai_text.lower() or "visita" in ai_text.lower():
+            from app.schemas.ui import ActionMenu
+            extracted_components.append(ActionMenu(
+                options=[
+                    {"label": "📅 Agendar Visita", "payload": "SCHEDULE_VISIT"},
+                    {"label": "📞 Hablar con Asesor", "payload": "CALL_AGENT"}
+                ]
+            ))
+        
+        branding = await transformer._get_branding_for_client(
+            client_id, 
+            session_context.get("brand_project")
         )
         
-        return sdui_response
+        policy_response = policy_handler.build_response(
+            ai_text=ai_text,
+            components=extracted_components,
+            session_id=str(new_conversation_id or "init"),
+        )
+        
+        from app.schemas.ui import BaseComponent
+        final_components = []
+        for comp_data in policy_response.get("components", []):
+            comp_type = comp_data.get("type")
+            if comp_type == "chat":
+                from app.schemas.ui import ChatMessage
+                final_components.append(ChatMessage(**comp_data))
+            elif comp_type == "property-card":
+                from app.schemas.ui import PropertyCard
+                final_components.append(PropertyCard(**comp_data))
+            elif comp_type == "property-grid":
+                from app.schemas.ui import PropertyGrid
+                final_components.append(PropertyGrid(**comp_data))
+            else:
+                from app.schemas.ui import ChatMessage
+                final_components.append(ChatMessage(text=comp_data.get("text", ""), sender="bot"))
+
+        if deferred_footer_text:
+            from app.schemas.ui import ChatMessage
+            final_components.append(ChatMessage(text=deferred_footer_text, sender="bot"))
+        
+        return SDUIResponse(
+            session_id=str(new_conversation_id or "init"),
+            branding=branding,
+            components=final_components
+        )
 
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
@@ -173,8 +298,11 @@ async def chat_interaction(query: ChatRequest):
         raise HTTPException(status_code=504, detail=str(e)) from e
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error interno del bridge") from e
+
 
 @app.get("/")
 async def root():

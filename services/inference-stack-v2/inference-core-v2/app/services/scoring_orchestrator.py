@@ -13,6 +13,7 @@ from app.repositories.scoring_repository import ScoringRepository
 from app.services.cache_service import cache_service
 from app.services.hybrid_retriever import HybridRetriever
 from app.services.scoring_job_service import ScoringJobService
+from app.services.prompt_selector import prompt_selector
 from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
@@ -96,17 +97,84 @@ class ScoringOrchestrator:
     async def get_or_create_prompt(
         self,
         model_data: Dict[str, Any],
-        vertical_ctx: Dict[str, Any]
+        vertical_ctx: Dict[str, Any],
+        client_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Get active prompt - must be configured in database"""
         model_id = UUID(model_data["id"])
-        
+        if client_id:
+            cached_prompt = await cache_service.get_scoring_prompt(client_id=client_id, model_id=model_id)
+            if cached_prompt:
+                return cached_prompt
+
         prompt_config = await self.repo.get_active_prompt(model_id)
         
         if not prompt_config:
             raise ValueError(f"No active prompt found for model {model_id} - please configure prompt in database")
-        
+        if client_id:
+            await cache_service.set_scoring_prompt(client_id=client_id, model_id=model_id, prompt_data=prompt_config)
         return prompt_config
+
+    @staticmethod
+    def _resolve_channel_from_metadata(user_metadata: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(user_metadata, dict):
+            return "web_html"
+        raw = (
+            user_metadata.get("channel")
+            or user_metadata.get("channel_slug")
+            or user_metadata.get("channel_type")
+        )
+        if not isinstance(raw, str):
+            return "web_html"
+        normalized = raw.strip().lower()
+        return normalized if normalized in {"web_html", "meta_whatsapp", "meta_ig", "api"} else "web_html"
+
+    def _select_chat_prompt_slug(
+        self,
+        vertical_ctx: Dict[str, Any],
+        user_metadata: Optional[Dict[str, Any]],
+    ) -> str:
+        vertical = (vertical_ctx.get("vertical_slug") or "generic").strip().lower()
+        channel = self._resolve_channel_from_metadata(user_metadata)
+        return prompt_selector.get_prompt_slug(vertical=vertical, channel=channel)
+
+    async def _resolve_client_chat_prompt(
+        self,
+        client_id: UUID,
+        preferred_slug: str,
+    ) -> tuple[str, Optional[str]]:
+        slug = (preferred_slug or "primary_chat").strip() or "primary_chat"
+        cached_prompt = await cache_service.get_client_chat_prompt(client_id=client_id, slug=slug)
+        if cached_prompt:
+            return slug, cached_prompt
+
+        prompt_text = await self.repo.get_client_system_prompt(client_id, slug=slug)
+        if prompt_text:
+            await cache_service.set_client_chat_prompt(client_id=client_id, slug=slug, prompt_text=prompt_text)
+            return slug, prompt_text
+        if slug != "primary_chat":
+            cached_fallback = await cache_service.get_client_chat_prompt(client_id=client_id, slug="primary_chat")
+            if cached_fallback:
+                logger.warning(
+                    "Prompt slug '%s' not found for client_id=%s; using cached fallback slug 'primary_chat'",
+                    slug,
+                    client_id,
+                )
+                return "primary_chat", cached_fallback
+            fallback_prompt = await self.repo.get_client_system_prompt(client_id, slug="primary_chat")
+            if fallback_prompt:
+                await cache_service.set_client_chat_prompt(
+                    client_id=client_id,
+                    slug="primary_chat",
+                    prompt_text=fallback_prompt,
+                )
+                logger.warning(
+                    "Prompt slug '%s' not found for client_id=%s; using fallback slug 'primary_chat'",
+                    slug,
+                    client_id,
+                )
+                return "primary_chat", fallback_prompt
+        return slug, None
 
     async def _resolve_runtime_context(
         self,
@@ -129,17 +197,23 @@ class ScoringOrchestrator:
             model_data = snapshot.get("model_data") or {}
             prompt_config = snapshot.get("scoring_prompt") or {}
             client_prompt_text = snapshot.get("client_prompt_text")
+            snapshot_prompt_slug = (snapshot.get("chat_prompt_slug") or "").strip()
             if vertical_ctx and model_data and prompt_config:
+                chat_prompt_slug = snapshot_prompt_slug or self._select_chat_prompt_slug(
+                    vertical_ctx=vertical_ctx,
+                    user_metadata=request.user_metadata,
+                )
                 if not client_prompt_text:
-                    client_prompt_text = await self.repo.get_client_system_prompt(
-                        request.client_id,
-                        slug="primary_chat",
+                    chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
+                        client_id=request.client_id,
+                        preferred_slug=chat_prompt_slug,
                     )
                 return {
                     "vertical_ctx": vertical_ctx,
                     "model_data": model_data,
                     "prompt_config": prompt_config,
                     "client_prompt_text": client_prompt_text,
+                    "chat_prompt_slug": chat_prompt_slug,
                     "from_snapshot": True,
                 }
 
@@ -157,10 +231,14 @@ class ScoringOrchestrator:
                 f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
             )
 
-        prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx)
-        client_prompt_text = await self.repo.get_client_system_prompt(
-            request.client_id,
-            slug="primary_chat",
+        prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx, client_id=request.client_id)
+        preferred_chat_prompt_slug = self._select_chat_prompt_slug(
+            vertical_ctx=vertical_ctx,
+            user_metadata=request.user_metadata,
+        )
+        chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
+            client_id=request.client_id,
+            preferred_slug=preferred_chat_prompt_slug,
         )
 
         return {
@@ -168,6 +246,7 @@ class ScoringOrchestrator:
             "model_data": model_data,
             "prompt_config": prompt_config,
             "client_prompt_text": client_prompt_text,
+            "chat_prompt_slug": chat_prompt_slug,
             "from_snapshot": False,
         }
 
@@ -200,12 +279,14 @@ class ScoringOrchestrator:
         model_data: Dict[str, Any],
         prompt_config: Dict[str, Any],
         client_prompt_text: Optional[str],
+        chat_prompt_slug: str,
     ) -> Dict[str, Any]:
         return {
             "vertical_ctx": ScoringOrchestrator._json_safe(vertical_ctx or {}),
             "model_data": ScoringOrchestrator._json_safe(model_data or {}),
             "scoring_prompt": ScoringOrchestrator._json_safe(prompt_config or {}),
             "client_prompt_text": client_prompt_text,
+            "chat_prompt_slug": chat_prompt_slug,
         }
 
     @staticmethod
@@ -465,6 +546,7 @@ class ScoringOrchestrator:
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
         system_prompt: Optional[str] = None,
+        prompt_slug: str = "primary_chat",
     ) -> str:
         """
         Generate chat response using LLM with client's system prompt.
@@ -486,10 +568,12 @@ class ScoringOrchestrator:
 
             # Get system prompt from lead_ai_prompts unless snapshot provided one.
             if not system_prompt:
-                system_prompt = await self.repo.get_client_system_prompt(
-                    request.client_id,
-                    slug="primary_chat"
+                resolved_slug, resolved_prompt = await self._resolve_client_chat_prompt(
+                    client_id=request.client_id,
+                    preferred_slug=prompt_slug or "primary_chat",
                 )
+                prompt_slug = resolved_slug
+                system_prompt = resolved_prompt
             
             if not system_prompt:
                 raise ValueError("CLIENT_CHAT_PROMPT_NOT_CONFIGURED")
@@ -570,6 +654,7 @@ class ScoringOrchestrator:
             model_data = runtime_ctx["model_data"]
             prompt_config = runtime_ctx["prompt_config"]
             client_prompt_text = runtime_ctx.get("client_prompt_text")
+            chat_prompt_slug = runtime_ctx.get("chat_prompt_slug") or "primary_chat"
             if not client_prompt_text:
                 logger.error(
                     "Missing chat system prompt for client_id=%s; conversation blocked by policy",
@@ -592,6 +677,7 @@ class ScoringOrchestrator:
                 vertical_ctx=vertical_ctx,
                 conversation_id=conversation_id,
                 system_prompt=client_prompt_text,
+                prompt_slug=chat_prompt_slug,
             )
             
             existing_lead_id = None
@@ -626,6 +712,7 @@ class ScoringOrchestrator:
                     model_data=model_data,
                     prompt_config=prompt_config,
                     client_prompt_text=client_prompt_text,
+                    chat_prompt_slug=chat_prompt_slug,
                 )
                 await self.repo.set_conversation_context_snapshot(
                     conversation_id=conversation_id,

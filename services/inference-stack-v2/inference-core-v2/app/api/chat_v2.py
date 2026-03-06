@@ -214,16 +214,18 @@ async def invalidate_cache(
     """Invalidate cache entries (internal use)"""
     try:
         if client_id:
-            success = await cache_service.invalidate_active_model(client_id=client_id)
-            if success:
+            active_ok = await cache_service.invalidate_active_model(client_id=client_id)
+            prompts_ok = await cache_service.invalidate_client_prompts(client_id=client_id)
+            if active_ok or prompts_ok:
                 return {"status": "success", "message": "Cache invalidated"}
             raise HTTPException(status_code=500, detail="Cache invalidation failed")
 
         if not client_id:
             # Invalidate all cache
-            success = await cache_service.invalidate_all_models()
-            
-            if success:
+            models_ok = await cache_service.invalidate_all_models()
+            prompts_ok = await cache_service.invalidate_all_prompts()
+
+            if models_ok or prompts_ok:
                 return {"status": "success", "message": "All cache invalidated"}
             raise HTTPException(status_code=500, detail="Cache invalidation failed")
 

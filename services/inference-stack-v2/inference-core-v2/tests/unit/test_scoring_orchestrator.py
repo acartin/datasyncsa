@@ -155,3 +155,78 @@ async def test_get_scoring_ops_summary_clamps_window_and_uses_service():
 
     assert result == {"window_minutes": 1440}
     orchestrator.job_service.get_ops_summary.assert_called_once_with(window_minutes=1440)
+
+
+def test_select_chat_prompt_slug_uses_vertical_and_channel_metadata():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+
+    slug = orchestrator._select_chat_prompt_slug(
+        vertical_ctx={"vertical_slug": "realtor"},
+        user_metadata={"channel": "meta_whatsapp"},
+    )
+    assert slug == "realtor_meta_whatsapp_v1"
+
+    fallback_slug = orchestrator._select_chat_prompt_slug(
+        vertical_ctx={"vertical_slug": "realtor"},
+        user_metadata={"channel": "unknown-channel"},
+    )
+    assert fallback_slug == "realtor_web_v1"
+
+
+@pytest.mark.asyncio
+async def test_resolve_runtime_context_falls_back_to_primary_chat_when_prompt_slug_missing():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+    orchestrator.repo = AsyncMock()
+    orchestrator.repo.get_conversation_context_snapshot = AsyncMock(return_value=None)
+    orchestrator.resolve_vertical_for_client = AsyncMock(return_value={
+        "client_exists": True,
+        "vertical_id": 1,
+        "vertical_slug": "realtor",
+        "scoring_model_id": str(uuid4()),
+    })
+    orchestrator.get_active_scoring_model = AsyncMock(return_value={"id": str(uuid4())})
+    orchestrator.get_or_create_prompt = AsyncMock(return_value={"id": str(uuid4())})
+    orchestrator.repo.get_client_system_prompt = AsyncMock(side_effect=[None, "primary prompt text"])
+
+    request = ChatV2Request(
+        query_text="hola",
+        client_id=uuid4(),
+        user_metadata={"channel": "meta_whatsapp"},
+    )
+
+    runtime_ctx = await orchestrator._resolve_runtime_context(request, conversation_id=uuid4())
+
+    assert runtime_ctx["chat_prompt_slug"] == "primary_chat"
+    assert runtime_ctx["client_prompt_text"] == "primary prompt text"
+    assert orchestrator.repo.get_client_system_prompt.await_count == 2
+    assert orchestrator.repo.get_client_system_prompt.await_args_list[0].kwargs["slug"] == "realtor_meta_whatsapp_v1"
+    assert orchestrator.repo.get_client_system_prompt.await_args_list[1].kwargs["slug"] == "primary_chat"
+
+
+@pytest.mark.asyncio
+async def test_resolve_runtime_context_uses_prompt_slug_from_channel_when_available():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+    orchestrator.repo = AsyncMock()
+    orchestrator.repo.get_conversation_context_snapshot = AsyncMock(return_value=None)
+    orchestrator.resolve_vertical_for_client = AsyncMock(return_value={
+        "client_exists": True,
+        "vertical_id": 1,
+        "vertical_slug": "realtor",
+        "scoring_model_id": str(uuid4()),
+    })
+    orchestrator.get_active_scoring_model = AsyncMock(return_value={"id": str(uuid4())})
+    orchestrator.get_or_create_prompt = AsyncMock(return_value={"id": str(uuid4())})
+    orchestrator.repo.get_client_system_prompt = AsyncMock(return_value="meta ig prompt")
+
+    request = ChatV2Request(
+        query_text="hola",
+        client_id=uuid4(),
+        user_metadata={"channel": "meta_ig"},
+    )
+
+    runtime_ctx = await orchestrator._resolve_runtime_context(request, conversation_id=uuid4())
+
+    assert runtime_ctx["chat_prompt_slug"] == "realtor_meta_ig_v1"
+    assert runtime_ctx["client_prompt_text"] == "meta ig prompt"
+    orchestrator.repo.get_client_system_prompt.assert_awaited_once()
+    assert orchestrator.repo.get_client_system_prompt.await_args.kwargs["slug"] == "realtor_meta_ig_v1"
