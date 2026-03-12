@@ -85,9 +85,102 @@ async def test_generate_chat_response_includes_history_and_hybrid_placeholders()
     prompt = kwargs["contents"][0]
     assert "Usuario: Busco 2 habitaciones" in prompt
     assert "[sin resultados vectoriales]" in prompt
+    assert "[sin datos confirmados del lead]" in prompt
     assert "[sin contexto estructurado]" in prompt
     config = kwargs["config"]
     assert getattr(config, "max_output_tokens", None) is not None
+
+
+@pytest.mark.asyncio
+async def test_generate_chat_response_includes_confirmed_lead_profile():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+    orchestrator.repo = AsyncMock()
+    orchestrator.repo.get_client_system_prompt = AsyncMock(return_value="Sistema base")
+    orchestrator.repo.get_conversation_messages = AsyncMock(
+        return_value=[{"role": "user", "content": "me llamo alvaro"}]
+    )
+    orchestrator._retrieve_vertical_vector_context = AsyncMock(return_value=[])
+    orchestrator._retrieve_structured_business_context = AsyncMock(return_value={
+        "lead_snapshot": {
+            "full_name": "Alvaro",
+            "email": "alvaro@example.com",
+            "phone": "+50688887777",
+        }
+    })
+
+    llm_response = MagicMock()
+    llm_response.text = "Claro, te llamas Alvaro."
+    llm_client = MagicMock()
+    llm_client.models.generate_content.return_value = llm_response
+    orchestrator._llm_client = llm_client
+
+    request = ChatV2Request(query_text="como me llamo?", client_id=uuid4())
+    vertical_ctx = {"vertical_id": 1, "vertical_slug": "realtor"}
+    conversation_id = uuid4()
+
+    answer = await orchestrator._generate_chat_response(
+        request=request,
+        vertical_ctx=vertical_ctx,
+        conversation_id=conversation_id,
+    )
+
+    assert answer == "Claro, te llamas Alvaro."
+    _, kwargs = llm_client.models.generate_content.call_args
+    prompt = kwargs["contents"][0]
+    assert "Datos confirmados del lead:" in prompt
+    assert "Nombre: Alvaro" in prompt
+    assert "Email: alvaro@example.com" in prompt
+    assert "Telefono: +50688887777" in prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_chat_response_includes_confirmed_conversation_extraction():
+    orchestrator = ScoringOrchestrator(AsyncMock())
+    orchestrator.repo = AsyncMock()
+    orchestrator.repo.get_client_system_prompt = AsyncMock(return_value="Sistema base")
+    orchestrator.repo.get_conversation_messages = AsyncMock(
+        return_value=[{"role": "user", "content": "quiero casas en heredia"}]
+    )
+    orchestrator._retrieve_vertical_vector_context = AsyncMock(return_value=[])
+    orchestrator._retrieve_structured_business_context = AsyncMock(return_value={
+        "conversation_extraction_result": {
+            "common": {
+                "extracted_name": "Alvaro",
+                "extracted_budget": "250000",
+            },
+            "vertical": {
+                "desired_location": "Heredia",
+                "property_type": "casa",
+                "bedrooms_min": 3,
+            },
+        }
+    })
+
+    llm_response = MagicMock()
+    llm_response.text = "Respuesta generada"
+    llm_client = MagicMock()
+    llm_client.models.generate_content.return_value = llm_response
+    orchestrator._llm_client = llm_client
+
+    request = ChatV2Request(query_text="agenda una visita", client_id=uuid4())
+    vertical_ctx = {"vertical_id": 1, "vertical_slug": "realtor"}
+    conversation_id = uuid4()
+
+    answer = await orchestrator._generate_chat_response(
+        request=request,
+        vertical_ctx=vertical_ctx,
+        conversation_id=conversation_id,
+    )
+
+    assert answer == "Respuesta generada"
+    _, kwargs = llm_client.models.generate_content.call_args
+    prompt = kwargs["contents"][0]
+    assert "Datos confirmados de la conversación:" in prompt
+    assert "Nombre: Alvaro" in prompt
+    assert "Presupuesto: 250000" in prompt
+    assert "Zona deseada: Heredia" in prompt
+    assert "Tipo de propiedad: casa" in prompt
+    assert "Habitaciones: 3" in prompt
 
 
 def test_truncate_history_context_keeps_recent_tail():

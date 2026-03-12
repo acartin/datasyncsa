@@ -23,7 +23,7 @@ services:
     networks:
       - internal_network
 
-  # Redis (Shared by Realtor Chat and ETL Queue)
+  # Redis (Shared by Chat Web Renderer and ETL Queue)
   redis:
     image: redis:alpine
     container_name: ${ENV_PREFIX}-infra-redis
@@ -91,6 +91,44 @@ services:
       - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
       - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
       - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
+      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
+      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # Inference Core V3
+  inference-core-v3:
+    build:
+      context: ./services/inference-stack-v2/inference-core-v3
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-inference-v3
+    restart: always
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${INFERENCE_WEB_CONCURRENCY:-1}
+    ports:
+      - "${INFERENCE_V3_PORT:-8095}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
       - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
     volumes:
@@ -181,7 +219,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
       - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
       - MEMORY_RESET_TIMEOUT=8
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -213,7 +251,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
       - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
       - MEMORY_RESET_TIMEOUT=8
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -276,12 +314,12 @@ services:
     networks:
       - internal_network
 
-  # Realtor Chat API (Bridge)
-  realtor-api:
+  # Chat Web Renderer API (Bridge)
+  chat-web-renderer-api:
     build:
-      context: ./services/web/realtor-chat/backend
+      context: ./services/web/chat-web-renderer/backend
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-realtor-chat-api
+    container_name: ${ENV_PREFIX}-web-chat-web-renderer-api
     restart: unless-stopped
     ports:
       - "${REALTOR_BRIDGE_PORT}:8000"
@@ -296,8 +334,9 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_PASSWORD=${DB_PASS}
       - REDIS_URL=redis://redis:6379/0
-      - INFERENCE_V2_URL=http://inference-core-v2:8000
-      - INFERENCE_V2_RESET_URL=http://inference-core-v2:8000/api/v2/internal/memory/reset
+      - INFERENCE_API_URL=http://inference-core-v3:8000
+      - INFERENCE_API_PREFIX=/api/v3
+      - INFERENCE_RESET_URL=http://inference-core-v3:8000/api/v3/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -305,7 +344,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - inference-core-v2
+      - inference-core-v3
     networks:
       - internal_network
 
@@ -320,54 +359,54 @@ services:
       - "${GENERIC_BRIDGE_V2_PORT}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - INFERENCE_V2_URL=http://inference-core-v2:8000
-      - INFERENCE_V2_API_PREFIX=/api/v2
+      - INFERENCE_API_URL=http://inference-core-v3:8000
+      - INFERENCE_API_PREFIX=/api/v3
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - inference-core-v2
+      - inference-core-v3
     networks:
       - internal_network
 
-  # Realtor Bridge V2
-  realtor-bridge-v2:
+  # Property Bridge V2
+  property-bridge-v2:
     build:
-      context: ./services/realtor-bridge-v2
+      context: ./services/property-bridge-v2
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-realtor-bridge-v2
+    container_name: ${ENV_PREFIX}-web-property-bridge-v2
     restart: unless-stopped
     ports:
-      - "${REALTOR_BRIDGE_V2_PORT}:8000"
+      - "${PROPERTY_BRIDGE_V2_PORT}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - INFERENCE_V2_URL=http://inference-core-v2:8000
-      - INFERENCE_V2_API_PREFIX=/api/v2
+      - INFERENCE_API_URL=http://inference-core-v3:8000
+      - INFERENCE_API_PREFIX=/api/v3
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - inference-core-v2
+      - inference-core-v3
     networks:
       - internal_network
 
-  # Realtor Chat Frontend (Nginx)
-  realtor-web:
+  # Chat Web Renderer Frontend (Nginx)
+  chat-web-renderer-ui:
     image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-realtor-chat-ui
+    container_name: ${ENV_PREFIX}-web-chat-web-renderer-ui
     restart: unless-stopped
     ports:
       - "${REALTOR_WEB_PORT}:80"
     volumes:
-      - ./services/web/realtor-chat/frontend:/usr/share/nginx/html:ro
-      - ./services/web/realtor-chat/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:ro
+      - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       - TZ=${TZ:-UTC}
-      - API_HOST=realtor-api
+      - API_HOST=chat-web-renderer-api
     depends_on:
-      - realtor-api
+      - chat-web-renderer-api
     networks:
       - internal_network
 

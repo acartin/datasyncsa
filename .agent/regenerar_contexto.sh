@@ -40,10 +40,12 @@ cat > "$BRAIN_FILE" <<EOF
 |---|---|---:|
 | \`docker-compose.yml\` | Orquestación de servicios (DB, Redis, APIs, bridges, UI, ETL). | 5 |
 | \`services/web/admin-console\` | BFF FastAPI + renderer SDUI para consola operativa multi-tenant. | 5 |
-| \`services/web/realtor-chat\` | Bridge y widget chat SDUI inmobiliario. | 5 |
+| \`services/web/chat-web-renderer\` | Canal web y renderer SDUI del chat. | 5 |
 | \`services/inference-stack-v2/inference-core-v2\` | Motor v2 de chat/scoring por vertical/modelo/prompt. | 5 |
 | \`services/inference-stack-v2/semantic-adapter-v2\` | Recuperación semántica v2 (RAG retriever). | 5 |
 | \`services/etl-docs\` | Ingesta documental, colas RQ y vectorización. | 5 |
+| \`services/generic-bridge-v2\` | Wrapper liviano para integraciones genéricas hacia inference-core-v2. | 4 |
+| \`services/property-bridge-v2\` | Wrapper de compatibilidad del vertical inmobiliario hacia inference-core-v2. | 4 |
 | \`schemas\` | Contratos canónicos compartidos entre servicios. | 4 |
 | \`tests\` | Pruebas de integración y sistema cross-service. | 4 |
 | \`volumes/r2_storage\` | Storage documental montado (Cloudflare R2 vía rclone). | 5 |
@@ -60,10 +62,14 @@ cat > "$BRAIN_FILE" <<EOF
 ## 3. ENTRY POINTS PRINCIPALES
 
 - \`services/web/admin-console/backend/app/main.py\`
-- \`services/web/realtor-chat/backend/app/main.py\`
+- \`services/web/chat-web-renderer/backend/app/main.py\`
 - \`services/inference-stack-v2/inference-core-v2/main.py\`
 - \`services/inference-stack-v2/semantic-adapter-v2/main.py\`
 - \`services/etl-docs/main.py\`
+
+## Referencia Canónica
+
+- Documento operativo detallado: \`docs/CHAT_SYSTEM_REFERENCE.md\`
 
 ## 4. ENTIDADES CRÍTICAS (DB)
 
@@ -156,7 +162,7 @@ append_section "Contratos/Modelos Críticos"
 append_codeblock text \
 "$(rg -n --no-heading '^class [A-Za-z_][A-Za-z0-9_]*\((BaseModel|SQLAlchemyBaseUserTableUUID|Base)\)|^(async[[:space:]]+def|def)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*\(' \
   services/web/admin-console/backend/app/contracts \
-  services/web/realtor-chat/backend/app/schemas \
+  services/web/chat-web-renderer/backend/app/schemas \
   services/inference-stack/inference-core/app/models \
   services/inference-stack-v2/inference-core-v2/app/models \
   services/etl-docs/src/shared \
@@ -180,10 +186,10 @@ for f in \
   services/web/admin-console/backend/app/modules/shared/sdui.py \
   services/web/admin-console/frontend/renderer/main.js \
   services/web/admin-console/frontend/renderer/engine/registry.js \
-  services/web/realtor-chat/backend/app/schemas/ui.py \
-  services/web/realtor-chat/backend/app/transformer/core.py \
-  services/web/realtor-chat/frontend/core/renderer.js \
-  services/web/realtor-chat/backend/app/main.py \
+  services/web/chat-web-renderer/backend/app/schemas/ui.py \
+  services/web/chat-web-renderer/backend/app/transformer/core.py \
+  services/web/chat-web-renderer/frontend/core/renderer.js \
+  services/web/chat-web-renderer/backend/app/main.py \
   services/web/admin-console/backend/app/main.py
 do
   append_file_excerpt "$f"
@@ -197,7 +203,7 @@ for f in \
   services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py \
   services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py \
   services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py \
-  services/web/realtor-chat/backend/app/core/inference_bridge.py
+  services/web/chat-web-renderer/backend/app/core/inference_bridge.py
 do
   append_file_excerpt "$f"
 done

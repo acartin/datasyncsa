@@ -1,6 +1,6 @@
 """
 Generic Bridge V2
-Adapts generic chat requests to inference-core-v2 API
+Adapts generic chat requests to the active inference-core API
 """
 import asyncio
 import logging
@@ -15,8 +15,8 @@ import os
 
 
 # Configuration
-INFERENCE_V2_URL = os.getenv("INFERENCE_V2_URL", "http://localhost:8000")
-INFERENCE_V2_API_PREFIX = os.getenv("INFERENCE_V2_API_PREFIX", "/api/v2")
+INFERENCE_API_URL = os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://localhost:8000"))
+INFERENCE_API_PREFIX = os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v3"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
@@ -27,7 +27,7 @@ logger = logging.getLogger("generic-bridge-v2")
 # FastAPI app
 app = FastAPI(
     title="Generic Bridge V2",
-    description="Adapts generic chat requests to inference-core-v2",
+    description="Adapts generic chat requests to the active inference core",
     version="2.0.0"
 )
 
@@ -81,7 +81,7 @@ class HealthResponse(BaseModel):
     """Health check response"""
     status: str
     service: str
-    inference_v2_status: str
+    inference_status: str
 
 
 class AsyncHTTPClient:
@@ -89,7 +89,7 @@ class AsyncHTTPClient:
     
     def __init__(self):
         self.client = None
-        self.base_url = f"{INFERENCE_V2_URL}{INFERENCE_V2_API_PREFIX}"
+        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
     
     async def __aenter__(self):
         self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
@@ -138,7 +138,7 @@ def _pick(payload: Dict[str, Any], *keys: str):
 @app.post("/chat", response_model=GenericChatResponse)
 async def chat_endpoint(request: GenericChatRequest):
     """
-    Generic chat endpoint that forwards to inference-core-v2
+    Generic chat endpoint that forwards to the active inference core
     
     Required:
     - query_text: User's question/message
@@ -151,8 +151,7 @@ async def chat_endpoint(request: GenericChatRequest):
     start_time = time.time()
     
     try:
-        # Build v2 request payload
-        v2_payload = {
+        request_payload = {
             "queryText": request.query_text,
             "clientId": str(request.client_id),
             "businessDomain": request.business_domain,
@@ -161,9 +160,9 @@ async def chat_endpoint(request: GenericChatRequest):
             "filters": request.filters
         }
         
-        # Forward to inference-core-v2
+        # Forward to inference core
         async with AsyncHTTPClient() as http_client:
-            response = await http_client.post_with_retry("/chat", v2_payload)
+            response = await http_client.post_with_retry("/chat", request_payload)
             
             if response.status_code == 400:
                 error_data = response.json()
@@ -174,7 +173,7 @@ async def chat_endpoint(request: GenericChatRequest):
                 raise HTTPException(status_code=404, detail=error_data.get("detail", "Not found"))
             
             if response.status_code >= 500:
-                logger.error(f"Inference v2 error: {response.status_code} - {response.text}")
+                logger.error(f"Inference core error: {response.status_code} - {response.text}")
                 raise HTTPException(
                     status_code=503,
                     detail="Scoring service temporarily unavailable"
@@ -187,39 +186,39 @@ async def chat_endpoint(request: GenericChatRequest):
                     detail=f"Bad gateway: {response.status_code}"
                 )
             
-            # Parse v2 response
-            v2_response = response.json()
+            # Parse core response
+            core_response = response.json()
             
             # Build generic response
             generic_response = GenericChatResponse(
-                answer=v2_response["answer"],
-                conversation_id=UUID(_pick(v2_response, "conversationId", "conversation_id")),
+                answer=core_response["answer"],
+                conversation_id=UUID(_pick(core_response, "conversationId", "conversation_id")),
                 metadata={
-                    "source": "inference-core-v2",
+                    "source": "inference-core-v3",
                     "processing_time_ms": int((time.time() - start_time) * 1000)
                 }
             )
 
-            generic_response.scoring_status = _pick(v2_response, "scoringStatus", "scoring_status")
-            generic_response.scoring_eta = _pick(v2_response, "scoringEta", "scoring_eta")
-            scoring_job_id = _pick(v2_response, "scoringJobId", "scoring_job_id")
+            generic_response.scoring_status = _pick(core_response, "scoringStatus", "scoring_status")
+            generic_response.scoring_eta = _pick(core_response, "scoringEta", "scoring_eta")
+            scoring_job_id = _pick(core_response, "scoringJobId", "scoring_job_id")
             if scoring_job_id:
                 try:
                     generic_response.scoring_job_id = UUID(str(scoring_job_id))
                 except ValueError:
-                    logger.warning("Invalid scoring_job_id in v2 response: %s", scoring_job_id)
+                    logger.warning("Invalid scoring_job_id in core response: %s", scoring_job_id)
             
             # Add scoring data if available
-            if v2_response.get("scorecard"):
-                scorecard = v2_response["scorecard"]
-                scorecard_id = _pick(v2_response, "scorecardId", "scorecard_id")
+            if core_response.get("scorecard"):
+                scorecard = core_response["scorecard"]
+                scorecard_id = _pick(core_response, "scorecardId", "scorecard_id")
                 generic_response.scorecard_id = UUID(scorecard_id) if scorecard_id else None
                 generic_response.score_total = _pick(scorecard, "scoreTotal", "score_total")
                 generic_response.priority_label = _pick(scorecard, "priorityLabel", "priority_label")
                 generic_response.metadata["scoring_model_version"] = _pick(scorecard, "modelVersion", "model_version")
                 generic_response.metadata["scoring_prompt_version"] = _pick(scorecard, "promptVersion", "prompt_version")
             
-            lead_id = _pick(v2_response, "leadId", "lead_id")
+            lead_id = _pick(core_response, "leadId", "lead_id")
             if lead_id:
                 generic_response.lead_id = UUID(lead_id)
             
@@ -234,7 +233,7 @@ async def chat_endpoint(request: GenericChatRequest):
     except HTTPException:
         raise
     except httpx.RequestError as e:
-        logger.error(f"Connection error to inference-core-v2: {e}")
+        logger.error(f"Connection error to inference core: {e}")
         raise HTTPException(status_code=503, detail="Scoring service unavailable")
     except Exception as e:
         logger.exception(f"Unexpected error in /chat: {e}")
@@ -245,24 +244,24 @@ async def chat_endpoint(request: GenericChatRequest):
 async def health_check():
     """Health check endpoint"""
     try:
-        # Check inference-core-v2 health
+        # Check inference-core health
         inference_status = "unknown"
         async with httpx.AsyncClient(timeout=5.0) as client:
             try:
-                response = await client.get(f"{INFERENCE_V2_URL}{INFERENCE_V2_API_PREFIX}/health")
+                response = await client.get(f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}/health")
                 if response.status_code == 200:
                     data = response.json()
                     inference_status = data.get("status", "unknown")
                 else:
                     inference_status = f"error_{response.status_code}"
             except Exception as e:
-                logger.warning(f"Health check failed for inference-core-v2: {e}")
+                logger.warning(f"Health check failed for inference core: {e}")
                 inference_status = "unreachable"
         
         return HealthResponse(
             status="healthy",
             service="generic-bridge-v2",
-            inference_v2_status=inference_status
+            inference_status=inference_status
         )
     
     except Exception as e:
@@ -276,9 +275,9 @@ async def root():
     return {
         "service": "generic-bridge-v2",
         "version": "2.0.0",
-        "description": "Adapts generic chat requests to inference-core-v2",
+        "description": "Adapts generic chat requests to the active inference core",
         "endpoints": {
-            "POST /chat": "Forward chat to inference-core-v2 with scoring",
+            "POST /chat": "Forward chat to inference core with scoring",
             "GET /health": "Health check with dependency status"
         }
     }

@@ -62,6 +62,18 @@ class ChatV2Response(BaseModel):
     )
 
     answer: str = Field(..., description="The AI generated response")
+    intent: Optional[str] = Field(None, description="Resolved high-level intent for the turn")
+    realtor_turn: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Structured routing intent/result from the realtor flow when available. "
+            "Expected keys include: intent, sql, clarification, reasoning, search_summary."
+        ),
+    )
+    components: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Canonical UI-agnostic components for the final resolved turn",
+    )
     conversation_id: UUID = Field(..., description="The conversation ID for this session")
     lead_id: Optional[UUID] = Field(None, description="Lead ID if created/identified")
     scorecard_id: Optional[UUID] = Field(None, description="Scorecard ID if scoring was performed")

@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-05T20:53:05Z`
+- Generated UTC: `2026-03-07T05:15:16Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-1`
-- Git commit: `4730391`
+- Git branch: `HETZNER-LOCAL-2026-03-6`
+- Git commit: `a802100`
 - Policy: High-signal only; assets/binarios excluidos.
 
 ## Contexto Maestro
@@ -14,10 +14,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-05T20:53:05Z`
+- Generated UTC: `2026-03-07T05:15:16Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-1`
-- Git commit: `4730391`
+- Git branch: `HETZNER-LOCAL-2026-03-6`
+- Git commit: `a802100`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 
@@ -25,10 +25,12 @@
 |---|---|---:|
 | `docker-compose.yml` | Orquestación de servicios (DB, Redis, APIs, bridges, UI, ETL). | 5 |
 | `services/web/admin-console` | BFF FastAPI + renderer SDUI para consola operativa multi-tenant. | 5 |
-| `services/web/realtor-chat` | Bridge y widget chat SDUI inmobiliario. | 5 |
+| `services/web/chat-web-renderer` | Canal web y renderer SDUI del chat. | 5 |
 | `services/inference-stack-v2/inference-core-v2` | Motor v2 de chat/scoring por vertical/modelo/prompt. | 5 |
 | `services/inference-stack-v2/semantic-adapter-v2` | Recuperación semántica v2 (RAG retriever). | 5 |
 | `services/etl-docs` | Ingesta documental, colas RQ y vectorización. | 5 |
+| `services/generic-bridge-v2` | Wrapper liviano para integraciones genéricas hacia inference-core-v2. | 4 |
+| `services/property-bridge-v2` | Wrapper de compatibilidad del vertical inmobiliario hacia inference-core-v2. | 4 |
 | `schemas` | Contratos canónicos compartidos entre servicios. | 4 |
 | `tests` | Pruebas de integración y sistema cross-service. | 4 |
 | `volumes/r2_storage` | Storage documental montado (Cloudflare R2 vía rclone). | 5 |
@@ -45,10 +47,14 @@
 ## 3. ENTRY POINTS PRINCIPALES
 
 - `services/web/admin-console/backend/app/main.py`
-- `services/web/realtor-chat/backend/app/main.py`
+- `services/web/chat-web-renderer/backend/app/main.py`
 - `services/inference-stack-v2/inference-core-v2/main.py`
 - `services/inference-stack-v2/semantic-adapter-v2/main.py`
 - `services/etl-docs/main.py`
+
+## Referencia Canónica
+
+- Documento operativo detallado: `docs/CHAT_SYSTEM_REFERENCE.md`
 
 ## 4. ENTIDADES CRÍTICAS (DB)
 
@@ -88,7 +94,7 @@ services:
     networks:
       - internal_network
 
-  # Redis (Shared by Realtor Chat and ETL Queue)
+  # Redis (Shared by Chat Web Renderer and ETL Queue)
   redis:
     image: redis:alpine
     container_name: ${ENV_PREFIX}-infra-redis
@@ -246,7 +252,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
       - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
       - MEMORY_RESET_TIMEOUT=8
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -278,7 +284,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PATH_STAGING=/app/data/staging
       - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://realtor-api:8000/internal/memory/reset
+      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
       - MEMORY_RESET_TIMEOUT=8
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -338,7 +344,6 @@ VERTICAL_CACHE_TTL_SECONDS=300
 CHANNEL_GATEWAY_ENABLED=true
 VERTICAL_ROUTING_ENABLED=true
 META_ADAPTER_ENABLED=false
-SESSION_MULTICHANNEL_ENABLED=false
 
 # --- SCORING FEATURE FLAGS ---
 SCORING_LLM_TIMEOUT_SECS=60
@@ -366,7 +371,7 @@ ETL_DOCS_PORT=8090
 INFERENCE_V2_PORT=8091
 SEMANTIC_V2_PORT=8092
 GENERIC_BRIDGE_V2_PORT=8093
-REALTOR_BRIDGE_V2_PORT=8094
+PROPERTY_BRIDGE_V2_PORT=8094
 
 # --- EXTERNAL INTEGRATIONS ---
 # External ETL endpoint (required by admin-console ai-library module)
@@ -402,133 +407,12 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 ```
-### `docs/SERVER_PROVISIONING.md`
-
-```
-# Server Provisioning Guide: DatasyncSA Infrastructure
-
-This guide details the steps to configure a fresh Debian/Ubuntu server (Hetzner VPS or Local Machine) to host the DatasyncSA Docker stack with R2 storage integration.
-
-## 1. Prerequisites
-- **OS**: Debian 12 (Bookworm) or Ubuntu 22.04 LTS recommended.
-- **User**: A non-root user with sudo privileges (e.g., `acartin`).
-- **Cloudflare API**: Access Key ID and Secret Access Key for R2.
-
-## 2. Docker Installation
-Install the official Docker Engine and Compose plugin.
-
-```bash
-# Update and install dependencies
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
-
-# Add Docker's official GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Add the repository
-echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Enable for non-root user
-sudo usermod -aG docker $USER
-# LOGOUT AND LOGIN AGAIN FOR GROUPS TO UPDATE
-```
-
-## 3. Storage Configuration (R2 Mount)
-We use `rclone` to mount the Cloudflare R2 bucket as a local file system. This allows legacy applications to interact with cloud storage as if it were a local disk, providing a zero-friction migration path.
-
-### 3.1 Install & Configure Rclone
-```bash
-sudo apt-get install -y rclone fuse3
-
-# Interactive Configuration
-rclone config
-# 1. New remote -> Name: "r2-remote" (Un nombre genérico para la conexión)
-# 2. Type: "s3"
-# 3. Provider: "Cloudflare"
-# 4. Access Key ID: <YOUR_R2_ACCESS_KEY>
-# 5. Secret Access Key: <YOUR_R2_SECRET_KEY>
-# 6. Endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-# 7. ACL: private
-# 8. Finish and verify with: rclone lsd r2-remote:
-```
-
-### 3.2 Create Directory & Systemd Service
-Create the mount point and the service to auto-mount on boot.
-
-```bash
-# Create mount points
-sudo mkdir -p /srv/datasyncsa/volumes/r2_storage
-sudo chown -R $USER:$USER /srv/datasyncsa/volumes/r2_storage
-sudo mkdir -p /srv/datasyncsa/volumes/staging
-sudo chown -R $USER:$USER /srv/datasyncsa/volumes/staging
-
-# Create Service File
-sudo nano /etc/systemd/system/rclone-mount.service
-```
-
-Paste the following configuration. Replace `datasync-dev` with the actual bucket name you want to mount (e.g., `datasync-dev` for Ryzen, `datasync-prod` for Hetzner).
-
-```ini
-[Unit]
-Description=Rclone Mount for R2 Storage
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-User=acartin
-Group=acartin
-# NOTA: r2-remote es la conexión, datasync-dev es el bucket
-ExecStart=/usr/bin/rclone mount r2-remote:datasync-dev /srv/datasyncsa/volumes/r2_storage \
-    --allow-other \
-    --vfs-cache-mode full \
-    --vfs-cache-max-size 10G \
-    --log-file /var/log/rclone-storage.log \
-    --log-level INFO
-ExecStop=/bin/fusermount -u /srv/datasyncsa/volumes/r2_storage
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3.3 Enable Service
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now rclone-mount.service
-# Check status
-systemctl status rclone-mount.service
-# Verify mount works
-ls /srv/datasyncsa/volumes/r2_storage
-```
-
-## 4. Application Deployment
-Clone the repo (or copy files) to `/srv/datasyncsa`.
-
-```bash
-# 1. Copy config
-cp .env.example .env
-nano .env # Edit secrets like DB_PASSWORD, R2_KEYS
-
-# 2. Deploy Stack
-docker compose up -d --build
-```
-```
 
 ## Topología Técnica (directorios clave)
 
 ```text
 docs
+docs/OLD
 schemas
 schemas/__pycache__
 services
@@ -554,20 +438,20 @@ services/inference-stack-v2/inference-core-v2/scripts
 services/inference-stack-v2/inference-core-v2/tests
 services/inference-stack-v2/semantic-adapter-v2
 services/inference-stack-v2/semantic-adapter-v2/app
-services/realtor-bridge-v2
-services/realtor-bridge-v2/__pycache__
+services/property-bridge-v2
+services/property-bridge-v2/__pycache__
 services/web
 services/web/admin-console
 services/web/admin-console/backend
 services/web/admin-console/docs
 services/web/admin-console/frontend
+services/web/chat-web-renderer
+services/web/chat-web-renderer/backend
+services/web/chat-web-renderer/frontend
 services/web/datasyncsa
 services/web/datasyncsa/css
 services/web/datasyncsa/img
 services/web/datasyncsa/js
-services/web/realtor-chat
-services/web/realtor-chat/backend
-services/web/realtor-chat/frontend
 services/web/tests
 services/web/tests/assets
 tests
@@ -591,12 +475,12 @@ services/generic-bridge-v2/main.py:28:app = FastAPI(
 services/generic-bridge-v2/main.py:287:if __name__ == "__main__":
 services/generic-bridge-v2/main.py:293:    uvicorn.run(
 services/etl-processor/main.py:3:app = FastAPI()
-services/realtor-bridge-v2/main.py:29:app = FastAPI(
-services/realtor-bridge-v2/main.py:348:if __name__ == "__main__":
-services/realtor-bridge-v2/main.py:354:    uvicorn.run(
-services/web/realtor-chat/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/realtor-chat/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
-services/web/realtor-chat/backend/app/main.py:11:app = FastAPI(title="Realtor Chat Polymorphic Bridge")
+services/property-bridge-v2/main.py:29:app = FastAPI(
+services/property-bridge-v2/main.py:348:if __name__ == "__main__":
+services/property-bridge-v2/main.py:354:    uvicorn.run(
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:11:app = FastAPI(title="Chat Web Renderer")
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
@@ -624,11 +508,11 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
+services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
 services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
 services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
 services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
-services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
 services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
 services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
 services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
@@ -640,8 +524,8 @@ services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0"
 ## Rutas API Detectadas
 
 ```text
-services/web/realtor-chat/backend/app/api/external.py:56:@router.post(
-services/web/realtor-chat/backend/app/api/external.py:257:@router.get("/health")
+services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:267:@router.get("/health")
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
@@ -649,8 +533,8 @@ services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:239:@router.get("/health")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:259:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:241:@router.get("/health")
+services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:261:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
 services/web/admin-console/backend/app/modules/contacts/router.py:225:@router.get("/contacts", response_model=WebIAFirstResponse)
@@ -767,26 +651,46 @@ services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("
 services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
 ```
 
 ## Contratos/Modelos Críticos
 
 ```text
-services/web/realtor-chat/backend/app/schemas/ui.py:4:class BaseComponent(BaseModel):
-services/web/realtor-chat/backend/app/schemas/ui.py:51:class BrandingConfig(BaseModel):
-services/web/realtor-chat/backend/app/schemas/ui.py:76:class SDUIResponse(BaseModel):
-services/web/realtor-chat/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
-services/web/realtor-chat/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
-services/web/realtor-chat/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
-services/web/realtor-chat/backend/app/schemas/internal_chat.py:10:class InternalChatRequest(BaseModel):
-services/web/realtor-chat/backend/app/schemas/internal_chat.py:45:class InternalChatResponse(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:4:class BaseComponent(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:51:class BrandingConfig(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:76:class SDUIResponse(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:10:class InternalChatRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:45:class InternalChatResponse(BaseModel):
+services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
+services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
+services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
+services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
+services/etl-docs/src/shared/schemas.py:73:class SemanticItem(BaseModel):
+services/etl-docs/src/shared/schemas.py:88:class RAGFilters(BaseModel):
+services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
+services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
+services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
+services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:86:class ScoringJobResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:114:class ScoringOpsSummaryResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:137:class ScorecardResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:159:class ActiveModelResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:172:class InternalMemoryResetRequest(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:177:class InternalMemoryResetResponse(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
@@ -799,26 +703,6 @@ services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class Scor
 services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:74:class ScoringJobResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:102:class ScoringOpsSummaryResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:125:class ScorecardResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:147:class ActiveModelResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:160:class InternalMemoryResetRequest(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:165:class InternalMemoryResetResponse(BaseModel):
-services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
-services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
-services/etl-docs/src/shared/schemas.py:73:class SemanticItem(BaseModel):
-services/etl-docs/src/shared/schemas.py:88:class RAGFilters(BaseModel):
-services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
-services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
-services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
-services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
 ```
 
 ## Tablas/SQL Referenciadas (DB Map)
@@ -864,6 +748,10 @@ services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repositor
 services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py -> lead_scoring_bands
 services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py -> lead_scoring_criteria
 services/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py -> lead_type
+services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_resolver.py -> lead_leads
+services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_resolver.py -> lead_properties
+services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_resolver.py -> lead_property_images
+services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_resolver.py -> lead_propierties
 services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py -> lead_id
 services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py -> lead_messages
 services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_ai_prompts
@@ -872,6 +760,7 @@ services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.
 services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_from_extraction
 services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_id
 services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_messages
+services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_properties
 services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_snapshot
 services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py -> lead_id
 services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py -> lead_messages
@@ -883,7 +772,7 @@ services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrat
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_id
 services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_messages
 services/inference-stack-v2/semantic-adapter-v2/app/vector_repo.py -> ai_vectors
-services/realtor-bridge-v2/main.py -> lead_scoring
+services/property-bridge-v2/main.py -> lead_scoring
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema_v2_clone
@@ -997,36 +886,42 @@ services/web/admin-console/backend/tests/integration/test_security_and_scoping.p
 services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_detail_passes_user_scope
 services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_id
 services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_service
-services/web/realtor-chat/backend/app/api/external.py -> ai_response
-services/web/realtor-chat/backend/app/api/external.py -> ai_text
-services/web/realtor-chat/backend/app/api/external.py -> auth_not_configured
-services/web/realtor-chat/backend/app/api/external.py -> auth_user_id
-services/web/realtor-chat/backend/app/api/external.py -> lead_id
-services/web/realtor-chat/backend/app/api/schemas.py -> auth_user_id
-services/web/realtor-chat/backend/app/core/database.py -> lead_brand_configs
-services/web/realtor-chat/backend/app/core/database.py -> lead_client_verticals
-services/web/realtor-chat/backend/app/core/database.py -> lead_clients
-services/web/realtor-chat/backend/app/core/database.py -> lead_properties
-services/web/realtor-chat/backend/app/core/database.py -> lead_property_images
-services/web/realtor-chat/backend/app/core/inference_bridge.py -> lead_id
-services/web/realtor-chat/backend/app/main.py -> ai_response
-services/web/realtor-chat/backend/app/main.py -> ai_text
-services/web/realtor-chat/backend/app/main.py -> lead_id
-services/web/realtor-chat/backend/app/schemas/internal_chat.py -> auth_user_id
-services/web/realtor-chat/backend/app/transformer/core.py -> ai_response
-services/web/realtor-chat/backend/app/transformer/core.py -> ai_text
-services/web/realtor-chat/backend/app/transformer/core.py -> lead_brand_configs
-services/web/realtor-chat/backend/app/transformer/generic_policy.py -> ai_response
-services/web/realtor-chat/backend/app/transformer/generic_policy.py -> ai_text
-services/web/realtor-chat/backend/app/transformer/realtor_policy.py -> ai_response
-services/web/realtor-chat/backend/app/transformer/realtor_policy.py -> ai_text
-services/web/realtor-chat/backend/tests/integration/test_api.py -> ai_text
-services/web/realtor-chat/backend/tests/integration/test_tenant_isolation.py -> ai_text
-services/web/realtor-chat/backend/tests/unit/test_chat_runtime.py -> ai_text
-services/web/realtor-chat/backend/tests/unit/test_external_api_security.py -> ai_text
-services/web/realtor-chat/backend/tests/unit/test_generic_policy.py -> ai_text
-services/web/realtor-chat/backend/tests/unit/test_internal_chat_schema.py -> auth_user_id
-services/web/realtor-chat/backend/tests/unit/test_realtor_policy.py -> ai_text
+services/web/chat-web-renderer/backend/app/api/external.py -> ai_response
+services/web/chat-web-renderer/backend/app/api/external.py -> ai_text
+services/web/chat-web-renderer/backend/app/api/external.py -> auth_not_configured
+services/web/chat-web-renderer/backend/app/api/external.py -> auth_user_id
+services/web/chat-web-renderer/backend/app/api/external.py -> lead_id
+services/web/chat-web-renderer/backend/app/api/schemas.py -> auth_user_id
+services/web/chat-web-renderer/backend/app/core/database.py -> lead_brand_configs
+services/web/chat-web-renderer/backend/app/core/database.py -> lead_client_verticals
+services/web/chat-web-renderer/backend/app/core/database.py -> lead_clients
+services/web/chat-web-renderer/backend/app/core/database.py -> lead_properties
+services/web/chat-web-renderer/backend/app/core/database.py -> lead_property_images
+services/web/chat-web-renderer/backend/app/core/inference_bridge.py -> lead_id
+services/web/chat-web-renderer/backend/app/main.py -> ai_response
+services/web/chat-web-renderer/backend/app/main.py -> ai_text
+services/web/chat-web-renderer/backend/app/main.py -> lead_id
+services/web/chat-web-renderer/backend/app/planner/sql_planner.py -> lead_ai_prompts
+services/web/chat-web-renderer/backend/app/planner/sql_planner.py -> lead_leads
+services/web/chat-web-renderer/backend/app/planner/sql_planner.py -> lead_properties
+services/web/chat-web-renderer/backend/app/planner/sql_planner.py -> lead_property_images
+services/web/chat-web-renderer/backend/app/planner/sql_planner.py -> lead_propierties
+services/web/chat-web-renderer/backend/app/schemas/internal_chat.py -> auth_user_id
+services/web/chat-web-renderer/backend/app/transformer/core.py -> ai_response
+services/web/chat-web-renderer/backend/app/transformer/core.py -> ai_text
+services/web/chat-web-renderer/backend/app/transformer/core.py -> lead_brand_configs
+services/web/chat-web-renderer/backend/app/transformer/generic_policy.py -> ai_response
+services/web/chat-web-renderer/backend/app/transformer/generic_policy.py -> ai_text
+services/web/chat-web-renderer/backend/app/transformer/realtor_policy.py -> ai_response
+services/web/chat-web-renderer/backend/app/transformer/realtor_policy.py -> ai_text
+services/web/chat-web-renderer/backend/tests/integration/test_api.py -> ai_text
+services/web/chat-web-renderer/backend/tests/integration/test_tenant_isolation.py -> ai_text
+services/web/chat-web-renderer/backend/tests/unit/test_chat_runtime.py -> ai_text
+services/web/chat-web-renderer/backend/tests/unit/test_external_api_security.py -> ai_text
+services/web/chat-web-renderer/backend/tests/unit/test_generic_policy.py -> ai_text
+services/web/chat-web-renderer/backend/tests/unit/test_internal_chat_schema.py -> auth_user_id
+services/web/chat-web-renderer/backend/tests/unit/test_realtor_policy.py -> ai_text
+services/web/chat-web-renderer/backend/tests/unit/test_sql_planner.py -> lead_leads
 ```
 
 ## Motor SUID/SDUI (archivos núcleo)
@@ -1525,7 +1420,7 @@ export function renderContent(components) {
     return components.map(c => renderComponent(c)).join('');
 }
 ```
-### `services/web/realtor-chat/backend/app/schemas/ui.py`
+### `services/web/chat-web-renderer/backend/app/schemas/ui.py`
 
 ```
 from typing import List, Optional, Union, Dict
@@ -1608,7 +1503,7 @@ class SDUIResponse(BaseModel):
     branding: Optional[BrandingConfig] = None
     components: List[Union[ChatMessage, PropertyCard, MortgageCalculator, PropertyGrid, PropertyMap, ActionMenu, PhotoCarousel]]
 ```
-### `services/web/realtor-chat/backend/app/transformer/core.py`
+### `services/web/chat-web-renderer/backend/app/transformer/core.py`
 
 ```
 import logging
@@ -1752,24 +1647,61 @@ class SDUITransformer:
         for prop_data in prop_results:
             if isinstance(prop_data, Exception) or not prop_data:
                 continue
-            try:
-                title = prop_data.get("title", "Propiedad Sugerida").replace("&#8211;", "-")
-                card = PropertyCard(
-                    id=str(prop_data.get("id")),
-                    title=title,
-                    price=float(prop_data.get("price", 0)),
-                    location=f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", "),
-                    image_url=prop_data["images"][0] if prop_data.get("images") else None,
-                    tags=prop_data.get("features", {}).get("highlights", []) if isinstance(prop_data.get("features"), dict) else [],
-                )
+            card = self._map_property_data_to_card(prop_data)
+            if card:
                 cards.append(card)
-            except Exception as e:
-                logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
-                continue
         
         return cards
+
+    async def search_properties_for_query(
+        self,
+        client_id: str,
+        query_text: str,
+        limit: int = 4,
+        include_terms: bool = True,
+    ) -> List[PropertyCard]:
+        properties = await asyncio.to_thread(
+            db_manager.search_properties,
+            client_id,
+            query_text,
+            limit,
+            include_terms,
+        )
+        cards: List[PropertyCard] = []
+        for prop_data in properties or []:
+            card = self._map_property_data_to_card(prop_data)
+            if card:
+                cards.append(card)
+        return cards
+
+    async def count_properties_for_query(self, client_id: str, query_text: str, include_terms: bool = True) -> int:
+        return await asyncio.to_thread(db_manager.count_properties, client_id, query_text, include_terms)
+
+    async def get_property_price_stats_for_query(self, client_id: str, query_text: str, include_terms: bool = False) -> Dict[str, Any]:
+        return await asyncio.to_thread(db_manager.get_property_price_stats, client_id, query_text, include_terms)
+
+    async def extract_property_filters_for_query(self, query_text: str) -> Dict[str, Any]:
+        return await asyncio.to_thread(db_manager.extract_property_filters, query_text)
+
+    def _map_property_data_to_card(self, prop_data: Dict[str, Any]) -> Union[PropertyCard, None]:
+        try:
+            title = (prop_data.get("title") or "Propiedad Sugerida").replace("&#8211;", "-")
+            location = f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", ")
+            features = prop_data.get("features") if isinstance(prop_data.get("features"), dict) else {}
+            tags = features.get("highlights", []) if isinstance(features, dict) else []
+            return PropertyCard(
+                id=str(prop_data.get("id")),
+                title=title,
+                price=float(prop_data.get("price", 0) or 0),
+                location=location,
+                image_url=prop_data["images"][0] if prop_data.get("images") else None,
+                tags=tags if isinstance(tags, list) else [],
+            )
+        except Exception as e:
+            logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
+            return None
 ```
-### `services/web/realtor-chat/frontend/core/renderer.js`
+### `services/web/chat-web-renderer/frontend/core/renderer.js`
 
 ```
 /**
@@ -1898,7 +1830,7 @@ export class ChatRenderer {
     }
 }
 ```
-### `services/web/realtor-chat/backend/app/main.py`
+### `services/web/chat-web-renderer/backend/app/main.py`
 
 ```
 import os
@@ -1911,7 +1843,7 @@ from app.schemas.chat import InitRequest, InternalMemoryResetRequest
 from app.schemas.internal_chat import InternalChatRequest
 from app.schemas.ui import SDUIResponse
 
-app = FastAPI(title="Realtor Chat Polymorphic Bridge")
+app = FastAPI(title="Chat Web Renderer")
 
 cors_origins = [
     origin.strip()
@@ -1933,7 +1865,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    return {"status": "operational", "service": "realtor-chat-bridge"}
+    return {"status": "operational", "service": "chat-web-renderer-api"}
 
 
 @app.get("/health/dependencies")
@@ -1947,7 +1879,7 @@ async def dependencies_health():
 
     result = {
         "status": "operational",
-        "service": "realtor-chat-bridge",
+        "service": "chat-web-renderer-api",
         "dependencies": {
             "inference_core_v2": {"ok": False, "url": inference_url},
             "semantic_adapter_v2": {"ok": False, "url": retriever_url},
@@ -1982,7 +1914,6 @@ from app.core.vertical_router import vertical_router
 from app.transformer.core import SDUITransformer
 from app.transformer.realtor_policy import RealtorRendererPolicy
 from app.transformer.generic_policy import GenericRendererPolicy
-from app.core.feature_flags import feature_flags
 from app.session.manager import SessionManager
 
 inference_client = InferenceClient()
@@ -2021,14 +1952,11 @@ async def chat_interaction(req: InternalChatRequest):
     channel = req.channel
     channel_user_id = req.channel_user_id
 
-    if feature_flags.SESSION_MULTICHANNEL_ENABLED:
-        session_data = await session_manager.get_session_multichannel(
-            client_id=client_id,
-            channel=channel,
-            channel_user_id=channel_user_id,
-        )
-    else:
-        session_data = await session_manager.get_session(client_id)
+    session_data = await session_manager.get_session_multichannel(
+        client_id=client_id,
+        channel=channel,
+        channel_user_id=channel_user_id,
+    )
     
     session_context = {
         "client_id": client_id,
@@ -2047,49 +1975,55 @@ async def chat_interaction(req: InternalChatRequest):
         
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
         if new_conversation_id:
-            if feature_flags.SESSION_MULTICHANNEL_ENABLED:
-                await session_manager.upsert_session(
-                    client_id=client_id,
-                    channel=channel,
-                    channel_user_id=channel_user_id,
-                    data={
-                        "conversation_id": new_conversation_id,
-                        "brand_project": session_context.get("brand_project"),
-                        "last_interaction": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
-            else:
-                await session_manager.update_session(
-                    client_id,
-                    {
-                        "conversation_id": new_conversation_id,
-                        "brand_project": session_context.get("brand_project"),
-                        "channel": channel,
-                        "channel_user_id": channel_user_id,
-                        "last_interaction": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
+            await session_manager.upsert_session(
+                client_id=client_id,
+                channel=channel,
+                channel_user_id=channel_user_id,
+                data={
+                    "conversation_id": new_conversation_id,
+                    "brand_project": session_context.get("brand_project"),
+                    "last_interaction": datetime.now(timezone.utc).isoformat(),
+                },
+            )
         
         vertical = await vertical_router.resolve_vertical_for_client_async(client_id)
         policy_handler = await vertical_router.get_handler_async(client_id, channel)
         if not policy_handler:
             raise HTTPException(status_code=500, detail="No renderer policy available for resolved vertical/channel")
         
-        ai_text = (ai_response.get("answer") or "").strip()
-        
+        ai_text = ai_response.get("answer")
+        if isinstance(ai_text, dict):
+            ai_text = str(ai_text.get("text", str(ai_text)))
+        elif not isinstance(ai_text, str):
+            ai_text = str(ai_text) if ai_text is not None else ""
+        ai_text = (ai_text or "").strip()
         extracted_components = []
-        sources = ai_response.get("sources", [])
-        if sources:
-            property_cards = await transformer._extract_properties_from_sources(sources)
-            if property_cards:
-                if len(property_cards) == 1:
-                    extracted_components.append(property_cards[0])
-                else:
+        canonical_components = ai_response.get("components") or []
+        if canonical_components:
+            for component_payload in canonical_components:
+                comp_type = component_payload.get("type")
+                if comp_type == "property-card":
+                    from app.schemas.ui import PropertyCard
+                    extracted_components.append(PropertyCard(**component_payload))
+                elif comp_type == "property-grid":
                     from app.schemas.ui import PropertyGrid
-                    extracted_components.append(PropertyGrid(
-                        title="Propiedades Relacionadas",
-                        properties=property_cards
-                    ))
+                    extracted_components.append(PropertyGrid(**component_payload))
+                elif comp_type == "chat":
+                    from app.schemas.ui import ChatMessage
+                    extracted_components.append(ChatMessage(**component_payload))
+        else:
+            sources = ai_response.get("sources", [])
+            if sources:
+                property_cards = await transformer._extract_properties_from_sources(sources)
+                if property_cards:
+                    if len(property_cards) == 1:
+                        extracted_components.append(property_cards[0])
+                    else:
+                        from app.schemas.ui import PropertyGrid
+                        extracted_components.append(PropertyGrid(
+                            title="Propiedades Relacionadas",
+                            properties=property_cards
+                        ))
         
         if "cita" in ai_text.lower() or "visita" in ai_text.lower():
             from app.schemas.ui import ActionMenu
@@ -2119,8 +2053,6 @@ async def chat_interaction(req: InternalChatRequest):
                 from app.schemas.ui import ChatMessage
                 final_components.append(ChatMessage(**comp_data))
             elif comp_type == "property-card":
-                from app.schemas.ui import PropertyCard
-                final_components.append(PropertyCard(**comp_data))
 ```
 ### `services/web/admin-console/backend/app/main.py`
 
@@ -2213,6 +2145,7 @@ app.include_router(grid_presets_router)
 import logging
 import asyncio
 import re
+import json
 import time
 from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
@@ -2226,6 +2159,7 @@ from app.services.cache_service import cache_service
 from app.services.hybrid_retriever import HybridRetriever
 from app.services.scoring_job_service import ScoringJobService
 from app.services.prompt_selector import prompt_selector
+from app.services.realtor_turn_resolver import RealtorTurnResolver
 from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
@@ -2235,6 +2169,7 @@ MISCONFIGURED_CHAT_MESSAGE = "Lo siento, no puedo conversar, estoy desconfigurad
 
 class ScoringOrchestrator:
     """Orchestrator for v2 chat and scoring"""
+    _PROPERTY_SEARCH_LIMIT = 4
     _conversation_locks: Dict[str, asyncio.Lock] = {}
     _scheduled_scoring_tasks: Dict[str, asyncio.Task] = {}
     
@@ -2243,8 +2178,32 @@ class ScoringOrchestrator:
         self.repo = ScoringRepository(db_session)
         self.job_service = ScoringJobService(self.repo)
         self.hybrid_retriever = HybridRetriever()
+        self.realtor_turn_resolver = RealtorTurnResolver(
+            db_session,
+            search_limit=self._PROPERTY_SEARCH_LIMIT,
+        )
         self._scoring_engine = None
         self._llm_client = None
+        self._planner_prompt_cache: Dict[str, str] = {}
+        self._property_intents = {
+            "PROPERTY_SEARCH",
+            "PROPERTY_INVENTORY",
+            "PROPERTY_PRICE_RANGE",
+            "RAG",
+            "CLARIFICATION",
+            "NONE",
+        }
+
+    _PROPERTY_PLANNER_GUARDRAILS = """
+MANDATORY EXECUTION RULES (append as hard constraint, after any prompt text from DB):
+- You must return only JSON. Do not include markdown, surrounding quotes, or explanatory text.
+- If intent is PROPERTY_SEARCH / PROPERTY_INVENTORY / PROPERTY_PRICE_RANGE, SQL must be a single SELECT over lead_properties.
+- Always include hard tenant scoping: client_id = '{client_id}'.
+- Always include published price constraint: COALESCE(price, 0) > 0.
+- For direct user location requests (includes "en X", "zona X", "en el"), generate a new SQL from scratch using current message and do not inherit prior filters.
+- Use previous search only when user explicitly references prior results (examples: "de esas", "más baratas de esas", "las mismas").
+- Prefer title, description, features->>'address' for textual filtering.
+""".strip()
     
     @property
     def llm_client(self):
@@ -2309,16 +2268,22 @@ class ScoringOrchestrator:
     async def get_or_create_prompt(
         self,
         model_data: Dict[str, Any],
-        vertical_ctx: Dict[str, Any]
+        vertical_ctx: Dict[str, Any],
+        client_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Get active prompt - must be configured in database"""
         model_id = UUID(model_data["id"])
-        
+        if client_id:
+            cached_prompt = await cache_service.get_scoring_prompt(client_id=client_id, model_id=model_id)
+            if cached_prompt:
+                return cached_prompt
+
         prompt_config = await self.repo.get_active_prompt(model_id)
         
         if not prompt_config:
             raise ValueError(f"No active prompt found for model {model_id} - please configure prompt in database")
-        
+        if client_id:
+            await cache_service.set_scoring_prompt(client_id=client_id, model_id=model_id, prompt_data=prompt_config)
         return prompt_config
 
     @staticmethod
@@ -2350,12 +2315,30 @@ class ScoringOrchestrator:
         preferred_slug: str,
     ) -> tuple[str, Optional[str]]:
         slug = (preferred_slug or "primary_chat").strip() or "primary_chat"
+        cached_prompt = await cache_service.get_client_chat_prompt(client_id=client_id, slug=slug)
+        if cached_prompt:
+            return slug, cached_prompt
+
         prompt_text = await self.repo.get_client_system_prompt(client_id, slug=slug)
         if prompt_text:
+            await cache_service.set_client_chat_prompt(client_id=client_id, slug=slug, prompt_text=prompt_text)
             return slug, prompt_text
         if slug != "primary_chat":
+            cached_fallback = await cache_service.get_client_chat_prompt(client_id=client_id, slug="primary_chat")
+            if cached_fallback:
+                logger.warning(
+                    "Prompt slug '%s' not found for client_id=%s; using cached fallback slug 'primary_chat'",
+                    slug,
+                    client_id,
+                )
+                return "primary_chat", cached_fallback
             fallback_prompt = await self.repo.get_client_system_prompt(client_id, slug="primary_chat")
             if fallback_prompt:
+                await cache_service.set_client_chat_prompt(
+                    client_id=client_id,
+                    slug="primary_chat",
+                    prompt_text=fallback_prompt,
+                )
                 logger.warning(
                     "Prompt slug '%s' not found for client_id=%s; using fallback slug 'primary_chat'",
                     slug,
@@ -2364,72 +2347,21 @@ class ScoringOrchestrator:
                 return "primary_chat", fallback_prompt
         return slug, None
 
-    async def _resolve_runtime_context(
-        self,
-        request: ChatV2Request,
-        conversation_id: UUID,
-    ) -> Dict[str, Any]:
+    async def _resolve_property_planner_prompt(self, client_id: UUID) -> Optional[str]:
         """
-        Resolve full runtime context for a chat turn.
-        Prefers conversation snapshot when available.
+        Resolve the property-routing planner prompt (planner/system prompt) for a client.
         """
-        snapshot = None
-        if request.conversation_id:
-            snapshot = await self.repo.get_conversation_context_snapshot(
-                conversation_id=conversation_id,
-                client_id=request.client_id,
+        primary_slug = "sql_planner_system"
+        secondary_slug = "sql_planner"
+
+        cached_prompt = await cache_service.get_client_chat_prompt(
+            client_id=client_id,
+            slug=primary_slug,
+        )
+        if cached_prompt:
+            resolved = cached_prompt.replace("{search_limit}", str(self._PROPERTY_SEARCH_LIMIT)).replace(
+                "{client_id}", str(client_id)
             )
-
-        if snapshot:
-            vertical_ctx = snapshot.get("vertical_ctx") or {}
-            model_data = snapshot.get("model_data") or {}
-            prompt_config = snapshot.get("scoring_prompt") or {}
-            client_prompt_text = snapshot.get("client_prompt_text")
-            snapshot_prompt_slug = (snapshot.get("chat_prompt_slug") or "").strip()
-            if vertical_ctx and model_data and prompt_config:
-                chat_prompt_slug = snapshot_prompt_slug or self._select_chat_prompt_slug(
-                    vertical_ctx=vertical_ctx,
-                    user_metadata=request.user_metadata,
-                )
-                if not client_prompt_text:
-                    chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
-                        client_id=request.client_id,
-                        preferred_slug=chat_prompt_slug,
-                    )
-                return {
-                    "vertical_ctx": vertical_ctx,
-                    "model_data": model_data,
-                    "prompt_config": prompt_config,
-                    "client_prompt_text": client_prompt_text,
-                    "chat_prompt_slug": chat_prompt_slug,
-                    "from_snapshot": True,
-                }
-
-        vertical_ctx = await self.resolve_vertical_for_client(request.client_id)
-        vertical_id = int(vertical_ctx["vertical_id"])
-        scoring_model_id = UUID(str(vertical_ctx["scoring_model_id"]))
-
-        model_data = await self.get_active_scoring_model(
-            client_id=request.client_id,
-            vertical_id=vertical_id,
-            scoring_model_id=scoring_model_id,
-        )
-        if not model_data:
-            raise ValueError(
-                f"NO_ACTIVE_VERTICAL_SCORING_MODEL: vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
-            )
-
-        prompt_config = await self.get_or_create_prompt(model_data, vertical_ctx)
-        preferred_chat_prompt_slug = self._select_chat_prompt_slug(
-            vertical_ctx=vertical_ctx,
-            user_metadata=request.user_metadata,
-        )
-        chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
-            client_id=request.client_id,
-            preferred_slug=preferred_chat_prompt_slug,
-        )
-
-        return {
 ```
 ### `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
 
@@ -3103,7 +3035,7 @@ class ScoringRepository:
             RETURNING id, lead_id, platform, conversation_id, messages, total_messages, context_snapshot
         """)
 ```
-### `services/web/realtor-chat/backend/app/core/inference_bridge.py`
+### `services/web/chat-web-renderer/backend/app/core/inference_bridge.py`
 
 ```
 import os
@@ -3208,8 +3140,13 @@ class InferenceClient:
         normalized = {
             "answer": data.get("answer", ""),
             "sources": data.get("sources", []),
+            "components": data.get("components", []),
+            "intent": data.get("intent"),
             "conversation_id": str(data.get("conversationId", data.get("conversation_id", ""))),
         }
+        
+        if "propertyTurn" in data or "property_turn" in data:
+            normalized["property_turn"] = data.get("property_turn") or data.get("propertyTurn")
         
         if data.get("leadId") or data.get("lead_id"):
             normalized["lead_id"] = str(data.get("leadId") or data.get("lead_id"))

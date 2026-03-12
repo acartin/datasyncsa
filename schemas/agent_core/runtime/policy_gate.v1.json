@@ -1,0 +1,55 @@
+{
+  "contract": "AgentCorePolicyGateV1",
+  "version": "1.0.0",
+  "description": "Policy gate finito y declarativo. Solo acepta o rechaza.",
+  "decision_space": [
+    "accept",
+    "reject"
+  ],
+  "reason_codes": [
+    "schema_invalid",
+    "tenant_not_authorized",
+    "tool_not_permitted",
+    "missing_required_slots",
+    "confidence_too_low",
+    "side_effects_blocked",
+    "budget_exceeded"
+  ],
+  "defaults": {
+    "min_confidence": 0.55,
+    "max_tool_calls": 2,
+    "allow_side_effects": true
+  },
+  "verticals": {
+    "generic": {
+      "allowed_goals": [
+        "answer",
+        "clarify",
+        "rag",
+        "workflow"
+      ],
+      "allowed_tools": [
+        "rag",
+        "workflow"
+      ]
+    },
+    "realtor": {
+      "allowed_goals": [
+        "clarify",
+        "rag",
+        "realtor_search",
+        "realtor_refine",
+        "workflow"
+      ],
+      "allowed_tools": [
+        "rag",
+        "realtor_sql",
+        "workflow"
+      ]
+    }
+  },
+  "notes": [
+    "Si aparecen nuevas reglas fuera de estas categorias, el problema esta en planner prompt o contratos.",
+    "El gate nunca transforma un plan rechazado."
+  ]
+}

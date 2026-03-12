@@ -31,6 +31,11 @@ Orden obligatorio de lectura (carga mínima primero):
 3. `.agent/BRAIN_MAP.md` (lectura breve: encabezado + mapa operativo)
 4. `.agent/AI_CONTEXT_PACK.md` (lectura selectiva por secciones, solo on-demand)
 
+Para tareas de rediseño, implementación o integración del stack conversacional nuevo:
+
+5. `.agent/AGENT_CORE_BOOTSTRAP.md`
+6. `docs/AGENT_CORE_INDEX.md`
+
 Regla de eficiencia de contexto:
 - `AI_CONTEXT_PACK.md` es archivo de consulta, no de lectura completa por defecto.
 - Evitar `cat` completo de archivos grandes; priorizar `rg`, `sed -n`, `find` por sección puntual.
@@ -46,11 +51,18 @@ Si hay contradicción:
 
 Servicios activos principales:
 - `services/web/admin-console`
-- `services/web/realtor-chat`
+- `services/web/chat-web-renderer`
 - `services/inference-stack/inference-core`
 - `services/inference-stack/semantic-adapter`
 - `services/inference-stack-v2/inference-core-v2`
+- `services/inference-stack-v2/inference-core-v3`
 - `services/etl-docs`
+- `services/generic-bridge-v2`
+- `services/property-bridge-v2`
+
+Servicios objetivo de reemplazo (greenfield):
+- `services/agent-core`
+- `services/scoring-core`
 
 Servicios deprecados:
 - `services/etl-processor`
@@ -106,8 +118,9 @@ Regla:
 ## 8. IA e Inference
 
 - `inference-core` v1: chat RAG legacy + scoring legacy.
-- `inference-core-v2`: scoring por vertical/modelo/prompt versionado.
-- No asumir que `lead_type` viene del cliente en v2; se resuelve por vertical del tenant.
+- `inference-core-v2`: legado operativo de scoring/flujos antiguos. No introducir inteligencia nueva de chat.
+- `inference-core-v3`: autoridad principal del chat; resuelve tenant/vertical, decide rutas y subflujos (`generic`, `realtor`), sintetiza y persiste la respuesta final, y encola side-effects.
+- No asumir que `lead_type` viene del cliente en v3; se resuelve por vertical del tenant.
 - Mutaciones de conocimiento (ETL sync/delete) deben disparar reset de memoria best-effort.
 
 ## 8.1 Prohibición de Heurística Hardcodeada
@@ -119,11 +132,14 @@ Regla:
 
 ## 9. Testing Mínimo por Cambio
 
-Regla crítica de sincronización runtime (obligatoria para Inference v2):
+Regla crítica de sincronización runtime:
 - Si se modifica cualquier archivo de `services/inference-stack-v2/inference-core-v2/**`, es obligatorio ejecutar antes de probar:
   - `docker compose up -d --build inference-core-v2 inference-core-v2-worker`
+- Si se modifica cualquier archivo de `services/inference-stack-v2/inference-core-v3/**`, es obligatorio ejecutar antes de probar:
+  - `docker compose up -d --build inference-core-v3`
 - Motivo: en `docker-compose.yml` esos servicios no montan el código de `/app` por volumen, solo `schemas`; sin rebuild quedan ejecutando imagen vieja.
-- No se aceptan resultados de tests/simulaciones si no se recrearon ambos contenedores (`inference-core-v2` + `inference-core-v2-worker`) después del cambio.
+- No se aceptan resultados de tests/simulaciones si no se recrearon ambos contenedores (`inference-core-v2` + `inference-core-v2-worker`) para cambios en `inference-core-v2`.
+- Para cambios en `inference-core-v3`, no se aceptan resultados de tests/simulaciones sin `docker compose ps inference-core-v3` tras rebuild.
 - Verificación mínima obligatoria:
   - `docker compose ps inference-core-v2 inference-core-v2-worker`
   - `docker compose exec -T inference-core-v2-worker /bin/bash -lc "grep -n 'deterministic_scoring_service' app/services/scoring_engine.py"`
@@ -133,12 +149,15 @@ Si tocas cada área, corre como mínimo en el contenedor **backend/API** corresp
 Admin Console backend (`admin-console-api`):
 - `docker compose exec -T admin-console-api pytest -q tests`
 
-Realtor Chat backend (`realtor-api`):
-- `docker compose exec -T realtor-api pytest -q tests`
-- si `pytest` no está instalado en la imagen: `docker compose exec -T realtor-api pip install -r /app/requirements-dev.txt`
+Chat Web Renderer backend (`chat-web-renderer-api`):
+- `docker compose exec -T chat-web-renderer-api pytest -q tests`
+- si `pytest` no está instalado en la imagen: `docker compose exec -T chat-web-renderer-api pip install -r /app/requirements-dev.txt`
 
 Inference Core v2 (`inference-core-v2`):
 - `docker compose exec -T inference-core-v2 env PYTHONPATH=/app pytest -q tests`
+
+Inference Core v3 (`inference-core-v3`):
+- `docker compose exec -T inference-core-v3 pytest -q tests`
 
 Semantic Adapter v2 (`semantic-adapter-v2`):
 - `docker compose exec -T semantic-adapter-v2 pytest -q tests`
@@ -148,6 +167,20 @@ ETL Docs (`etl-docs`):
 
 Inference Core v1 (`inference-core`, solo si ese servicio existe en el compose activo):
 - `docker compose exec -T inference-core pytest -q tests`
+
+Guardrail adicional para cambios conversacionales de `inference-core-v3`:
+- Si se tocan `routing`, `planner`, `answer_synthesizer`, `lead_followup_planner`, contratos de presentacion/grounding o flujo realtor en `services/inference-stack-v2/inference-core-v3/**`, despues del rebuild y de `pytest -q tests/unit` se debe correr tambien la bateria intensiva realtor:
+  - `python3 tests/sandbox/realtor/realtor_v3_regression_battery.py --request-timeout 45 --json-out /tmp/realtor_v3_battery.json`
+- Esa bateria es el guardrail conductual canonico del vertical realtor para:
+  - `search`
+  - `refine`
+  - `inventory`
+  - `price_range`
+  - referencias a cards mostradas
+  - memoria de busqueda
+  - RAG post-busqueda
+  - cadencia de captura de lead
+- Si no se ejecuta, documentar explicitamente por que no se valido.
 
 Si no se ejecutan pruebas:
 - documentar explícitamente qué no se validó y por qué.
@@ -184,6 +217,11 @@ Para tareas de alto impacto, incluir además:
 - archivo objetivo
 - restricción explícita de no tocar módulos fuera de scope
 - suite de test mínima esperada
+
+Para tareas que toquen arquitectura conversacional:
+- tomar como canónico `docs/AGENT_CORE_INDEX.md`
+- tratar `inference-core-v1/v2` como referencia de extracción o compatibilidad, no como baseline arquitectónico nuevo
+- tratar `scoring-core` como subsistema independiente de `agent-core`
 
 ## 12. Estado de Migración desde .agent
 

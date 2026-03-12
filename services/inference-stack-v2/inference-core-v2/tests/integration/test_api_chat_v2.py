@@ -187,6 +187,7 @@ async def test_cache_invalidation(client, mocker):
     """Test cache invalidation endpoint"""
     mock_cache = mocker.patch('app.api.chat_v2.cache_service')
     mock_cache.invalidate_active_model = mocker.AsyncMock(return_value=True)
+    mock_cache.invalidate_client_prompts = mocker.AsyncMock(return_value=True)
     
     # Test specific invalidation
     response = client.post(f"/api/v2/cache/invalidate?client_id={uuid4()}")
@@ -196,6 +197,7 @@ async def test_cache_invalidation(client, mocker):
     
     # Test all cache invalidation
     mock_cache.invalidate_all_models = mocker.AsyncMock(return_value=True)
+    mock_cache.invalidate_all_prompts = mocker.AsyncMock(return_value=True)
     response = client.post("/api/v2/cache/invalidate")
     
     assert response.status_code == 200
@@ -207,6 +209,7 @@ async def test_cache_invalidation_ignores_unknown_query_params(client, mocker):
     """Unknown query params are ignored; endpoint invalidates all cache when client_id is absent."""
     mock_cache = mocker.patch('app.api.chat_v2.cache_service')
     mock_cache.invalidate_all_models = mocker.AsyncMock(return_value=True)
+    mock_cache.invalidate_all_prompts = mocker.AsyncMock(return_value=True)
 
     response = client.post("/api/v2/cache/invalidate?vertical_id=1")
 

@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-httpx
-google-genai
-pydantic
-pydantic-settings
-psycopg2-binary
-python-dotenv

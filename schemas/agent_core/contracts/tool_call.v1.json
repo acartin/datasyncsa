@@ -1,0 +1,114 @@
+{
+  "contract": "ToolCallV1",
+  "version": "1.0.0",
+  "description": "Contrato de tool call emitido por el planner.",
+  "type": "object",
+  "required": [
+    "tool_name",
+    "payload"
+  ],
+  "properties": {
+    "tool_name": {
+      "type": "string",
+      "enum": [
+        "rag",
+        "realtor_sql",
+        "workflow"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "rag_query": {
+          "type": "object",
+          "properties": {
+            "query_text": {
+              "type": "string"
+            },
+            "top_k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "filter_doc_type": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "realtor_slots": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "property_type": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "apartment",
+                "house",
+                "land",
+                "office",
+                null
+              ]
+            },
+            "min_price": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "max_price": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "min_rooms": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "max_rooms": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "workflow_call": {
+          "type": "object",
+          "properties": {
+            "workflow_name": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  },
+  "rules": [
+    "tool_name=rag_requires_payload.rag_query",
+    "tool_name=realtor_sql_requires_payload.realtor_slots",
+    "tool_name=workflow_requires_payload.workflow_call"
+  ]
+}

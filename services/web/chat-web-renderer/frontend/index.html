@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>Hommie - Asistente Inmobiliario AI</title>
+    <!-- Premium Design System -->
+    <link rel="stylesheet" href="index.css?v=3">
+</head>
+
+<body>
+    <!-- Launcher Button -->
+    <div id="chat-launcher" onclick="toggleWidget()">
+        <svg viewBox="0 0 24 24">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+        </svg>
+    </div>
+
+    <!-- Chat Widget -->
+    <div id="chat-widget">
+        <!-- Header -->
+        <div class="widget-header">
+            <div class="avatar-container">
+                <div class="brand-avatar">H</div>
+                <div class="status-indicator">
+                    <span class="dot"></span>
+                    <span>En línea</span>
+                </div>
+            </div>
+            <div class="header-info">
+                <h3>Hommie AI</h3>
+            </div>
+            <button id="new-chat-button" class="new-chat-button" type="button" aria-label="Iniciar chat nuevo">
+                New Chat
+            </button>
+            <button class="close-button" onclick="toggleWidget()" aria-label="Cerrar chat">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="chat-messages">
+            <div class="message-wrapper bot">
+                <div class="sender-name">Hommie AI</div>
+                <div class="message-bubble">
+                    Hola! 👋 Soy Hommie, tu asistente experto. ¿En qué zona estás buscando tu próxima propiedad?
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="widget-input-area">
+            <form id="chat-form">
+                <div class="input-wrapper">
+                    <input type="text" id="user-input" placeholder="Escribe tu mensaje..." required autocomplete="off">
+                    <button type="submit" class="send-button">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- UI Logic & Components -->
+    <script type="module">
+        // Manejo de Errores Global para Depuración
+        window.onerror = (msg, url, line) => {
+            console.error(`Error en UI: ${msg} en ${url}:${line}`);
+        };
+
+        import { ChatRenderer } from './core/renderer.js?v=3';
+
+        // Realtor Components
+        import './components/realtor/property-card.js';
+        import './components/realtor/property-grid.js';
+        import './components/interactive/action-menu.js';
+        import './components/interactive/mortgage-calc.js';
+        import './components/media/map-widget.js';
+        import './components/media/photo-carousel.js';
+
+        const renderer = new ChatRenderer('chat-messages');
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('user-input');
+        const widget = document.getElementById('chat-widget');
+        const messagesContainer = document.getElementById('chat-messages');
+        const newChatButton = document.getElementById('new-chat-button');
+        const statusIndicator = document.querySelector('.status-indicator');
+        const statusDot = document.querySelector('.status-indicator .dot');
+        const statusLabel = document.querySelector('.status-indicator span:last-child');
+        const INITIAL_BOT_GREETING = 'Hola! 👋 Soy Hommie, tu asistente experto. ¿En qué zona estás buscando tu próxima propiedad?';
+
+        // Extraction of Context from URL (FB Ads, QR Codes, etc.)
+        const urlParams = new URLSearchParams(window.location.search);
+        const DEFAULT_CLIENT_ID = '64f357a0-98eb-44f1-9f41-6e615ed26180';
+        const clientId = urlParams.get('clientId') || DEFAULT_CLIENT_ID;
+        const brandProject = urlParams.get('project') || urlParams.get('brand_project');
+        const propertyId = urlParams.get('propertyId'); // For QR codes specific to a house
+        const ATTRIBUTION_FIRST_TOUCH_KEY = 'chat_web_renderer_attribution_first_touch';
+        const ATTRIBUTION_LAST_TOUCH_KEY = 'chat_web_renderer_attribution_last_touch';
+        const CHANNEL_USER_ID_KEY = `chat_web_renderer_channel_user_${clientId}`;
+        const CONVERSATION_SESSION_KEY = `chat_web_renderer_conversation_${clientId}`;
+        const ATTRIBUTION_KEYS = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+            'gclid', 'fbclid', 'ttclid', 'msclkid', 'li_fat_id', 'gbraid', 'wbraid'
+        ];
+
+        const FRONTEND_SESSION_STATE_KEY = 'chat_web_renderer_frontend_state';
+        const PAGE_LOAD_ID = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `page_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        let frontendMessageSeq = 0;
+
+        const safeParseJSON = (raw) => {
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                return null;
+            }
+        };
+        const readWindowState = () => {
+            try {
+                const parsed = safeParseJSON(window.name);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+            } catch (_) {
+                // Ignore window.name parse failures
+            }
+            return {};
+        };
+        const writeWindowState = (nextState) => {
+            try {
+                const current = readWindowState();
+                window.name = JSON.stringify({ ...current, ...nextState });
+            } catch (_) {
+                // Ignore window.name write failures
+            }
+        };
+        const readCookie = (key) => {
+            try {
+                const prefix = `${encodeURIComponent(key)}=`;
+                const match = document.cookie.split('; ').find((part) => part.startsWith(prefix));
+                if (!match) return null;
+                return decodeURIComponent(match.substring(prefix.length));
+            } catch (_) {
+                return null;
+            }
+        };
+        const writeCookie = (key, value, maxAgeSeconds = 60 * 60 * 24 * 30) => {
+            try {
+                document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+            } catch (_) {
+                // Ignore cookie failures
+            }
+        };
+        const readStorage = (key) => {
+            const windowState = readWindowState();
+            if (windowState[key]) return windowState[key];
+            try {
+                return (
+                    sessionStorage.getItem(key) ||
+                    localStorage.getItem(key) ||
+                    readCookie(key)
+                );
+            } catch (_) {
+                return readCookie(key);
+            }
+        };
+        const writeStorage = (key, value) => {
+            writeWindowState({ [key]: value });
+            try {
+                sessionStorage.setItem(key, value);
+            } catch (_) {
+                // Ignore storage failures
+            }
+            try {
+                localStorage.setItem(key, value);
+            } catch (_) {
+                // Ignore storage failures (private mode/webviews with blocked storage)
+            }
+            if (value === null || value === undefined) return;
+            writeCookie(key, String(value));
+        };
+        const clearStorage = (key) => {
+            writeWindowState({ [key]: '' });
+            try {
+                sessionStorage.removeItem(key);
+            } catch (_) {
+                // Ignore storage failures
+            }
+            try {
+                localStorage.removeItem(key);
+            } catch (_) {
+                // Ignore storage failures
+            }
+            try {
+                document.cookie = `${encodeURIComponent(key)}=; path=/; max-age=0; SameSite=Lax`;
+            } catch (_) {
+                // Ignore cookie failures
+            }
+        };
+
+        const extractAttribution = (params) => {
+            const data = {};
+            ATTRIBUTION_KEYS.forEach((key) => {
+                const val = params.get(key);
+                if (val) data[key] = val;
+            });
+            return data;
+        };
+
+        const hasAttributionData = (data) => Object.keys(data).length > 0;
+
+        const queryAttribution = extractAttribution(urlParams);
+        const storedFirstTouch = safeParseJSON(readStorage(ATTRIBUTION_FIRST_TOUCH_KEY)) || {};
+        const storedLastTouch = safeParseJSON(readStorage(ATTRIBUTION_LAST_TOUCH_KEY)) || {};
+
+        // Keep first touch stable for attribution reports.
+        if (!hasAttributionData(storedFirstTouch) && hasAttributionData(queryAttribution)) {
+            writeStorage(ATTRIBUTION_FIRST_TOUCH_KEY, JSON.stringify({
+                ...queryAttribution,
+                first_touch_at: new Date().toISOString()
+            }));
+        }
+
+        // Update last touch whenever URL contains attribution params.
+        if (hasAttributionData(queryAttribution)) {
+            writeStorage(ATTRIBUTION_LAST_TOUCH_KEY, JSON.stringify({
+                ...queryAttribution,
+                last_touch_at: new Date().toISOString()
+            }));
+        }
+
+        const runtimeAttribution = {
+            ...storedFirstTouch,
+            ...storedLastTouch,
+            ...queryAttribution
+        };
+        if (!runtimeAttribution.utm_source) runtimeAttribution.utm_source = 'direct';
+
+        const newChannelUserId = () => {
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                return `web_${clientId}_${crypto.randomUUID()}`;
+            }
+            return `web_${clientId}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        };
+
+        const persistedFrontendStateRaw = readStorage(FRONTEND_SESSION_STATE_KEY);
+        const persistedFrontendState = safeParseJSON(persistedFrontendStateRaw) || {};
+
+        let channelUserId =
+            readStorage(CHANNEL_USER_ID_KEY) ||
+            persistedFrontendState.channelUserId ||
+            newChannelUserId();
+        writeStorage(CHANNEL_USER_ID_KEY, channelUserId);
+
+        let conversationId =
+            readStorage(CONVERSATION_SESSION_KEY) ||
+            persistedFrontendState.conversationId ||
+            '';
+        writeWindowState({
+            [FRONTEND_SESSION_STATE_KEY]: {
+                clientId,
+                channelUserId,
+                conversationId
+            }
+        });
+        writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
+            clientId,
+            channelUserId,
+            conversationId
+        }));
+
+        const renderInitialGreeting = () => {
+            if (!messagesContainer) return;
+            messagesContainer.innerHTML = '';
+            renderer.renderResponse({
+                components: [{ type: 'chat', text: INITIAL_BOT_GREETING, sender: 'bot' }]
+            });
+        };
+
+        const buildFrontendDebugMetadata = () => {
+            const currentWindowState = readWindowState();
+            const storedConversationId = readStorage(CONVERSATION_SESSION_KEY) || '';
+            const storedChannelUserId = readStorage(CHANNEL_USER_ID_KEY) || '';
+            const frontendStateRaw = readStorage(FRONTEND_SESSION_STATE_KEY);
+            const frontendState = safeParseJSON(frontendStateRaw) || {};
+            const traceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                ? crypto.randomUUID()
+                : `trace_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+            frontendMessageSeq += 1;
+
+            return {
+                debug_trace_id: traceId,
+                frontend_page_load_id: PAGE_LOAD_ID,
+                frontend_message_seq: frontendMessageSeq,
+                frontend_runtime_conversation_id: conversationId || null,
+                frontend_runtime_channel_user_id: channelUserId || null,
+                frontend_stored_conversation_id: storedConversationId || null,
+                frontend_stored_channel_user_id: storedChannelUserId || null,
+                frontend_frontend_state_conversation_id: frontendState.conversationId || null,
+                frontend_frontend_state_channel_user_id: frontendState.channelUserId || null,
+                frontend_had_stored_conversation_id: Boolean(storedConversationId),
+                frontend_had_stored_channel_user_id: Boolean(storedChannelUserId),
+                frontend_had_frontend_state: Boolean(frontendStateRaw),
+                frontend_had_window_state: Object.keys(currentWindowState || {}).length > 0,
+                frontend_visibility_state: document.visibilityState || 'unknown',
+                frontend_boot_had_frontend_state: Boolean(persistedFrontendStateRaw),
+            };
+        };
+
+        const resetConversationState = () => {
+            conversationId = '';
+            clearStorage(CONVERSATION_SESSION_KEY);
+            channelUserId = newChannelUserId();
+            writeStorage(CHANNEL_USER_ID_KEY, channelUserId);
+            writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
+                clientId,
+                channelUserId,
+                conversationId
+            }));
+            renderer.hideTyping();
+            renderInitialGreeting();
+            input.value = '';
+            input.focus();
+        };
+
+        const pushSystemMessage = (text) => {
+            renderer.renderResponse({
+                components: [{ type: 'chat', text, sender: 'bot' }]
+            });
+        };
+
+        const setRuntimeStatus = (kind, label, details = '') => {
+            if (!statusIndicator || !statusDot || !statusLabel) return;
+            statusIndicator.classList.remove('status-ok', 'status-degraded', 'status-down');
+            statusIndicator.classList.add(kind);
+            statusLabel.textContent = label;
+            statusIndicator.title = details || label;
+        };
+
+        const refreshRuntimeStatus = async () => {
+            try {
+                const res = await fetch('/api/health/dependencies', { method: 'GET' });
+                if (!res.ok) throw new Error(`health status ${res.status}`);
+                const data = await res.json();
+                const deps = data?.dependencies || {};
+                const infOk = !!deps?.inference_core_v2?.ok;
+                const semOk = !!deps?.semantic_adapter_v2?.ok;
+
+                if (infOk && semOk) {
+                    setRuntimeStatus('status-ok', 'En línea');
+                } else if (infOk || semOk) {
+                    setRuntimeStatus('status-degraded', 'Degradado', JSON.stringify(deps));
+                } else {
+                    setRuntimeStatus('status-down', 'Sin conexión', JSON.stringify(deps));
+                }
+            } catch (_err) {
+                setRuntimeStatus('status-down', 'Sin conexión');
+            }
+        };
+
+        // Toggle Widget
+        window.toggleWidget = () => {
+            const launcher = document.getElementById('chat-launcher');
+            widget.classList.toggle('active');
+
+            if (widget.classList.contains('active')) {
+                launcher.classList.add('hidden');
+                refreshRuntimeStatus();
+                // input.focus(); // Eliminado para evitar que el teclado salte en móviles
+            } else {
+                launcher.classList.remove('hidden');
+            }
+        };
+
+        if (newChatButton) {
+            newChatButton.addEventListener('click', () => {
+                resetConversationState();
+            });
+        }
+
+        const applyBranding = (branding) => {
+            console.log("Applying branding:", branding);
+            if (!branding) return;
+            const root = document.documentElement;
+
+            // 1. Jerarquía de Marca (Primary -> Estructural)
+            if (branding.primary_color) {
+                root.style.setProperty('--brand-primary', branding.primary_color);
+                root.style.setProperty('--brand-accent', branding.primary_color);
+            }
+            if (branding.text_on_primary) {
+                root.style.setProperty('--text-on-primary', branding.text_on_primary);
+            }
+
+            // 2. CTAs (Secondary -> Conversión)
+            if (branding.secondary_color) {
+                root.style.setProperty('--brand-secondary', branding.secondary_color);
+            }
+            if (branding.text_on_secondary) {
+                root.style.setProperty('--text-on-secondary', branding.text_on_secondary);
+            }
+
+            // 3. Legibilidad y Fondo (Surface -> Backgrounds)
+            if (branding.surface_color) {
+                root.style.setProperty('--brand-surface', branding.surface_color);
+            }
+            if (branding.text_on_surface) {
+                root.style.setProperty('--text-on-surface', branding.text_on_surface);
+            }
+
+            // 4. Tipografías Dinámicas
+            if (branding.font_heading_url) {
+                loadFont(branding.font_heading_url);
+            }
+            if (branding.font_body_url) {
+                loadFont(branding.font_body_url);
+            }
+            if (branding.font_heading_name) {
+                root.style.setProperty('--font-heading', `'${branding.font_heading_name}', sans-serif`);
+            }
+            if (branding.font_body_name) {
+                root.style.setProperty('--font-body', `'${branding.font_body_name}', sans-serif`);
+            }
+
+            // 5. Estética (Shadows & Radius)
+            if (branding.border_radius) {
+                root.style.setProperty('--border-radius', branding.border_radius);
+            }
+            if (branding.box_shadow_style) {
+                root.style.setProperty('--box-shadow', branding.box_shadow_style);
+            }
+
+            // 6. Logos y Wordmark (Acomodado Premium)
+            const titleElement = document.querySelector('.header-info h3');
+            if (titleElement) {
+                if (branding.brand_wordmark_base64) {
+                    titleElement.innerHTML = '';
+                    const img = document.createElement('img');
+                    const src = formatDataUri(branding.brand_wordmark_base64);
+                    console.log("Wordmark potential src start:", src.substring(0, 50));
+
+                    img.src = src;
+                    img.alt = ""; // Evitar que se vea el texto si falla, el onerror se encarga
+                    img.className = "brand-wordmark";
+
+                    // Fallback si la imagen no carga
+                    img.onerror = () => {
+                        console.warn("Logo wordmark falló al cargar. Usando texto.");
+                        titleElement.innerText = branding.agent_name || "Hommie AI";
+                    };
+
+                    titleElement.appendChild(img);
+                    titleElement.style.padding = "4px 0";
+                } else if (branding.agent_name) {
+                    titleElement.innerText = branding.agent_name;
+                }
+            }
+
+            if (branding.agent_name) {
+                renderer.setBotName(branding.agent_name);
+            }
+
+            const avatar = document.querySelector('.brand-avatar');
+            if (avatar) {
+                if (branding.logo_header_base64) {
+                    avatar.innerHTML = '';
+                    const img = document.createElement('img');
+                    const src = formatDataUri(branding.logo_header_base64);
+                    img.src = src;
+                    img.alt = "";
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'contain';
+
+                    img.onerror = () => {
+                        avatar.innerText = (branding.agent_name || "H").charAt(0).toUpperCase();
+                        avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
+                    };
+
+                    avatar.appendChild(img);
+                    avatar.style.background = 'transparent';
+                    avatar.style.padding = '4px';
+                    avatar.style.boxShadow = 'none';
+                } else if (branding.agent_name) {
+                    const initials = branding.agent_name.charAt(0).toUpperCase();
+                    avatar.innerText = initials;
+                    avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
+                }
+            }
+
+            if (branding.favicon_base64) {
+                updateFavicon(branding.favicon_base64);
+            }
+        };
+
+        const formatDataUri = (input) => {
+            if (!input) return '';
+            const raw = input.trim();
+
+            // Caso 1: Ya es un Data URI completo
+            if (raw.startsWith('data:')) return raw;
+
+            // Caso 2: Es un SVG crudo (XML/SVG) -> Lo convertimos a Base64
+            if (raw.includes('<svg') || raw.includes('<?xml')) {
+                try {
+                    return `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(raw)))}`;
+                } catch (e) {
+                    console.error("Error encoding raw SVG:", e);
+                    return '';
+                }
+            }
+
+            // Caso 3: Es Base64 puro -> Detectamos el MIME y armamos el Data URI
+            const mime = getMimeType(raw);
+            return `data:${mime};base64,${raw}`;
+        };
+
+        const getMimeType = (base64) => {
+            if (base64.includes('PHN2Zy') || base64.includes('PD94bWw')) return 'image/svg+xml';
+            if (base64.includes('UklGR')) return 'image/webp';
+            if (base64.startsWith('iVBORw0KG')) return 'image/png';
+            if (base64.startsWith('/9j/')) return 'image/jpeg';
+            return 'image/svg+xml'; // SVG como fallback seguro para este proyecto
+        };
+
+        const updateFavicon = (base64) => {
+            let link = document.querySelector("link[rel*='icon']");
+            if (!link) {
+                link = document.createElement('link');
+                link.rel = 'icon';
+                document.head.appendChild(link);
+            }
+            link.href = formatDataUri(base64);
+        };
+
+        // Helper para cargar fuentes dinámicamente
+        window.loadFont = (url) => {
+            if (!url || document.querySelector(`link[href="${url}"]`)) return;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = url;
+            document.head.appendChild(link);
+        };
+
+        // 🔧 FIX DEFINITIVO: Ajuste Visual Viewport
+        // Maneja el redimensionamiento del teclado sin saltos ni pérdida del header
+        if (window.visualViewport) {
+            const handleResize = () => {
+                const widget = document.getElementById('chat-widget');
+                const viewport = window.visualViewport;
+
+                // Solo aplicar en móviles y si el widget está activo
+                if (widget && widget.classList.contains('active') && window.innerWidth <= 480) {
+
+                    // Altura total disponible en el viewport visual
+                    const availableHeight = viewport.height;
+
+                    // Restamos los márgenes (16px bottom + 16px top)
+                    // Usamos 32px para mantener el 'look' flotante pero asegurar que quepa
+                    const safeHeight = availableHeight - 32;
+
+                    // Aplicamos la altura calculada
+                    widget.style.height = `${safeHeight}px`;
+
+                    // Scroll al fondo
+                    requestAnimationFrame(() => renderer.scrollToBottom());
+                }
+            };
+
+            // Escuchar resize y scroll del viewport visual
+            window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+        }
+
+
+
+        // Initialize Branding on Load
+
+        // Initialize Branding on Load
+        (async () => {
+            try {
+                // Hacemos una petición silenciosa solo para branding
+                const res = await fetch('/api/chat/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        brand_project: brandProject
+                    })
+                });
+                const data = await res.json();
+                applyBranding(data.branding);
+            } catch (e) {
+                console.warn("Branding init error:", e);
+            }
+        })();
+
+        document.addEventListener('chat-action', (event) => {
+            const payload = event.detail?.payload;
+            if (!payload) return;
+
+            const payloadToText = {
+                SCHEDULE_VISIT: 'Quiero agendar una visita',
+                CALL_AGENT: 'Quiero hablar con un asesor',
+            };
+
+            const text = payloadToText[payload] || `Acción: ${payload}`;
+            input.value = text;
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+        });
+
+        document.addEventListener('property-open-map', (event) => {
+            const location = event.detail?.location || event.detail?.title || '';
+            const query = encodeURIComponent(location || 'propiedad');
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+            window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = input.value;
+            input.value = '';
+
+            // User Message
+            renderer.renderResponse({
+                components: [{ type: 'chat', text: text, sender: 'user' }]
+            });
+
+            try {
+                renderer.showTyping();
+
+                const frontendDebug = buildFrontendDebugMetadata();
+                console.debug('[chat-web-renderer] outbound', {
+                    traceId: frontendDebug.debug_trace_id,
+                    channelUserId,
+                    runtimeConversationId: conversationId || null,
+                    storedConversationId: frontendDebug.frontend_stored_conversation_id,
+                    messageSeq: frontendDebug.frontend_message_seq
+                });
+                const payload = {
+                    message_text: text,
+                    client_id: clientId,
+                    channel: 'web_html',
+                    channel_user_id: channelUserId,
+                    brand_project: brandProject,
+                    metadata: {
+                        source_property_ref: propertyId,
+                        landing_page_url: window.location.href,
+                        referrer_url: document.referrer || null,
+                        ...runtimeAttribution,
+                        ...frontendDebug
+                    }
+                };
+                if (conversationId) {
+                    payload.conversation_id = conversationId;
+                }
+
+                const controller = new AbortController();
+                const timeoutMs = 25000;
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    let detail = '';
+                    try {
+                        const errBody = await response.json();
+                        detail = errBody?.detail || '';
+                    } catch (_e) {
+                        detail = '';
+                    }
+                    throw new Error(detail || `Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.debug('[chat-web-renderer] inbound', {
+                    traceId: frontendDebug.debug_trace_id,
+                    nextConversationId: data?.session_id || data?.conversation_id || null
+                });
+
+                // Apply Dynamic Branding
+                applyBranding(data.branding);
+
+                const nextConversationId = data?.session_id || data?.conversation_id;
+                if (nextConversationId) {
+                    conversationId = nextConversationId;
+                    writeStorage(CONVERSATION_SESSION_KEY, conversationId);
+                    writeWindowState({
+                        [FRONTEND_SESSION_STATE_KEY]: {
+                            clientId,
+                            channelUserId,
+                            conversationId
+                        }
+                    });
+                    writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
+                        clientId,
+                        channelUserId,
+                        conversationId
+                    }));
+                }
+
+                renderer.hideTyping();
+                renderer.renderResponse(data);
+            } catch (err) {
+                renderer.hideTyping();
+                console.error("Error bridge:", err);
+                if (err?.name === 'AbortError') {
+                    pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");
+                } else {
+                    const msg = (err?.message || "").trim();
+                    pushSystemMessage(msg || "No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
+                }
+            }
+        });
+
+        // Initial + periodic dependency check for header indicator
+        refreshRuntimeStatus();
+        setInterval(refreshRuntimeStatus, 20000);
+    </script>
+</body>
+
+</html>

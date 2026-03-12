@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import re
+import json
 import time
 from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
@@ -14,6 +15,7 @@ from app.services.cache_service import cache_service
 from app.services.hybrid_retriever import HybridRetriever
 from app.services.scoring_job_service import ScoringJobService
 from app.services.prompt_selector import prompt_selector
+from app.services.realtor_turn_executor import RealtorTurnExecutor
 from app.core.config import settings
 
 logger = logging.getLogger("inference-core-v2.orchestrator")
@@ -23,6 +25,7 @@ MISCONFIGURED_CHAT_MESSAGE = "Lo siento, no puedo conversar, estoy desconfigurad
 
 class ScoringOrchestrator:
     """Orchestrator for v2 chat and scoring"""
+    _PROPERTY_SEARCH_LIMIT = 4
     _conversation_locks: Dict[str, asyncio.Lock] = {}
     _scheduled_scoring_tasks: Dict[str, asyncio.Task] = {}
     
@@ -31,8 +34,64 @@ class ScoringOrchestrator:
         self.repo = ScoringRepository(db_session)
         self.job_service = ScoringJobService(self.repo)
         self.hybrid_retriever = HybridRetriever()
+        self.realtor_turn_executor = RealtorTurnExecutor(
+            db_session,
+            search_limit=self._PROPERTY_SEARCH_LIMIT,
+        )
         self._scoring_engine = None
         self._llm_client = None
+        self._planner_prompt_cache: Dict[str, str] = {}
+        self._realtor_intents = {
+            "PROPERTY_SEARCH",
+            "PROPERTY_INVENTORY",
+            "PROPERTY_PRICE_RANGE",
+            "RAG",
+            "CLARIFICATION",
+            "NONE",
+        }
+
+    _REALTOR_TURN_GUARDRAILS = """
+MANDATORY EXECUTION RULES (append as hard constraint, after any prompt text from DB):
+- You must return only JSON. Do not include markdown, surrounding quotes, or explanatory text.
+- If intent is PROPERTY_SEARCH / PROPERTY_INVENTORY / PROPERTY_PRICE_RANGE, SQL must be a single SELECT over lead_properties.
+- If intent is PROPERTY_SEARCH / PROPERTY_INVENTORY / PROPERTY_PRICE_RANGE, include search_summary with a short natural summary of the active search.
+- Include filters as a JSON object when you can infer them from the current turn or confirmed session context.
+- Allowed filter keys: desired_location, property_type, bedrooms_min, bathrooms_min, garage_min, price_min, price_max, listing_intent.
+- Always include hard tenant scoping: client_id = '{client_id}'.
+- Always include published price constraint: COALESCE(price, 0) > 0.
+- For direct user location requests (includes "en X", "zona X", "en el"), generate a new SQL from scratch using current message and do not inherit prior filters.
+- Use previous search only when user explicitly references prior results (examples: "de esas", "más baratas de esas", "las mismas").
+- Prefer title, description, features->>'address' for textual filtering.
+""".strip()
+
+    _REALTOR_ANSWER_GUARDRAILS = """
+You are the final user-facing response synthesizer for the realtor flow.
+You receive the user message, the realtor_turn plan, execution facts and recent realtor session state.
+Write ONLY the final answer for the user. Do not output JSON, markdown, labels, or internal field names.
+
+Rules:
+- Use only the provided facts and conversation context. Do not invent properties, availability or unsupported details.
+- If search_summary is available, mention it naturally instead of saying "con ese criterio".
+- If results were found and visible_count > 0, acknowledge the results naturally.
+- If total_matches > visible_count and visible_count > 0, mention naturally that you are showing only a few to start.
+- If no results were found, say so honestly and suggest one useful next refinement.
+- If the execution failed, apologize briefly and ask for a concrete retry input like zone or property type.
+- For price range, mention min/max only if they are present in the facts.
+- Keep the answer concise, natural and advisor-like. Normally 1 or 2 sentences.
+- Never mention SQL, tools, prompts, execution status codes or internal contracts.
+""".strip()
+
+    _REALTOR_VERTICAL_MEMORY_KEYS = (
+        "desired_location",
+        "property_type",
+        "bedrooms_min",
+        "bathrooms_min",
+        "garage_min",
+        "price_min",
+        "price_max",
+        "listing_intent",
+        "search_summary",
+    )
     
     @property
     def llm_client(self):
@@ -176,6 +235,379 @@ class ScoringOrchestrator:
                 return "primary_chat", fallback_prompt
         return slug, None
 
+    async def _resolve_realtor_turn_prompt(self, client_id: UUID) -> Optional[str]:
+        """
+        Resolve the realtor-turn planner prompt (planner/system prompt) for a client.
+        """
+        primary_slug = "realtor_turn_system"
+        secondary_slug = "realtor_turn"
+
+        cached_prompt = await cache_service.get_client_chat_prompt(
+            client_id=client_id,
+            slug=primary_slug,
+        )
+        if cached_prompt:
+            resolved = str(cached_prompt).replace("{search_limit}", str(self._PROPERTY_SEARCH_LIMIT)).replace(
+                "{client_id}", str(client_id)
+            )
+            resolved = self._append_guardrails(resolved, self._REALTOR_TURN_GUARDRAILS)
+            self._planner_prompt_cache[str(client_id)] = resolved
+            return resolved
+
+        prompt_text = await self.repo.get_client_system_prompt(client_id, slug=primary_slug)
+        if not prompt_text:
+            prompt_text = await self.repo.get_client_system_prompt(client_id, slug=secondary_slug)
+        if not prompt_text:
+            logger.warning("Realtor turn prompt missing for client_id=%s", client_id)
+            return None
+
+        if prompt_text:
+            prompt_text = str(prompt_text).replace("{search_limit}", str(self._PROPERTY_SEARCH_LIMIT)).replace(
+                "{client_id}",
+                str(client_id),
+            )
+            prompt_text = self._append_guardrails(prompt_text, self._REALTOR_TURN_GUARDRAILS)
+
+        await cache_service.set_client_chat_prompt(
+            client_id=client_id,
+            slug=primary_slug,
+            prompt_text=prompt_text,
+        )
+        self._planner_prompt_cache[str(client_id)] = prompt_text
+        return prompt_text
+
+    @staticmethod
+    def _extract_realtor_turn_payload(raw: str) -> Dict[str, Any]:
+        text = (raw or "").strip()
+        if not text:
+            raise ValueError("Empty realtor turn response")
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?", "", text, flags=re.IGNORECASE).strip()
+            text = re.sub(r"```$", "", text).strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start : end + 1]
+        payload = json.loads(text)
+        if not isinstance(payload, dict):
+            raise ValueError("Realtor turn response is not JSON object")
+        return payload
+
+    @staticmethod
+    def _normalize_realtor_turn_payload(raw_payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        payload = raw_payload or {}
+        intent = str(payload.get("intent") or "NONE").strip().upper()
+        if intent not in {
+            "PROPERTY_SEARCH",
+            "PROPERTY_INVENTORY",
+            "PROPERTY_PRICE_RANGE",
+            "RAG",
+            "CLARIFICATION",
+            "NONE",
+        }:
+            intent = "NONE"
+
+        sql = payload.get("sql")
+        if sql is not None:
+            sql = str(sql).strip()
+        clarification = payload.get("clarification")
+        if clarification is not None:
+            clarification = str(clarification).strip() or None
+
+        reasoning = payload.get("reasoning")
+        if reasoning is not None:
+            reasoning = str(reasoning).strip() or None
+
+        search_summary = payload.get("search_summary")
+        if search_summary is not None:
+            search_summary = str(search_summary).strip() or None
+
+        filters = ScoringOrchestrator._normalize_memory_dict(payload.get("filters"))
+
+        return {
+            "intent": intent,
+            "sql": sql if sql else None,
+            "clarification": clarification,
+            "reasoning": reasoning,
+            "search_summary": search_summary,
+            "filters": filters,
+            "success": intent in {"PROPERTY_SEARCH", "PROPERTY_INVENTORY", "PROPERTY_PRICE_RANGE"},
+        }
+
+    @classmethod
+    def _normalize_memory_value(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned:
+                return None
+            if cleaned.lower() in {"null", "none", "n/a", "na", "unknown", "desconocido"}:
+                return None
+            return cleaned
+        if isinstance(value, dict):
+            normalized_dict = cls._normalize_memory_dict(value)
+            return normalized_dict or None
+        if isinstance(value, list):
+            normalized_items = [cls._normalize_memory_value(item) for item in value]
+            filtered_items = [item for item in normalized_items if item is not None]
+            return filtered_items or None
+        return cls._json_safe(value)
+
+    @classmethod
+    def _normalize_memory_dict(cls, data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            return {}
+        normalized: Dict[str, Any] = {}
+        for key, value in data.items():
+            cleaned = cls._normalize_memory_value(value)
+            if cleaned is not None:
+                normalized[str(key)] = cleaned
+        return normalized
+
+    @classmethod
+    def _normalize_conversation_common(cls, data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        normalized = cls._normalize_memory_dict(data)
+        return {
+            key: value
+            for key, value in normalized.items()
+            if str(key).startswith("extracted_")
+        }
+
+    @classmethod
+    def _normalize_conversation_extraction_result(
+        cls,
+        raw_payload: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        payload = raw_payload or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        common = cls._normalize_conversation_common(payload.get("common"))
+        vertical = cls._normalize_memory_dict(payload.get("vertical"))
+
+        normalized: Dict[str, Any] = {}
+        if common:
+            normalized["common"] = common
+        if vertical:
+            normalized["vertical"] = vertical
+        return normalized
+
+    @classmethod
+    def _merge_conversation_extraction_result(
+        cls,
+        current: Optional[Dict[str, Any]],
+        *,
+        common_update: Optional[Dict[str, Any]] = None,
+        vertical_update: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        normalized_current = cls._normalize_conversation_extraction_result(current)
+        merged_common = dict(normalized_current.get("common") or {})
+        merged_vertical = dict(normalized_current.get("vertical") or {})
+
+        cleaned_common = cls._normalize_conversation_common(common_update)
+        if cleaned_common:
+            merged_common.update(cleaned_common)
+
+        cleaned_vertical = cls._normalize_memory_dict(vertical_update)
+        if cleaned_vertical:
+            merged_vertical.update(cleaned_vertical)
+
+        merged: Dict[str, Any] = {}
+        if merged_common:
+            merged["common"] = merged_common
+        if merged_vertical:
+            merged["vertical"] = merged_vertical
+        return merged
+
+    @classmethod
+    def _build_realtor_vertical_memory(cls, runtime_ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        realtor_search_state = ((runtime_ctx or {}).get("realtor_search_state") or {})
+        filters = cls._normalize_memory_dict(realtor_search_state.get("filters"))
+        search_summary = cls._normalize_memory_value(realtor_search_state.get("search_summary"))
+
+        vertical_memory: Dict[str, Any] = {}
+        for key in cls._REALTOR_VERTICAL_MEMORY_KEYS:
+            if key in filters:
+                vertical_memory[key] = filters[key]
+        if search_summary:
+            vertical_memory["search_summary"] = search_summary
+        return vertical_memory
+
+    @classmethod
+    def _build_conversation_extraction_updates(
+        cls,
+        *,
+        query_text: str,
+        vertical_ctx: Dict[str, Any],
+        runtime_ctx: Optional[Dict[str, Any]],
+    ) -> Dict[str, Dict[str, Any]]:
+        common_update = cls._normalize_conversation_common(
+            cls._extract_contact_seed_from_text(query_text),
+        )
+
+        vertical_slug = str((vertical_ctx or {}).get("vertical_slug") or "").strip().lower()
+        vertical_update: Dict[str, Any] = {}
+        if vertical_slug in {"realtor", "real-estate", "real_estate", "inmobiliaria"}:
+            vertical_update = cls._build_realtor_vertical_memory(runtime_ctx)
+
+        return {
+            "common": common_update,
+            "vertical": vertical_update,
+        }
+
+    async def _build_realtor_turn_context(self, request: ChatV2Request, runtime_ctx: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build minimal context required by the realtor turn prompt.
+        """
+        conversation_id = request.conversation_id
+        history = []
+        if conversation_id:
+            history = await self.repo.get_conversation_messages(
+                conversation_id=conversation_id,
+                client_id=request.client_id,
+                max_messages=max(1, settings.chat_history_max_messages),
+            )
+
+        recent_history = []
+        for row in history[-6:] if isinstance(history, list) else []:
+            role = str((row or {}).get("role") or "").strip().lower()
+            content = str((row or {}).get("content") or "").strip()
+            if role and content:
+                recent_history.append({"role": role, "content": content})
+
+        return {
+            "planner_last_property_query": (runtime_ctx.get("realtor_search_state") or {}).get(
+                "planner_last_property_query",
+            ),
+            "planner_last_sql": (runtime_ctx.get("realtor_search_state") or {}).get("planner_last_sql"),
+            "planner_last_search_summary": (runtime_ctx.get("realtor_search_state") or {}).get("search_summary"),
+            "realtor_search_intent": (runtime_ctx.get("realtor_search_state") or {}).get("intent"),
+            "awaiting_property_confirmation": bool(
+                (runtime_ctx.get("realtor_search_state") or {}).get("awaiting_property_confirmation")
+            ),
+            "conversation_extraction_result": self._normalize_conversation_extraction_result(
+                runtime_ctx.get("conversation_extraction_result"),
+            ),
+            "history_tail": recent_history,
+        }
+
+    async def _resolve_realtor_answer_prompt(self, client_id: UUID) -> Optional[str]:
+        for slug in ("realtor_answer_synthesis", "realtor_web_v1", "primary_chat"):
+            cached_prompt = await cache_service.get_client_chat_prompt(client_id=client_id, slug=slug)
+            if cached_prompt:
+                return self._append_guardrails(cached_prompt, self._REALTOR_ANSWER_GUARDRAILS)
+
+            prompt_text = await self.repo.get_client_system_prompt(client_id, slug=slug)
+            if prompt_text:
+                await cache_service.set_client_chat_prompt(
+                    client_id=client_id,
+                    slug=slug,
+                    prompt_text=prompt_text,
+                )
+                return self._append_guardrails(prompt_text, self._REALTOR_ANSWER_GUARDRAILS)
+        return None
+
+    async def _generate_realtor_answer(
+        self,
+        *,
+        request: ChatV2Request,
+        conversation_id: UUID,
+        realtor_turn: Dict[str, Any],
+        execution_result: Dict[str, Any],
+        runtime_ctx: Dict[str, Any],
+    ) -> str:
+        if not self.llm_client:
+            return ""
+
+        system_prompt = await self._resolve_realtor_answer_prompt(request.client_id)
+        if not system_prompt:
+            return ""
+
+        payload = {
+            "user_text": request.query_text,
+            "realtor_turn": realtor_turn,
+            "execution_result": execution_result,
+            "realtor_search_state": runtime_ctx.get("realtor_search_state") or {},
+        }
+
+        try:
+            from google.genai import types
+
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.llm_client.models.generate_content,
+                    model=settings.llm_model,
+                    contents=[json.dumps(payload, ensure_ascii=False)],
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2,
+                        max_output_tokens=max(64, int(settings.chat_llm_max_output_tokens or 220)),
+                    ),
+                ),
+                timeout=max(1, int(settings.llm_timeout_secs or 30)),
+            )
+            return str(response.text or "").strip()
+        except Exception:
+            logger.exception(
+                "Failed to synthesize realtor answer for client=%s conversation=%s",
+                request.client_id,
+                conversation_id,
+            )
+            return ""
+
+    async def _plan_realtor_turn(self, request: ChatV2Request, runtime_ctx: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Runs a lightweight planning pass for realtor routing.
+        """
+        if not self.llm_client:
+            return {"intent": "NONE"}
+
+        system_prompt = await self._resolve_realtor_turn_prompt(request.client_id)
+        if not system_prompt:
+            return {"intent": "NONE"}
+
+        planning_payload = {
+            "user_text": request.query_text,
+            "session_data": await self._build_realtor_turn_context(request, runtime_ctx),
+        }
+
+        start_ms = time.perf_counter()
+        try:
+            from google.genai import types
+
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.llm_client.models.generate_content,
+                    model=settings.llm_model,
+                    contents=[json.dumps(planning_payload, ensure_ascii=False)],
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.1,
+                        max_output_tokens=max(64, int(settings.chat_llm_max_output_tokens or 256)),
+                    ),
+                ),
+                timeout=max(1, int(settings.llm_timeout_secs or 30)),
+            )
+
+            llm_ms = (time.perf_counter() - start_ms) * 1000.0
+            logger.debug("REALTOR_TURN_PLANNER output_ms=%.1f response_chars=%s", llm_ms, len(response.text or ""))
+            payload = self._extract_realtor_turn_payload(response.text or "")
+            normalized = self._normalize_realtor_turn_payload(payload)
+            normalized["llm_duration_ms"] = llm_ms
+            return normalized
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Realtor turn planner LLM timeout for client=%s conversation=%s",
+                request.client_id,
+                request.conversation_id,
+            )
+        except Exception as exc:
+            logger.exception("Realtor turn planner failed for client=%s: %s", request.client_id, exc)
+
+        return {"intent": "NONE"}
+
     async def _resolve_runtime_context(
         self,
         request: ChatV2Request,
@@ -192,30 +624,34 @@ class ScoringOrchestrator:
                 client_id=request.client_id,
             )
 
-        if snapshot:
-            vertical_ctx = snapshot.get("vertical_ctx") or {}
-            model_data = snapshot.get("model_data") or {}
-            prompt_config = snapshot.get("scoring_prompt") or {}
-            client_prompt_text = snapshot.get("client_prompt_text")
-            snapshot_prompt_slug = (snapshot.get("chat_prompt_slug") or "").strip()
-            if vertical_ctx and model_data and prompt_config:
-                chat_prompt_slug = snapshot_prompt_slug or self._select_chat_prompt_slug(
-                    vertical_ctx=vertical_ctx,
-                    user_metadata=request.user_metadata,
-                )
-                if not client_prompt_text:
-                    chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
-                        client_id=request.client_id,
-                        preferred_slug=chat_prompt_slug,
+            if snapshot:
+                vertical_ctx = snapshot.get("vertical_ctx") or {}
+                model_data = snapshot.get("model_data") or {}
+                prompt_config = snapshot.get("scoring_prompt") or {}
+                client_prompt_text = snapshot.get("client_prompt_text")
+                snapshot_prompt_slug = (snapshot.get("chat_prompt_slug") or "").strip()
+                if vertical_ctx and model_data and prompt_config:
+                    chat_prompt_slug = snapshot_prompt_slug or self._select_chat_prompt_slug(
+                        vertical_ctx=vertical_ctx,
+                        user_metadata=request.user_metadata,
                     )
-                return {
-                    "vertical_ctx": vertical_ctx,
-                    "model_data": model_data,
-                    "prompt_config": prompt_config,
-                    "client_prompt_text": client_prompt_text,
-                    "chat_prompt_slug": chat_prompt_slug,
-                    "from_snapshot": True,
-                }
+                    if not client_prompt_text:
+                        chat_prompt_slug, client_prompt_text = await self._resolve_client_chat_prompt(
+                            client_id=request.client_id,
+                            preferred_slug=chat_prompt_slug,
+                        )
+                    return {
+                        "vertical_ctx": vertical_ctx,
+                        "model_data": model_data,
+                        "prompt_config": prompt_config,
+                        "client_prompt_text": client_prompt_text,
+                        "chat_prompt_slug": chat_prompt_slug,
+                        "realtor_search_state": snapshot.get("realtor_search_state") or {},
+                        "conversation_extraction_result": self._normalize_conversation_extraction_result(
+                            snapshot.get("conversation_extraction_result"),
+                        ),
+                        "from_snapshot": True,
+                    }
 
         vertical_ctx = await self.resolve_vertical_for_client(request.client_id)
         vertical_id = int(vertical_ctx["vertical_id"])
@@ -247,6 +683,8 @@ class ScoringOrchestrator:
             "prompt_config": prompt_config,
             "client_prompt_text": client_prompt_text,
             "chat_prompt_slug": chat_prompt_slug,
+            "realtor_search_state": {},
+            "conversation_extraction_result": {},
             "from_snapshot": False,
         }
 
@@ -280,6 +718,8 @@ class ScoringOrchestrator:
         prompt_config: Dict[str, Any],
         client_prompt_text: Optional[str],
         chat_prompt_slug: str,
+        realtor_search_state: Optional[Dict[str, Any]] = None,
+        conversation_extraction_result: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         return {
             "vertical_ctx": ScoringOrchestrator._json_safe(vertical_ctx or {}),
@@ -287,6 +727,10 @@ class ScoringOrchestrator:
             "scoring_prompt": ScoringOrchestrator._json_safe(prompt_config or {}),
             "client_prompt_text": client_prompt_text,
             "chat_prompt_slug": chat_prompt_slug,
+            "realtor_search_state": ScoringOrchestrator._json_safe(realtor_search_state or {}),
+            "conversation_extraction_result": ScoringOrchestrator._json_safe(
+                ScoringOrchestrator._normalize_conversation_extraction_result(conversation_extraction_result),
+            ),
         }
 
     @staticmethod
@@ -325,6 +769,31 @@ class ScoringOrchestrator:
                 continue
             lines.append(f"Usuario: {content}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _build_history_bot_message(
+        answer: str,
+        realtor_turn: Optional[Dict[str, Any]],
+    ) -> str:
+        text = (answer or "").strip()
+        if text:
+            return text
+
+        payload = realtor_turn if isinstance(realtor_turn, dict) else {}
+        clarification = str(payload.get("clarification") or "").strip()
+
+        if clarification:
+            return clarification
+        return "Estoy para ayudarte con propiedades y consultas inmobiliarias en Costa Rica."
+
+    @staticmethod
+    def _append_guardrails(prompt_text: Optional[str], guardrails: str) -> Optional[str]:
+        base = str(prompt_text or "").strip()
+        if not base:
+            return None
+        if guardrails in base:
+            return base
+        return f"{base}\n\n{guardrails}"
 
     @staticmethod
     def _extract_contact_seed_from_text(query_text: str) -> Dict[str, Any]:
@@ -436,7 +905,79 @@ class ScoringOrchestrator:
     def _format_structured_context(structured: Dict[str, Any]) -> str:
         if not structured:
             return "[sin contexto estructurado]"
-        return str(structured)
+        return json.dumps(structured, ensure_ascii=False, default=str)
+
+    @staticmethod
+    def _format_confirmed_lead_profile(structured: Dict[str, Any]) -> str:
+        if not isinstance(structured, dict):
+            return "[sin datos confirmados del lead]"
+        lead_snapshot = structured.get("lead_snapshot") or {}
+        if not isinstance(lead_snapshot, dict):
+            return "[sin datos confirmados del lead]"
+
+        lines: List[str] = []
+        full_name = str(lead_snapshot.get("full_name") or "").strip()
+        email = str(lead_snapshot.get("email") or "").strip()
+        phone = str(lead_snapshot.get("phone") or "").strip()
+
+        if full_name:
+            lines.append(f"Nombre: {full_name}")
+        if email:
+            lines.append(f"Email: {email}")
+        if phone:
+            lines.append(f"Telefono: {phone}")
+
+        if not lines:
+            return "[sin datos confirmados del lead]"
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_confirmed_conversation_extraction(cls, structured: Dict[str, Any]) -> str:
+        if not isinstance(structured, dict):
+            return "[sin datos confirmados de la conversación]"
+
+        extraction = cls._normalize_conversation_extraction_result(
+            structured.get("conversation_extraction_result"),
+        )
+        common = extraction.get("common") or {}
+        vertical = extraction.get("vertical") or {}
+
+        lines: List[str] = []
+        common_labels = {
+            "extracted_name": "Nombre",
+            "extracted_email": "Email",
+            "extracted_phone": "Telefono",
+            "extracted_budget": "Presupuesto",
+            "extracted_approval": "Aprobacion financiera",
+            "extracted_preference": "Preferencia libre",
+            "extracted_preferred_date": "Fecha o ventana deseada",
+            "extracted_appointment_intent": "Intencion de cita",
+            "extracted_appointment_type": "Tipo de cita",
+        }
+        for key, label in common_labels.items():
+            value = common.get(key)
+            if value is not None:
+                lines.append(f"{label}: {value}")
+
+        vertical_labels = {
+            "desired_location": "Zona deseada",
+            "property_type": "Tipo de propiedad",
+            "bedrooms_min": "Habitaciones",
+            "bathrooms_min": "Banos",
+            "garage_min": "Cochera",
+            "price_min": "Precio minimo",
+            "price_max": "Precio maximo",
+            "listing_intent": "Intencion inmobiliaria",
+            "search_summary": "Busqueda activa",
+        }
+        for key, label in vertical_labels.items():
+            value = vertical.get(key)
+            if value is not None:
+                lines.append(f"{label}: {value}")
+
+        if not lines:
+            return "[sin datos confirmados de la conversación]"
+        return "\n".join(lines)
 
     @staticmethod
     def _truncate_history_context(text: str, max_chars: int) -> str:
@@ -477,6 +1018,7 @@ class ScoringOrchestrator:
         self,
         request: ChatV2Request,
         vertical_ctx: Dict[str, Any],
+        runtime_ctx: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Structured SQL context for hybrid RAG (tenant scoped).
@@ -487,6 +1029,10 @@ class ScoringOrchestrator:
                 "vertical_name": vertical_ctx.get("vertical_name"),
                 "conversation_metrics": None,
                 "lead_snapshot": None,
+                "realtor_search_state": (runtime_ctx or {}).get("realtor_search_state") or {},
+                "conversation_extraction_result": self._normalize_conversation_extraction_result(
+                    (runtime_ctx or {}).get("conversation_extraction_result"),
+                ),
                 "vertical_sql_placeholders": {
                     "property_inventory": "[placeholder: pending realtor inventory query]",
                 },
@@ -512,6 +1058,10 @@ class ScoringOrchestrator:
             "vertical_name": vertical_ctx.get("vertical_name"),
             "conversation_metrics": metrics,
             "lead_snapshot": lead_snapshot,
+            "realtor_search_state": (runtime_ctx or {}).get("realtor_search_state") or {},
+            "conversation_extraction_result": self._normalize_conversation_extraction_result(
+                (runtime_ctx or {}).get("conversation_extraction_result"),
+            ),
             "vertical_sql_placeholders": {
                 "property_inventory": "[placeholder: pending realtor inventory query]",
             },
@@ -526,6 +1076,7 @@ class ScoringOrchestrator:
         request: ChatV2Request,
         vertical_ctx: Dict[str, Any],
         conversation_id: UUID,
+        runtime_ctx: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         history = await self.repo.get_conversation_messages(
             conversation_id=conversation_id,
@@ -533,7 +1084,11 @@ class ScoringOrchestrator:
             max_messages=settings.chat_history_max_messages,
         )
         vector_chunks = await self._retrieve_vertical_vector_context(request, vertical_ctx)
-        structured_facts = await self._retrieve_structured_business_context(request, vertical_ctx)
+        structured_facts = await self._retrieve_structured_business_context(
+            request,
+            vertical_ctx,
+            runtime_ctx=runtime_ctx,
+        )
         return {
             "history": history,
             "vector_chunks": vector_chunks,
@@ -547,6 +1102,7 @@ class ScoringOrchestrator:
         conversation_id: UUID,
         system_prompt: Optional[str] = None,
         prompt_slug: str = "primary_chat",
+        runtime_ctx: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Generate chat response using LLM with client's system prompt.
@@ -560,6 +1116,7 @@ class ScoringOrchestrator:
                 request=request,
                 vertical_ctx=vertical_ctx,
                 conversation_id=conversation_id,
+                runtime_ctx=runtime_ctx,
             )
             history_text = self._truncate_history_context(
                 self._format_conversation_history(hybrid_ctx["history"]),
@@ -582,9 +1139,17 @@ class ScoringOrchestrator:
             structured_section = hybrid_ctx["structured_facts"]
             vector_context_text = self._format_vector_context(vector_section)
             structured_context_text = self._format_structured_context(structured_section)
+            confirmed_lead_profile_text = self._format_confirmed_lead_profile(structured_section)
+            confirmed_conversation_extraction_text = self._format_confirmed_conversation_extraction(
+                structured_section,
+            )
             composed_user_prompt = (
                 "Contexto conversacional previo:\n"
                 f"{history_text or '[sin historial]'}\n\n"
+                "Datos confirmados del lead:\n"
+                f"{confirmed_lead_profile_text}\n\n"
+                "Datos confirmados de la conversación:\n"
+                f"{confirmed_conversation_extraction_text}\n\n"
                 "Contexto vectorial recuperado (RAG vertical/tenant):\n"
                 f"{vector_context_text}\n\n"
                 "Contexto estructurado de negocio:\n"
@@ -670,15 +1235,104 @@ class ScoringOrchestrator:
                     scoring_job_id=None,
                     scoring_eta=None,
                 )
-            
-            # Generate chat response using hybrid context (history + placeholders for retrieval)
-            answer = await self._generate_chat_response(
-                request=request,
+
+            vertical_slug = str(vertical_ctx.get("vertical_slug") or "").strip().lower()
+            vertical_is_realtor = vertical_slug in {"realtor", "real-estate", "real_estate", "inmobiliaria"}
+            realtor_turn = None
+            realtor_intent = None
+            answer = ""
+            final_components: List[Dict[str, Any]] = []
+            if vertical_is_realtor:
+                realtor_turn = await self._plan_realtor_turn(
+                    request=request,
+                    runtime_ctx=runtime_ctx,
+                )
+                realtor_intent = realtor_turn.get("intent") if isinstance(realtor_turn, dict) else None
+                if realtor_intent == "CLARIFICATION":
+                    next_search_state = dict(runtime_ctx.get("realtor_search_state") or {})
+                    if realtor_turn.get("search_summary"):
+                        next_search_state["search_summary"] = realtor_turn.get("search_summary")
+                    answer = str(realtor_turn.get("clarification") or "").strip()
+                    if not answer:
+                        answer = "¿Qué aspecto quieres precisar de la búsqueda?"
+                    next_search_state["awaiting_property_confirmation"] = True
+                    if next_search_state:
+                        runtime_ctx["realtor_search_state"] = next_search_state
+                elif realtor_intent in {"PROPERTY_SEARCH", "PROPERTY_INVENTORY", "PROPERTY_PRICE_RANGE"}:
+                    executed_realtor_turn = await self.realtor_turn_executor.execute(
+                        realtor_turn=realtor_turn,
+                        user_query=request.query_text,
+                        client_id=request.client_id,
+                    )
+                    if executed_realtor_turn.get("handled"):
+                        final_components = list(executed_realtor_turn.get("components") or [])
+                        answer = await self._generate_realtor_answer(
+                            request=request,
+                            conversation_id=conversation_id,
+                            realtor_turn=realtor_turn,
+                            execution_result=executed_realtor_turn,
+                            runtime_ctx=runtime_ctx,
+                        )
+
+                        if not answer:
+                            facts = dict(executed_realtor_turn.get("facts") or {})
+                            summary = str(facts.get("search_summary") or "").strip()
+                            total_matches = int(facts.get("total_matches") or facts.get("count") or 0)
+                            visible_count = int(facts.get("visible_count") or 0)
+                            status = str(executed_realtor_turn.get("status") or "").strip().lower()
+                            if status == "execution_error":
+                                answer = "No pude procesar esa búsqueda en este momento. Intenta de nuevo con una zona o tipo de propiedad."
+                            elif status == "empty":
+                                answer = (
+                                    f"No encontré opciones para {summary}."
+                                    if summary
+                                    else "No encontré propiedades con esa búsqueda."
+                                )
+                            elif total_matches > 0 and visible_count > 0:
+                                answer = (
+                                    f"Encontré {total_matches} opciones para {summary}."
+                                    if summary
+                                    else f"Encontré {total_matches} propiedades."
+                                )
+                            else:
+                                answer = "Listo, ya procesé esa búsqueda."
+
+                        next_search_state = dict(runtime_ctx.get("realtor_search_state") or {})
+                        resolved_search_state = executed_realtor_turn.get("search_state") or {}
+                        if resolved_search_state:
+                            next_search_state.update(resolved_search_state)
+                        facts = dict(executed_realtor_turn.get("facts") or {})
+                        if facts:
+                            next_search_state["last_result_count"] = facts.get("total_matches") or facts.get("count")
+                            next_search_state["last_visible_count"] = facts.get("visible_count")
+                            if facts.get("search_summary"):
+                                next_search_state["search_summary"] = facts.get("search_summary")
+                        next_search_state["awaiting_property_confirmation"] = False
+                        runtime_ctx["realtor_search_state"] = next_search_state
+
+            runtime_ctx_realtor_state = runtime_ctx.get("realtor_search_state") or {}
+            conversation_extraction_updates = self._build_conversation_extraction_updates(
+                query_text=request.query_text,
                 vertical_ctx=vertical_ctx,
-                conversation_id=conversation_id,
-                system_prompt=client_prompt_text,
-                prompt_slug=chat_prompt_slug,
+                runtime_ctx=runtime_ctx,
             )
+            runtime_ctx["conversation_extraction_result"] = self._merge_conversation_extraction_result(
+                runtime_ctx.get("conversation_extraction_result"),
+                common_update=conversation_extraction_updates.get("common"),
+                vertical_update=conversation_extraction_updates.get("vertical"),
+            )
+
+            should_generate_chat = not bool(answer)
+            if should_generate_chat:
+                # Generate chat response using hybrid context (history + placeholders for retrieval)
+                answer = await self._generate_chat_response(
+                    request=request,
+                    vertical_ctx=vertical_ctx,
+                    conversation_id=conversation_id,
+                    system_prompt=client_prompt_text,
+                    prompt_slug=chat_prompt_slug,
+                    runtime_ctx=runtime_ctx,
+                )
             
             existing_lead_id = None
             if request.conversation_id:
@@ -713,6 +1367,8 @@ class ScoringOrchestrator:
                     prompt_config=prompt_config,
                     client_prompt_text=client_prompt_text,
                     chat_prompt_slug=chat_prompt_slug,
+                    realtor_search_state=runtime_ctx_realtor_state,
+                    conversation_extraction_result=runtime_ctx.get("conversation_extraction_result"),
                 )
                 await self.repo.set_conversation_context_snapshot(
                     conversation_id=conversation_id,
@@ -723,7 +1379,7 @@ class ScoringOrchestrator:
                     conversation_id=conversation_id,
                     lead_id=lead_id,
                     user_message=request.query_text,
-                    bot_message=answer
+                    bot_message=self._build_history_bot_message(answer=answer, realtor_turn=realtor_turn),
                 )
             except Exception as e:
                 logger.error(f"Error saving conversation: {e}")
@@ -731,7 +1387,7 @@ class ScoringOrchestrator:
             # Persist contact data early from user message so name/email/phone are not
             # blocked by async scoring failures/timeouts.
             try:
-                contact_seed = self._extract_contact_seed_from_text(request.query_text)
+                contact_seed = conversation_extraction_updates.get("common") or {}
                 if contact_seed:
                     updated = await self.repo.update_lead_from_extraction(
                         lead_id=lead_id,
@@ -796,10 +1452,13 @@ class ScoringOrchestrator:
 
             return ChatV2Response(
                 answer=answer,
+                intent=realtor_intent,
+                components=final_components,
                 conversation_id=conversation_id,
                 lead_id=lead_id,
                 scorecard_id=scorecard_id,
                 scorecard=scorecard,
+                realtor_turn=realtor_turn,
                 scoring_status=scoring_status,
                 scoring_job_id=scoring_job_id,
                 scoring_eta=scoring_eta,
@@ -898,6 +1557,7 @@ class ScoringOrchestrator:
                             repo=local_repo,
                             db_session=db_session,
                             lead_id=lead_id,
+                            client_id=client_id,
                             model_data=model_data,
                             scorecard_data=scorecard_data,
                             prompt_config=prompt_config,
@@ -987,6 +1647,7 @@ class ScoringOrchestrator:
         repo: ScoringRepository,
         db_session: AsyncSession,
         lead_id: UUID,
+        client_id: UUID,
         model_data: Dict[str, Any],
         scorecard_data: ScorecardV2,
         prompt_config: Dict[str, Any],
@@ -1057,6 +1718,32 @@ class ScoringOrchestrator:
             await repo.update_lead_current_scorecard(lead_id, scorecard_id)
             await repo.update_lead_from_extraction(lead_id, extraction_result)
             await db_session.commit()
+
+            common_update = self._normalize_conversation_common(extraction_result)
+            if common_update:
+                try:
+                    existing_snapshot = await repo.get_conversation_context_snapshot(
+                        conversation_id=conversation_id,
+                        client_id=client_id,
+                    )
+                    if existing_snapshot:
+                        merged_conversation_extraction = self._merge_conversation_extraction_result(
+                            existing_snapshot.get("conversation_extraction_result"),
+                            common_update=common_update,
+                        )
+                        updated_snapshot = dict(existing_snapshot)
+                        updated_snapshot["conversation_extraction_result"] = merged_conversation_extraction
+                        await repo.set_conversation_context_snapshot(
+                            conversation_id=conversation_id,
+                            lead_id=lead_id,
+                            snapshot=updated_snapshot,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to enrich conversation extraction snapshot for lead %s conversation %s",
+                        lead_id,
+                        conversation_id,
+                    )
             
             return scorecard_id
             
