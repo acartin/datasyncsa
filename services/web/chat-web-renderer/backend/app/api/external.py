@@ -161,17 +161,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
         extracted_components = []
         canonical_components = ai_response.get("components") or []
         if canonical_components:
-            for component_payload in canonical_components:
-                comp_type = component_payload.get("type")
-                if comp_type == "property-card":
-                    from app.schemas.ui import PropertyCard
-                    extracted_components.append(PropertyCard(**component_payload))
-                elif comp_type == "property-grid":
-                    from app.schemas.ui import PropertyGrid
-                    extracted_components.append(PropertyGrid(**component_payload))
-                elif comp_type == "chat":
-                    from app.schemas.ui import ChatMessage
-                    extracted_components.append(ChatMessage(**component_payload))
+            extracted_components = transformer.parse_canonical_components(canonical_components)
         else:
             sources = ai_response.get("sources", [])
             if sources:

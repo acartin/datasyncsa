@@ -74,6 +74,38 @@ class TestRealtorRendererPolicy:
         comp_types = [c["type"] for c in response["components"]]
         assert "chat" in comp_types
 
+    def test_build_response_splits_text_before_and_after_cards(self):
+        policy = RealtorRendererPolicy(channel="web_html")
+        card = PropertyCard(title="Casa", price=100000, location="San Jose")
+        response = policy.build_response(
+            ai_text="Resumen corto.\n\nTexto de seguimiento.",
+            components=[card],
+            session_id="sess-split",
+        )
+        assert response["session_id"] == "sess-split"
+        assert len(response["components"]) == 3
+        assert response["components"][0]["type"] == "chat"
+        assert response["components"][0]["text"] == "Resumen corto."
+        assert response["components"][1]["type"] == "property-card"
+        assert response["components"][2]["type"] == "chat"
+        assert response["components"][2]["text"] == "Texto de seguimiento."
+
+    def test_build_response_splits_last_question_after_cards(self):
+        policy = RealtorRendererPolicy(channel="web_html")
+        card = PropertyCard(title="Casa", price=100000, location="San Jose")
+        response = policy.build_response(
+            ai_text="Encontré 20 propiedades en Alajuela. ¿Te gustaría filtrar por presupuesto?",
+            components=[card],
+            session_id="sess-question",
+        )
+        assert response["session_id"] == "sess-question"
+        assert len(response["components"]) == 3
+        assert response["components"][0]["type"] == "chat"
+        assert response["components"][0]["text"] == "Encontré 20 propiedades en Alajuela."
+        assert response["components"][1]["type"] == "property-card"
+        assert response["components"][2]["type"] == "chat"
+        assert response["components"][2]["text"] == "¿Te gustaría filtrar por presupuesto?"
+
     def test_validate_response_passes_for_valid(self):
         policy = RealtorRendererPolicy(channel="web_html")
         response = {

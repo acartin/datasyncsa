@@ -2,104 +2,40 @@
 
 ## Objetivo
 
-Separar prompts por tipo de responsabilidad sin volver a mezclar reglas de negocio dentro de texto libre.
+Definir cómo se cargan y usan prompts en runtime sin hardcodear negocio en código.
 
-## Tablas existentes
+## Fuentes de prompt
 
-### `ai_system_prompts`
+1. `ai_system_prompts`
+- fuente canónica de `planner_system` y `synthesizer_system` (global + vertical).
 
-Uso recomendado:
+2. `lead_ai_prompts`
+- overlay opcional de estilo/tono/contexto comercial por tenant.
+- no define intención, SQL, contratos de salida, tools ni policy.
 
-- prompts estructurales del sistema
-- prompts por `node_slug`
-- versionado por `vertical_slug`
+## Prompts mínimos requeridos
 
-Debe contener:
+1. `planner_system`
+- instrucciones de decisión y formato `RouterDecision`.
 
-- planner prompts
-- synthesizer prompts
-- prompts de nodos internos de `agent-core`
+2. `synthesizer_system`
+- instrucciones de redacción usando solo `SynthesizerInput`.
 
-### `lead_ai_prompts`
+## Secuencia de uso en runtime
 
-Uso recomendado:
+1. Resolver tenant/vertical/canal.
+2. Resolver prompt de planner por prioridad:
+- `ai_system_prompts` (`node_slug`, `vertical_slug`) -> base por vertical.
+- `ai_system_prompts` (`node_slug`, global) -> fallback global.
+3. Ejecutar planner con schema estricto.
+4. Ejecutar tools y construir `SynthesizerInput`.
+5. Resolver prompt de synthesizer con la misma prioridad anterior (`ai_system_prompts`).
+6. Aplicar overlay opcional de estilo/tono por tenant desde `lead_ai_prompts` sin alterar contratos.
+7. Ejecutar synthesizer con schema estricto.
 
-- overrides y personalizacion por tenant
-- tono de marca
-- instrucciones tenant-specific que no cambian la arquitectura
+## Reglas operativas
 
-Debe contener:
-
-- tono por tenant
-- restricciones editoriales del tenant
-- overrides de slugs compatibles con el runtime
-
-### `lead_scoring_prompts`
-
-Uso:
-
-- exclusivo de `scoring-core`
-- fuera del flujo de `agent-core`
-
-## Regla de resolucion
-
-Para `agent-core`, el runtime recomendado es:
-
-1. resolver `ai_system_prompts` por `node_slug + vertical_slug`
-2. si no existe, fallback a `node_slug` global
-3. aplicar override opcional desde `lead_ai_prompts`
-4. nunca resolver prompts de scoring desde `agent-core`
-
-## Node slugs recomendados
-
-Planner:
-
-- `planner_route_turn`
-- `planner_generic_turn`
-- `planner_realtor_turn`
-- `planner_workflow_turn`
-
-Synthesizer:
-
-- `synth_generic_answer`
-- `synth_realtor_answer`
-- `synth_clarify_answer`
-
-Guardrails de texto opcionales:
-
-- `guardrail_answer_style`
-
-## Reglas de prompt
-
-Planner:
-
-- responde solo JSON valido
-- no habla al usuario final
-- no ve `ToolResult`
-- no escribe SQL
-- no describe pasos internos del runtime
-
-Synthesizer:
-
-- solo ve `SynthesizerInput`
-- no ve `RouterDecision`
-- no decide `goal`
-- no inventa evidencia
-- no genera cards
-
-## Que no debe ir en prompts
-
-- reglas finitas del gate
-- tools habilitadas por tenant
-- card registry
-- allowlist SQL
-- compatibilidad de APIs
-
-## Tono y marca
-
-La personalizacion por tenant debe venir de `lead_ai_prompts` y no debe alterar:
-
-- contratos del planner
-- estructura de `ToolCall`
-- rules del gate
-- mapeo de cards
+1. Planner y synthesizer no comparten el mismo prompt.
+2. Prompt no define permisos; permisos viven en policy.
+3. Versionado de prompts debe quedar trazable en persistencia.
+4. `lead_ai_prompts` no puede sobreescribir reglas de routing, SQL ni esquema tipado.

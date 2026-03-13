@@ -101,12 +101,12 @@ services:
     networks:
       - internal_network
 
-  # Inference Core V3
-  inference-core-v3:
+  # Agent Core (LangGraph conversational runtime)
+  agent-core:
     build:
-      context: ./services/inference-stack-v2/inference-core-v3
+      context: ./services/agent-core
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-inference-v3
+    container_name: ${ENV_PREFIX}-backend-agent-core
     restart: always
     command:
       - uvicorn
@@ -116,9 +116,9 @@ services:
       - --port
       - "8000"
       - --workers
-      - ${INFERENCE_WEB_CONCURRENCY:-1}
+      - ${AGENT_CORE_WEB_CONCURRENCY:-1}
     ports:
-      - "${INFERENCE_V3_PORT:-8095}:8000"
+      - "${AGENT_CORE_PORT:-8096}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - TZ=${TZ:-UTC}
@@ -131,11 +131,85 @@ services:
       - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
       - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
+      - RAG_RETRIEVER_V2_TIMEOUT_SECS=${RAG_RETRIEVER_V2_TIMEOUT_SECS:-10}
+      - SCORING_BG_ENABLED=${SCORING_BG_ENABLED:-true}
+      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
+      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
       - redis
+      - semantic-adapter-v2
+      - scoring-core
+    networks:
+      - internal_network
+
+  # Scoring Core API
+  scoring-core:
+    build:
+      context: ./services/scoring-core
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-scoring-core
+    restart: always
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${SCORING_CORE_WEB_CONCURRENCY:-1}
+    ports:
+      - "${SCORING_CORE_PORT:-8097}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
+      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # Scoring Core Worker
+  scoring-core-worker:
+    build:
+      context: ./services/scoring-core
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
+    restart: always
+    command: ["python", "worker.py"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
+      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+      - scoring-core
     networks:
       - internal_network
 
@@ -334,9 +408,12 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_PASSWORD=${DB_PASS}
       - REDIS_URL=redis://redis:6379/0
-      - INFERENCE_API_URL=http://inference-core-v3:8000
-      - INFERENCE_API_PREFIX=/api/v3
-      - INFERENCE_RESET_URL=http://inference-core-v3:8000/api/v3/internal/memory/reset
+      - AGENT_CORE_API=http://agent-core:8000
+      - INFERENCE_API_URL=http://agent-core:8000
+      - AGENT_CORE_API_PREFIX=/api/v1
+      - INFERENCE_API_PREFIX=/api/v1
+      - AGENT_CORE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
+      - INFERENCE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -344,7 +421,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - inference-core-v3
+      - agent-core
     networks:
       - internal_network
 
@@ -359,14 +436,16 @@ services:
       - "${GENERIC_BRIDGE_V2_PORT}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - INFERENCE_API_URL=http://inference-core-v3:8000
-      - INFERENCE_API_PREFIX=/api/v3
+      - AGENT_CORE_API=http://agent-core:8000
+      - INFERENCE_API_URL=http://agent-core:8000
+      - AGENT_CORE_API_PREFIX=/api/v1
+      - INFERENCE_API_PREFIX=/api/v1
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - inference-core-v3
+      - agent-core
     networks:
       - internal_network
 
@@ -381,14 +460,16 @@ services:
       - "${PROPERTY_BRIDGE_V2_PORT}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - INFERENCE_API_URL=http://inference-core-v3:8000
-      - INFERENCE_API_PREFIX=/api/v3
+      - AGENT_CORE_API=http://agent-core:8000
+      - INFERENCE_API_URL=http://agent-core:8000
+      - AGENT_CORE_API_PREFIX=/api/v1
+      - INFERENCE_API_PREFIX=/api/v1
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - inference-core-v3
+      - agent-core
     networks:
       - internal_network
 

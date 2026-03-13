@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from typing import Dict, Any, List, Union
 from app.schemas.ui import (
     SDUIResponse, ChatMessage, PropertyCard, PropertyGrid, 
@@ -72,6 +73,29 @@ class SDUITransformer:
             branding=branding,
             components=components
         )
+
+    def parse_canonical_components(self, canonical_components: List[Dict[str, Any]]) -> List[BaseComponent]:
+        components: List[BaseComponent] = []
+        for payload in canonical_components or []:
+            if not isinstance(payload, dict):
+                continue
+            card_type = str(payload.get("card_type") or "").strip().lower()
+            comp_type = str(payload.get("type") or "").strip().lower()
+
+            # Agent-core realtor cards arrive as card_type=property_card.
+            if card_type == "property_card" or comp_type == "property-card":
+                card = self._map_agent_core_property_card(payload)
+                if card:
+                    components.append(card)
+                continue
+
+            if comp_type == "chat":
+                text = str(payload.get("text") or "").strip()
+                if text:
+                    components.append(ChatMessage(text=text, sender="bot"))
+                continue
+
+        return components
 
     async def _get_branding_for_client(self, client_id: str, brand_project: Union[str, None]) -> BrandingConfig:
         """
@@ -193,3 +217,44 @@ class SDUITransformer:
         except Exception as e:
             logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
             return None
+
+    def _map_agent_core_property_card(self, payload: Dict[str, Any]) -> Union[PropertyCard, None]:
+        try:
+            title = str(payload.get("title") or "Propiedad sugerida").replace("&#8211;", "-")
+            listing_id = str(payload.get("listing_id") or payload.get("id") or "").strip()
+            location = str(payload.get("neighborhood") or payload.get("city") or "").strip()
+            rooms = payload.get("rooms")
+            area_display = str(payload.get("area_display") or "").strip()
+            tags: List[str] = []
+            if rooms:
+                tags.append(f"{rooms} hab")
+            if area_display:
+                tags.append(area_display)
+            return PropertyCard(
+                id=listing_id or None,
+                title=title,
+                price=self._parse_price_value(payload),
+                location=location or None,
+                image_url=payload.get("image_url"),
+                public_url=payload.get("cta_url") or payload.get("public_url"),
+                tags=tags,
+            )
+        except Exception as exc:
+            logger.warning("Error mapping canonical property card: %s", exc)
+            return None
+
+    def _parse_price_value(self, payload: Dict[str, Any]) -> float:
+        value = payload.get("price")
+        if value is not None:
+            try:
+                return float(value)
+            except Exception:
+                pass
+        display = str(payload.get("price_display") or "")
+        numeric = re.sub(r"[^0-9.]", "", display)
+        if not numeric:
+            return 0.0
+        try:
+            return float(numeric)
+        except Exception:
+            return 0.0

@@ -35,6 +35,7 @@
     },
     "realtor": {
       "allowed_goals": [
+        "answer",
         "clarify",
         "rag",
         "realtor_search",
@@ -47,6 +48,22 @@
         "workflow"
       ]
     }
+  },
+  "required_tools_by_goal": {
+    "answer": [],
+    "clarify": [],
+    "rag": [
+      "rag"
+    ],
+    "realtor_search": [
+      "realtor_sql"
+    ],
+    "realtor_refine": [
+      "realtor_sql"
+    ],
+    "workflow": [
+      "workflow"
+    ]
   },
   "notes": [
     "Si aparecen nuevas reglas fuera de estas categorias, el problema esta en planner prompt o contratos.",

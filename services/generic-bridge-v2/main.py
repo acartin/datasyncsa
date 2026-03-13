@@ -15,8 +15,14 @@ import os
 
 
 # Configuration
-INFERENCE_API_URL = os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://localhost:8000"))
-INFERENCE_API_PREFIX = os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v3"))
+INFERENCE_API_URL = os.getenv(
+    "AGENT_CORE_API",
+    os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+)
+INFERENCE_API_PREFIX = os.getenv(
+    "AGENT_CORE_API_PREFIX",
+    os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+)
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
@@ -194,7 +200,7 @@ async def chat_endpoint(request: GenericChatRequest):
                 answer=core_response["answer"],
                 conversation_id=UUID(_pick(core_response, "conversationId", "conversation_id")),
                 metadata={
-                    "source": "inference-core-v3",
+                    "source": "agent-core",
                     "processing_time_ms": int((time.time() - start_time) * 1000)
                 }
             )

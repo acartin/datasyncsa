@@ -1,1 +1,1 @@
-# Internal models for agent-core
+from .contracts import *  # noqa: F401,F403

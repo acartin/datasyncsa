@@ -1,399 +1,197 @@
-# Agent Core Prompt Sequence
+# Plan operativo de prompts (ejecutable por IA)
 
-Secuencia canonica de prompts para implementar de principio a fin la arquitectura nueva con:
+Usa esta secuencia sin saltos. Cada prompt debe entregarse y persistirse en su rama de trabajo antes de pasar al siguiente.
 
-- `agent-core`
-- `scoring-core`
+Formato común para cada ejecución:
+- Rol de la IA: `senior backend engineer + arquitecto de sistemas`.
+- Entregable explícito: archivos tocados, tests/lint pendientes, contrato de aceptación.
+- Criterio de no-negociación: no agregar heurística hardcodeada ni lógica de intención en reglas locales.
 
-No existe `routing-core` en el target actual.
+## Prompt 01 — Cortafuegos de contexto (lectura obligatoria)
 
-## Como usar este archivo
+`Lee y alinea: docs/AGENT_CORE_INDEX.md, docs/AGENT_CORE_RULES.md, docs/AGENT_CORE_ARCHITECTURE.md, docs/AGENT_CORE_PROMPT_RUNTIME.md, docs/AGENT_CORE_FILE_MAP.md, docs/AGENT_CORE_IMPLEMENTATION_PLAN.md, .agent/AGENT_CORE_BOOTSTRAP.md, .agent/PY_EXECUTION_MAP.md y la salida del estado actual docs/AGENT_CORE_PROMPT_STATUS.md.`
 
-- Ejecuta los prompts en orden.
-- Cada prompt es reanudable.
-- Si la sesion es nueva o el contexto se compacto, antepone el bloque `COMMON BOOTSTRAP`.
-- Cada prompt asume que el anterior ya quedo completado.
-- Cada prompt debe terminar con:
-  - archivos cambiados
-  - decisiones tomadas
-  - bloqueos reales
-  - id del siguiente prompt sugerido
+Si algo contradice estas fuentes, prioriza `AGENT_CORE_RULES` y luego el código.
 
-## COMMON BOOTSTRAP
+Actualiza el estado del prompt como `in_progress` y solo propone cambios que respeten LangGraph en `agent-core`.
 
-```text
-Trabaja sobre /srv/datasyncsa.
+## Prompt 02 — Contratos base tipados
 
-Antes de hacer nada:
-1. Lee .agent/RULES.md
-2. Lee .agent/PY_EXECUTION_MAP.md
-3. Lee .agent/AGENT_CORE_BOOTSTRAP.md
-4. Lee docs/AGENT_CORE_INDEX.md
+Implementa o ajusta los contratos Pydantic de `agent-core` en `schemas/agent_core/contracts` con estructura cerrada:
 
-Arquitectura canonica:
-- agent-core es el unico decisor conversacional.
-- scoring-core es un servicio separado y conserva la BD y logica actual de scoring.
-- generic y realtor son verticales del mismo runtime.
-- No crear tablas nuevas para policy gate, tool registry o card registry.
-- Esos artefactos viven en archivos bajo schemas/.
-- Prompts del sistema: ai_system_prompts.
-- Prompts por tenant: lead_ai_prompts.
-- Prompts de scoring: lead_scoring_prompts.
-- No tomar inference-core-v1/v2 como baseline arquitectonico; solo como fuente de extraccion.
-
-Fuentes canonicas:
-- docs/AGENT_CORE_RULES.md
-- docs/AGENT_CORE_ARCHITECTURE.md
-- docs/AGENT_CORE_PROMPT_RUNTIME.md
-- docs/SCORING_CORE_BOUNDARY.md
-- docs/AGENT_CORE_FILE_MAP.md
-- docs/AGENT_CORE_IMPLEMENTATION_PLAN.md
-- schemas/agent_core/contracts/*
-- schemas/agent_core/runtime/*
-- schemas/scoring_core/contracts/*
-
-Reglas de ejecucion:
-- No tocar BD de scoring.
-- No cambiar logica funcional de scoring al extraerla.
-- No mezclar scoring dentro de agent-core.
-- No introducir heuristicas hardcodeadas para routing conversacional.
-- No crear compatibilidad legacy innecesaria dentro de agent-core.
-- Si necesitas compatibilidad de APIs, resuelvela coordinando consumidores del monorepo.
-
-Al terminar:
-- resume archivos cambiados
-- lista decisiones y supuestos
-- propone el siguiente prompt exacto por id
-```
-
-## PROMPT 01 - Congelar contratos de borde y mapa de consumidores
-
-```text
-Usa COMMON BOOTSTRAP.
-
-Tarea:
-Congela el mapa real de consumidores internos del monorepo y los contratos de borde que hoy dependen de inference-core-v1/v2 para que la implementacion de agent-core y scoring-core tenga targets claros.
-
-Objetivos:
-- identificar todos los modulos internos que llaman APIs de inference-core-v1/v2
-- identificar endpoints realmente usados para chat y scoring
-- crear dos documentos nuevos:
-  - docs/AGENT_CORE_API_CONTRACT.md
-  - docs/SCORING_CORE_API_CONTRACT.md
-- actualizar docs/AGENT_CORE_FILE_MAP.md con la lista de consumidores reales
-
-Scope permitido:
-- docs/**
-- services/** solo para lectura
-- tests/** solo para lectura
-- .agent/** solo si necesitas agregar referencia documental minima
+- `RouterDecision`, `ToolCall`, `ToolResult`
+- `SynthesizerInput`, `SynthesizerOutput`
+- `GateResult`, `GuardrailResult`
+- `AnswerEnvelope`, `CardModel`, enums y códigos de rechazo
 
 Reglas:
-- no crear codigo de runtime
-- no modificar servicios aun
-- no inventar consumidores: descubre los reales en el repo
-- separa claramente:
-  - contrato conversacional de agent-core
-  - contrato de scorecards/jobs de scoring-core
+1. Ninguna propiedad opcional debe permitir `Any` como atajo.
+2. `goal` solo enum, sin cadenas libres.
+3. Planner nunca recibe `ToolResult`.
+4. Synthesizer nunca recibe `RouterDecision`.
 
-Resultado esperado:
-- contrato de entrada/salida de agent-core definido
-- contrato de entrada/salida de scoring-core definido
-- lista exacta de consumidores internos que luego habra que cortar a los nuevos servicios
-```
+Incluye validaciones Pydantic mínimas y serialización JSON estable.
 
-## PROMPT 02 - Extraer scoring-core sin cambiar su logica
+### Resultado esperado
+Archivo de contratos compilable y referencias en `docs/AGENT_CORE_FILE_MAP.md`.
 
-```text
-Usa COMMON BOOTSTRAP.
+## Prompt 03 — Estado de LangGraph y grafo canónico
 
-Tarea:
-Extrae el motor actual de scoring desde services/inference-stack-v2/inference-core-v2 hacia services/scoring-core, conservando la logica funcional y la BD actual.
+Construye estado del grafo en `services/agent-core/app/graph/state.py` y flujo en `services/agent-core/app/graph/workflow.py`.
 
-Objetivos:
-- mover o copiar la implementacion funcional de scoring a scoring-core
-- preservar nombres de clases y funciones cuando sea posible
-- dejar scoring-core como duenio de:
-  - scoring_engine
-  - scoring_worker
-  - scoring_job_service
-  - scoring_repository
-  - modelos y endpoints de scorecards/jobs/modelo activo necesarios
+Nodos obligatorios:
+1. `normalize_input`
+2. `plan_turn`
+3. `policy_gate`
+4. `clarify_response`
+5. `execute_tools`
+6. `synthesize`
+7. `answer_guardrail`
+8. `persist`
 
-Scope permitido:
-- services/scoring-core/**
-- services/inference-stack-v2/inference-core-v2/** solo para lectura o para quitar acoplamientos minimos si son imprescindibles
-- docs/** si necesitas documentar una decision tecnica concreta
+Conexiones obligatorias:
+- `policy_gate` debe recibir `RouterDecision`.
+- `clarify_response` sólo en `goal=clarify`.
+- `execute_tools` no debe correr si `goal=clarify`.
+- `answer_guardrail` valida salida del `synthesizer`.
+- `persist` siempre finaliza el turno.
 
-Reglas:
-- no tocar tablas ni migraciones de scoring
-- no cambiar contratos de scorecard/job salvo que el repo ya tenga inconsistencia tecnica real
-- no borrar todavia el codigo legacy de inference-core-v2
-- si necesitas adaptar imports o config, manten el comportamiento
+Invariantes:
+1. Solo binarios en gate/guardrail.
+2. Sin branching implícito por regex/keywords en `graph.py`.
 
-Resultado esperado:
-- scoring-core contiene el motor real de scoring y su worker
-- la logica de scoring ya no depende conceptualmente de inference-core-v2 para existir
-```
+## Prompt 04 — Planner LLM con schema estrictamente tipado
 
-## PROMPT 03 - Cablear scoring-core como servicio ejecutable
+Implementa `planner` como nodo LangGraph usando:
+- `planner_system_prompt` cargado desde DB
+- `history` + `context_snapshot`
+- `response_format=RouterDecision` en llamada LLM
 
-```text
-Usa COMMON BOOTSTRAP.
+Reglas de rechazo explícito:
+1. Si no puede completar slots obligatorios, produce `goal=clarify`.
+2. Si no cumple schema, no hacer fallback local con reglas.
+3. `confidence` obligatorio y persistido.
 
-Tarea:
-Convierte scoring-core en un servicio realmente ejecutable dentro del repo.
+No ejecutar tools desde planner.
 
-Objetivos:
-- agregar app FastAPI real en services/scoring-core
-- agregar worker funcional en services/scoring-core/worker.py
-- crear o adaptar Dockerfile y wiring necesario
-- actualizar docker-compose y archivos operativos minimos para levantar:
-  - scoring-core
-  - scoring-core-worker
-- mantener endpoints de lectura de scoring segun docs/SCORING_CORE_API_CONTRACT.md
+## Prompt 05 — Policy gate binario y determinista
 
-Scope permitido:
-- services/scoring-core/**
-- docker-compose.yml
-- .env.example si hace falta declarar variables nuevas o mover naming
-- .agent/PY_EXECUTION_MAP.md si hace falta ajuste fino
-- docs/** solo si debes reflejar un cambio operativo real
+Implementa gate como función pura sobre `RouterDecision` y config de tenant.
 
-Reglas:
-- no cambies la BD de scoring
-- no redisenes scoring
-- no conectes aun consumers nuevos
-- limita validacion a lo minimo necesario del servicio
+Campos de salida únicamente:
+- `accepted: bool`
+- `reject_code: GateRejectCode | null`
 
-Resultado esperado:
-- scoring-core puede compilar/arrancar como servicio propio
-- scoring-core-worker puede ejecutar el pipeline async existente
-```
+Comportamiento:
+1. Rechazo si tenant no autorizado.
+2. Rechazo si `confidence` < umbral configurable.
+3. Rechazo si herramienta o permisos no válidos.
+4. Rechazo si faltan slots obligatorios.
 
-## PROMPT 04 - Implementar contratos y loaders base de agent-core
+No producir plan alternativo, no redirigir, no rellenar campos.
 
-```text
-Usa COMMON BOOTSTRAP.
+## Prompt 06 — Normalización y ejecución de tool calls deterministas
 
-Tarea:
-Implementa en codigo el esqueleto real de agent-core a partir de los contratos y runtime config que ya existen en schemas/.
+Implementa tool runtime en `services/agent-core/app/tools`:
+1. `rag` usando contrato `RAGQuery`.
+2. `realtor_sql` con translator `slots -> AST -> SQL`.
+3. `workflow` con validador de registry.
 
-Objetivos:
-- crear modelos Pydantic equivalentes a:
-  - RouterDecision
-  - ToolCall
-  - ToolResult
-  - SynthesizerInput
-  - SynthesizerOutput
-  - AnswerEnvelope
-- implementar loaders tipados para:
-  - policy_gate.v1.json
-  - tool_registry.v1.json
-  - card_registry.v1.json
-  - prompt_runtime.v1.json
-- dejar un app skeleton navegable dentro de services/agent-core
+Regla crítica:
+- El LLM nunca recibe SQL ni puede escribir SQL.
+- Cada tool call genera `ToolResult`.
+- Errores de tool se modelan con `error` pero no rompen el grafo.
 
-Scope permitido:
-- services/agent-core/**
-- schemas/agent_core/** si encuentras un desajuste estructural real
-- docs/** solo si documentas una correccion de contrato
+## Prompt 07 — Card renderer sin LLM
+
+Implementa render de `ToolResult` a `CardModel` en ruta determinista.
 
 Reglas:
-- no implementes aun planner real ni tools reales
-- no metas scoring dentro de agent-core
-- no introduzcas contratos paralelos distintos a los de schemas
+1. `PropertyCard` desde listados con precio/rooms/area.
+2. `SearchSummaryCard` derivada de resultados SQL.
+3. `RAGSourceCard` desde chunks recuperados.
+4. No usar LLM para decidir qué card mostrar.
 
-Resultado esperado:
-- agent-core tiene tipos y config base listos para construir el runtime
-```
+## Prompt 08 — Synthesizer restringido
 
-## PROMPT 05 - Implementar prompt runtime y planner de agent-core
+Implementa síntesis en `services/agent-core/app/nodes/synthesize.py`:
 
-```text
-Usa COMMON BOOTSTRAP.
+- Input: solo `SynthesizerInput`.
+- Output: `SynthesizerOutput` con `text`, `evidence_ids`, `needs_cards`.
 
-Tarea:
-Implementa la resolucion de prompts y el planner de agent-core siguiendo docs/AGENT_CORE_PROMPT_RUNTIME.md.
+`synthesizer` no recibe estado de routing ni decisiones.
 
-Objetivos:
-- resolver prompts desde:
-  - ai_system_prompts
-  - lead_ai_prompts
-- implementar normalize_input
-- implementar context snapshot minimo y limpio para planner
-- implementar planner LLM que devuelva RouterDecision tipado
-- implementar salida explicita de clarify como goal legitimo
+Se requiere:
+1. citar `evidence_ids` consistentes con `tool_results`.
+2. respetar `tenant_tone` y estilo del prompt de síntesis.
 
-Scope permitido:
-- services/agent-core/**
-- docs/** solo si debes documentar una decision de prompt/runtime
+## Prompt 09 — Answer guardrail binario
+
+Implementa guardrail final en `services/agent-core/app/nodes/answer_guardrail.py`.
 
 Reglas:
-- planner no puede ver ToolResult
-- planner no puede escribir SQL libre
-- planner no puede redactar cards
-- si hace falta un nuevo node_slug, documentalo y usalo de forma consistente
+1. Acepta/rechaza únicamente.
+2. Si rechaza, no reescribir texto.
+3. Debe detectar:
+   - claims sin evidencia
+   - IDs de listing inexistentes
+   - schema inválido
+4. En reject, retorna error técnico estandarizado.
 
-Resultado esperado:
-- agent-core ya puede recibir un turno y producir RouterDecision valido
-```
+## Prompt 10 — API y respuesta final
 
-## PROMPT 06 - Implementar runtime determinista generico
+Conecta `POST /api/v1/chat` al grafo y garantiza `AnswerEnvelope`.
 
-```text
-Usa COMMON BOOTSTRAP.
+`AnswerEnvelope` debe incluir:
+- `goal`, `confidence`, `evidence_ids`, `cards`, `clarify_message` cuando aplique
 
-Tarea:
-Implementa el runtime determinista de agent-core para el vertical generic.
+Si `goal=clarify`, ruta limpia sin tool execution.
+Si reject de gate/guardrail, ruta de error técnico sin texto improvisado.
 
-Objetivos:
-- implementar policy gate binario
-- implementar answer guardrail binario
-- implementar tool execution para:
-  - rag
-  - workflow si ya hay workflow tipado utilizable
-- implementar synthesizer LLM que solo vea SynthesizerInput
-- implementar persistencia de AnswerEnvelope
+## Prompt 11 — Persistencia, trazas y métricas de grafo
 
-Scope permitido:
-- services/agent-core/**
-- schemas/agent_core/** solo si hay que ajustar un contrato por bug real
+Implementa persistencia mínima de:
+- `RouterDecision`
+- `ToolResult[]`
+- `GuardrailResult`
+- `AnswerEnvelope`
+- `latency_ms` por nodo
 
-Reglas:
-- gate y guardrail solo accept/reject + reason_code
-- el synthesizer no puede ver RouterDecision
-- si el goal es clarify, el flujo termina antes de tool execution
-- cards siguen fuera del synthesizer
+Añade correlación con `conversation_id`.
 
-Resultado esperado:
-- generic funciona de punta a punta en agent-core sin scoring
-```
+## Prompt 12 — Integración scoring-core (sin refactor de scoring)
 
-## PROMPT 07 - Implementar vertical realtor en agent-core
+Solo adaptar clientes de API:
+1. enqueue score job (async)
+2. leer estado de score
+3. no incluir lógica de scoring en `agent-core`.
 
-```text
-Usa COMMON BOOTSTRAP.
+Define cliente HTTP dedicado en configuración y timeout.
 
-Tarea:
-Implementa el vertical realtor dentro del mismo runtime de agent-core, sin crear una arquitectura paralela.
+## Prompt 13 — Contratos de despliegue y configuración
 
-Objetivos:
-- implementar contratos de slots realtor
-- implementar realtor_sql como:
-  - slots -> AST -> SQL
-  - allowlist de tablas/columnas
-  - linter + row-limit
-- implementar card_renderer determinista para resultados realtor
-- conectar prompts y policies especificas del vertical
+Completa:
+- `AGENT_CORE_API` y `SCORING_CORE_API` en `docker-compose.yml` y `.env.example`.
+- `docs` actualizados con estos nombres y su responsabilidad.
+- Ajustes de healthcheck mínimos en `agent-core` y `scoring-core`.
 
-Scope permitido:
-- services/agent-core/**
-- schemas/agent_core/**
-- schemas/canonical_property.json
-- schemas/property_card_expanded.v1.json
+## Prompt 14 — Ajuste de pruebas objetivo
 
-Reglas:
-- no meter SQL libre en prompts ni planner
-- cards salen solo de ToolResult
-- generic y realtor deben compartir el mismo runtime base
-- cualquier diferencia por vertical debe vivir en config, contracts o tools, no en dos pipelines distintos
+Actualiza/crea pruebas de regresión de conversación en `tests/system` y `tests/smoke-stack`.
 
-Resultado esperado:
-- realtor funciona dentro de agent-core como vertical del mismo sistema
-```
+No inventar nuevos casos con regresión de intent; cubrir:
+1. classify direct answer
+2. clarify con slots faltantes
+3. tool execution
+4. guardrail reject
+5. scoring enqueue
 
-## PROMPT 08 - Conectar agent-core con scoring-core
+No ejecutar suite completa si no hay aprobación explícita.
 
-```text
-Usa COMMON BOOTSTRAP.
+## Prompt 15 — Cierre de secuencia
 
-Tarea:
-Conecta agent-core con scoring-core usando el contrato minimo definido, sin reintroducir scoring en agent-core.
-
-Objetivos:
-- despues de persistir la conversacion final, disparar side effect de scoring
-- usar solo:
-  - client_id
-  - lead_id
-  - conversation_id
-- implementar cliente interno o llamada interna a scoring-core
-- asegurar que agent-core no resuelva:
-  - scoring_model_id
-  - prompt_id de scoring
-  - prompt snapshot de scoring
-
-Scope permitido:
-- services/agent-core/**
-- services/scoring-core/**
-- schemas/scoring_core/contracts/*
-- docs/** solo si se documenta el borde definitivo
-
-Reglas:
-- agent-core no ejecuta scoring
-- agent-core no calcula scorecards
-- scoring-core es duenio completo del dominio de scoring
-
-Resultado esperado:
-- agent-core dispara scoring sin conocer detalles internos del dominio de scoring
-```
-
-## PROMPT 09 - Cortar consumidores internos al nuevo stack
-
-```text
-Usa COMMON BOOTSTRAP.
-
-Tarea:
-Migra los consumidores internos del monorepo para que dejen de depender del camino activo de inference-core-v1/v2 y usen agent-core y scoring-core.
-
-Objetivos:
-- actualizar los modulos detectados en docs/AGENT_CORE_FILE_MAP.md y docs/AGENT_CORE_API_CONTRACT.md
-- cortar llamadas directas a inference-core-v1/v2 para chat
-- cortar llamadas directas a inference-core-v1/v2 para scorecards/jobs cuando ya existan equivalentes en scoring-core
-- mantener coordinados los contratos de borde de los consumidores del monorepo
-
-Scope permitido:
-- consumers reales identificados en el paso 01
-- services/agent-core/**
-- services/scoring-core/**
-- docs/** si el cambio altera borde operativo
-
-Reglas:
-- no meter adaptacion de compatibilidad dentro de agent-core
-- si un consumer necesita mapping, resolverlo en ese consumer o su adapter local
-- no reabrir inference-core-v1/v2 como baseline
-
-Resultado esperado:
-- el camino principal del monorepo deja de usar inference-core-v1/v2 para las rutas activas
-```
-
-## PROMPT 10 - Limpieza final y congelamiento canónico
-
-```text
-Usa COMMON BOOTSTRAP.
-
-Tarea:
-Haz la limpieza final para que cualquier IA o desarrollador vea una sola arquitectura vigente en el repo.
-
-Objetivos:
-- marcar inference-core-v1/v2 como legacy fuera del camino principal
-- actualizar docs y bootstrap operativos si cambiaron rutas reales
-- regenerar contexto si aplica segun .agent/RULES.md
-- dejar AGENT_CORE_INDEX como puerta de entrada correcta
-- eliminar o archivar documentos que contradigan la arquitectura nueva
-
-Scope permitido:
-- docs/**
-- .agent/**
-- servicios legacy solo para quitar referencias activas si ya no son usadas
-
-Reglas:
-- no borrar algo que aun este en uso por consumidores reales
-- no dejar dos documentos vivos describiendo arquitecturas distintas
-- el resultado debe ser navegable por una IA sin ambiguedad
-
-Resultado esperado:
-- el repo tiene una sola verdad canonica para chat y scoring
-- inference-core-v1/v2 quedan explicitamente fuera del camino principal
-```
-
+Actualiza `docs/AGENT_CORE_PROMPT_STATUS.md` marcando avance por prompt y genera un resumen de:
+1. prompts completados
+2. cambios tocados
+3. bloqueos actuales
+4. siguiente prompt habilitado

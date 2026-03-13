@@ -1,85 +1,37 @@
-# Agent Core File Map
+# Agent Core File Map (Target)
 
-## Objetivo
+## Servicio
 
-Dar a cualquier IA o desarrollador una ruta corta para ubicar prompts, contratos, runtime y servicios objetivo.
+`services/agent-core/`
 
-## Servicios objetivo
+## Estructura objetivo
 
-```text
-services/
-  agent-core/
-  scoring-core/
-```
+- `main.py`
+- `app/api/chat.py`
+- `app/core/config.py`
+- `app/core/dependencies.py`
+- `app/graph/state.py`
+- `app/graph/nodes.py`
+- `app/graph/workflow.py`
+- `app/models/contracts.py`
+- `app/runtime/policy_gate.py`
+- `app/runtime/answer_guardrail.py`
+- `app/runtime/persistence.py`
+- `app/tools/executor.py`
+- `app/tools/sql_translator.py`
+- `app/tools/rag_client.py`
+- `app/tools/workflow_executor.py`
+- `app/renderers/card_renderer.py`
+- `app/services/planner_service.py`
+- `app/services/synthesizer_service.py`
+- `app/services/scoring_client.py`
 
-## Estructura recomendada de `agent-core`
+## Schemas compartidos
 
-```text
-services/agent-core/
-  app/
-    api/
-    core/
-    planners/
-    synthesizers/
-    runtime/
-    tools/
-    renderers/
-    repositories/
-    models/
-```
+- `schemas/agent_core/contracts/`
+- `schemas/agent_core/runtime/`
 
-## Estructura recomendada de `scoring-core`
+## Regla de ownership
 
-```text
-services/scoring-core/
-  app/
-    api/
-    core/
-    services/
-    repositories/
-    models/
-  worker.py
-```
-
-## Contratos y configuracion estructurada
-
-```text
-schemas/
-  agent_core/
-    contracts/
-    runtime/
-  scoring_core/
-    contracts/
-```
-
-## Fuentes existentes que sirven como base
-
-Conversacional legacy:
-
-- `services/inference-stack-v2/inference-core-v2/`
-- `services/inference-stack-v2/inference-core-v3/`
-
-Scoring funcional:
-
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
-
-Prompts:
-
-- `ai_system_prompts`
-- `lead_ai_prompts`
-- `lead_scoring_prompts`
-
-Documentacion:
-
-- `docs/AGENT_CORE_INDEX.md`
-- `docs/AGENT_CORE_DIAGRAMS.md`
-- `docs/Manuales/SCORING_V2_SCHEMA.md`
-
-## Regla de lectura para IA
-
-1. entender diagramas y reglas
-2. leer contratos en `schemas/agent_core/contracts`
-3. leer runtime config en `schemas/agent_core/runtime`
-4. leer frontera de `scoring-core`
+- Conversación y decisión: `agent-core`.
+- Scoring asíncrono: `scoring-core`.

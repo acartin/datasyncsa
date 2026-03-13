@@ -1,104 +1,61 @@
-# Agent Core Architecture
+# Agent Core Architecture (Target)
 
 ## Resumen
 
-`agent-core` es el runtime conversacional soberano del sistema.
+`agent-core` será un servicio de conversación `LangGraph-first`.
 
-Tiene una sola arquitectura y multiples verticales.
+Separa estrictamente:
+- decisión conversacional (planner LLM)
+- ejecución determinista (gate, tools, SQL translator, card renderer)
+- redacción final (synthesizer LLM)
 
-- Un solo planner.
-- Un solo runtime determinista.
-- Un solo synthesizer.
-- Verticales configurables: `generic`, `realtor`.
+## Componentes
 
-## Servicios
+1. Input Normalizer
+- Normaliza `tenant`, `channel`, `conversation_id`, `metadata`.
+- Construye contexto operativo mínimo.
 
-- `agent-core`
-  - logica conversacional.
-- `scoring-core`
-  - scoring asincrono.
+2. Planner LLM
+- Entrada: historial + contexto + prompt de planner.
+- Salida: `RouterDecision` tipado.
+- No ejecuta herramientas.
 
-## Flujo del turno
+3. Policy Gate
+- Valida esquema, permisos tenant, tools permitidas, budget y confidence.
+- Respuesta binaria `accept/reject`.
 
-1. Un canal o adaptador interno normaliza el request.
-2. `agent-core` valida identidad tecnica del request.
-3. `agent-core` resuelve tenant, vertical y prompt runtime.
-4. El planner genera `RouterDecision`.
-5. El `policy gate` acepta o rechaza.
-6. Si el planner devolvio `clarify`, `agent-core` responde y termina.
-7. Si la decision fue aceptada y requiere tools, el runtime ejecuta tools.
-8. `card_renderer` genera cards desde `ToolResult`.
-9. El synthesizer redacta el texto final.
-10. El `answer guardrail` acepta o rechaza.
-11. `agent-core` persiste exactamente el `AnswerEnvelope`.
-12. `agent-core` dispara side effects asincronos, incluido scoring.
+4. Tool Runtime
+- Ejecuta tools permitidas en paralelo cuando aplique.
+- Submódulos:
+- `RAG` retriever
+- `SQL translator` determinista
+- `workflow executor` para side effects tipados
 
-## Clarify vs Reject
+5. Card Renderer
+- Convierte `ToolResult` a `CardModel`.
+- No usa LLM.
 
-`clarify` y `reject` no son equivalentes.
+6. Synthesizer LLM
+- Entrada: `SynthesizerInput` (contexto resumido + tool results).
+- Salida: `SynthesizerOutput`.
+- No ve `RouterDecision`.
 
-- `clarify`
-  - resultado conversacional normal.
-  - sale del planner.
-  - produce una respuesta visible al usuario.
+7. Answer Guardrail
+- Verifica claims, evidencia y schema de salida.
+- Respuesta binaria `accept/reject`.
 
-- `reject`
-  - problema interno o violacion de policy.
-  - sale del gate o del guardrail.
-  - produce fallback seguro, no una aclaracion natural.
+8. Persistence
+- Persiste envelope, decisión, tool results y trazas.
+- Emite evento o enqueue hacia scoring (sin lógica de scoring local).
 
-## Estado conversacional
+## Frontera con scoring
 
-`agent-core` debe leer estado estructurado, no blobs libres.
+- `agent-core` solo invoca API de scoring para encolado y consulta de estado.
+- No contiene motor, repositorios ni worker de scoring en su dominio.
 
-Componentes minimos del estado:
+## Modelo de errores
 
-- `tenant`
-- `vertical`
-- `channel`
-- `conversation_id`
-- `history_window`
-- `conversation_state`
-- `last_cards`
-- `last_tool_facts`
-
-El planner lee estado estructurado.
-El synthesizer lee estado estructurado y `ToolResult`.
-
-## Verticales
-
-`generic`:
-
-- respuesta directa
-- retrieval documental
-- workflows simples cuando aplique
-- sin cards complejas por defecto
-
-`realtor`:
-
-- busqueda y refinamiento
-- slots inmobiliarios
-- SQL determinista
-- cards de propiedad y resumen de busqueda
-
-La arquitectura no cambia por vertical.
-Solo cambian configuracion, tools y contratos.
-
-## Lo que `agent-core` no hace
-
-- no calcula scoring
-- no mantiene compatibilidad legacy por si misma
-- no escribe SQL libre
-- no renderiza componentes fuera del contrato
-- no es repositorio de prompts de scoring
-
-## Resultado final
-
-El resultado visible del servicio es `AnswerEnvelope`:
-
-- `text`
-- `cards`
-- `evidence_ids`
-- `goal`
-- `confidence`
-- metadatos tecnicos minimos
+1. `goal=clarify`: respuesta de negocio válida.
+2. `gate reject`: rechazo de seguridad/política.
+3. `guardrail reject`: salida no confiable.
+4. `tool failure`: degradación controlada según contrato.

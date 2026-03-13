@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict, Any, List, Union
 from app.transformer.policy_loader import PolicyLoader, get_allowed_components
 from app.schemas.ui import (
@@ -103,11 +104,21 @@ class RealtorRendererPolicy:
         Construye el payload final de respuesta, siempre incluyendo chat_text.
         """
         final_components: List[BaseComponent] = []
+        pre_cards_text = ""
+        post_cards_text = ""
 
-        if ai_text:
-            final_components.append(ChatMessage(text=ai_text, sender="bot"))
+        if ai_text and components:
+            pre_cards_text, post_cards_text = self._split_text_for_card_flow(ai_text)
+        else:
+            pre_cards_text = ai_text
+
+        if pre_cards_text:
+            final_components.append(ChatMessage(text=pre_cards_text, sender="bot"))
 
         final_components.extend(components)
+
+        if post_cards_text:
+            final_components.append(ChatMessage(text=post_cards_text, sender="bot"))
 
         filtered = self.filter_components({"answer": ai_text}, final_components)
 
@@ -120,6 +131,20 @@ class RealtorRendererPolicy:
                 "allowed_components": self.allowed_components,
             },
         }
+
+    def _split_text_for_card_flow(self, ai_text: str) -> tuple[str, str]:
+        """
+        If the model returns multi-paragraph text, keep the first paragraph before cards
+        and move the remaining paragraphs after cards.
+        """
+        base_text = (ai_text or "").strip()
+        blocks = [block.strip() for block in re.split(r"\n\s*\n+", base_text) if block.strip()]
+        if len(blocks) <= 1:
+            sentences = [chunk.strip() for chunk in re.split(r"(?<=[.!?])\s+", base_text) if chunk.strip()]
+            if len(sentences) > 1 and sentences[-1].endswith("?"):
+                return " ".join(sentences[:-1]).strip(), sentences[-1]
+            return base_text, ""
+        return blocks[0], "\n\n".join(blocks[1:])
 
     def validate_response(self, response: Dict[str, Any]) -> bool:
         """

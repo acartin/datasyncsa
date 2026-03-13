@@ -42,8 +42,14 @@ async def dependencies_health():
     Lightweight dependency health for frontend status indicator.
     """
     timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
-    inference_base = os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://inference-core-v3:8000")).rstrip("/")
-    inference_prefix = os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v3"))
+    inference_base = os.getenv(
+        "AGENT_CORE_API",
+        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+    ).rstrip("/")
+    inference_prefix = os.getenv(
+        "AGENT_CORE_API_PREFIX",
+        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+    )
     inference_url = f"{inference_base}{inference_prefix}/health"
     retriever_url = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000").rstrip("/") + "/api/v2/health"
 
@@ -220,17 +226,7 @@ async def chat_interaction(req: InternalChatRequest):
         extracted_components = []
         canonical_components = ai_response.get("components") or []
         if canonical_components:
-            for component_payload in canonical_components:
-                comp_type = component_payload.get("type")
-                if comp_type == "property-card":
-                    from app.schemas.ui import PropertyCard
-                    extracted_components.append(PropertyCard(**component_payload))
-                elif comp_type == "property-grid":
-                    from app.schemas.ui import PropertyGrid
-                    extracted_components.append(PropertyGrid(**component_payload))
-                elif comp_type == "chat":
-                    from app.schemas.ui import ChatMessage
-                    extracted_components.append(ChatMessage(**component_payload))
+            extracted_components = transformer.parse_canonical_components(canonical_components)
         else:
             sources = ai_response.get("sources", [])
             if sources:

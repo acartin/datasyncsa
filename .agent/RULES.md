@@ -129,6 +129,15 @@ Regla:
 - Toda decisión de negocio/intent debe ser dinámica y provenir de configuración, prompts versionados o parámetros explícitos del runtime.
 - Si se requiere fallback, debe ser parametrizable (feature flag/config) y no lógica fija embebida en código.
 - Cualquier cambio que agregue `if/regex/keywords` ad-hoc para suplir clasificación/intención se considera regresión de arquitectura.
+- Guardrail obligatorio para agent-core antes de cerrar cambios:
+  - `bash tests/scripts/check_no_hardcoded_realtor_copy.sh`
+  - `docker compose exec -T agent-core pytest -q tests/unit/test_no_hardcoded_realtor_copy.py`
+
+## 8.2 Normalización LLM Centralizada (agent-core)
+
+- La normalización de estructura de salida LLM debe existir en un único módulo central (`app/core/llm_contract_normalizer.py`).
+- Prohibido repartir parches de normalización/corrección en múltiples nodos o servicios.
+- Prohibido “reparar” decisiones de negocio del planner fuera del contrato tipado (solo se permite unwrap/normalización estructural).
 
 ## 9. Testing Mínimo por Cambio
 

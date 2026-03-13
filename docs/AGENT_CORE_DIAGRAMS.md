@@ -1,17 +1,58 @@
-# Agent Core Diagrams
+# Agent Core Diagrams (LangGraph)
 
-Documentacion visual del diseno propuesto para `agent-core`.
+## Flujo principal
 
-## Flujo End-to-End
+```mermaid
+flowchart TD
+    A[normalize_input] --> B[planner LLM\nRouterDecision]
+    B --> C{policy_gate\nYES/NO}
+    C -- NO --> X[reject envelope]
+    C -- YES --> D{goal=clarify?}
+    D -- YES --> E[clarify envelope]
+    D -- NO --> F[execute tools\nRAG/SQL/workflow]
+    F --> G[card_renderer\ndeterminista]
+    F --> H[synthesizer LLM\nSynthesizerOutput]
+    H --> I{answer_guardrail\nYES/NO}
+    I -- NO --> Y[reject envelope]
+    I -- YES --> J[AnswerEnvelope]
+    G --> J
+    J --> K[persist]
+    K --> L[enqueue scoring async]
+```
 
-![Agent Core End-to-End](./AGENT_CORE_FLOW.svg)
+## Separación por zonas
 
-## Separacion Por Zonas
+```mermaid
+flowchart LR
+    subgraph DB[Base de datos]
+      P1[planner_system\nai_system_prompts core]
+      P2[synthesizer_system\nai_system_prompts core]
+      P3[tenant policy]
+      P4[lead_ai_prompts\nstyle overlay only]
+    end
 
-![Agent Core Zones](./AGENT_CORE_ZONES.svg)
+    subgraph LLM[Zona LLM]
+      L1[planner]
+      L2[synthesizer]
+    end
 
-## Nota
+    subgraph DET[Runtime determinista]
+      D1[policy gate]
+      D2[tool executor]
+      D3[sql translator]
+      D4[card renderer]
+      D5[answer guardrail]
+    end
 
-- `clarify` debe salir del planner como `goal`, no como efecto de `reject`.
-- `gate` y `guardrail` solo aceptan o rechazan; no corrigen ni reescriben.
-- `cards` se renderizan de forma determinista desde `ToolResult`.
+    subgraph CONTRACTS[Contratos tipados]
+      C1[RouterDecision]
+      C2[ToolCall]
+      C3[ToolResult]
+      C4[SynthesizerInput/Output]
+      C5[AnswerEnvelope]
+    end
+
+    DB --> LLM
+    LLM --> DET
+    DET --> CONTRACTS
+```

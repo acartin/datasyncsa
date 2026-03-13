@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.core.config import settings
+from app.core.llm_client import llm_service
+from app.core.prompt_service import PromptBundle, prompt_service
+from app.models.contracts import (
+    PropertyListing,
+    RAGChunk,
+    RAGResult,
+    RealtorSQLResult,
+    RealtorSearchSlots,
+    ResponseMode,
+    ToolName,
+    ToolResult,
+)
+from app.synthesizers.synthesizer_service import (
+    SynthesizerService,
+    _compact_context_snapshot,
+    _compact_tool_results,
+)
+
+
+def _build_listing(index: int) -> PropertyListing:
+    return PropertyListing(
+        listing_id=f"listing-{index}",
+        title=f"Casa amplia {index} " + ("x" * 120),
+        city="Heredia",
+        neighborhood="Santo Domingo",
+        price=120000 + index,
+        currency="USD",
+        rooms=3,
+        area_m2=110.0,
+        property_type="house",
+        features=[f"feature-{item}" for item in range(20)],
+        image_urls=[f"https://cdn.example.com/{index}/{item}.jpg" for item in range(8)],
+        listing_url=f"https://example.com/listings/{index}",
+    )
+
+
+def test_compact_tool_results_limits_realtor_and_rag_payload() -> None:
+    realtor_result = ToolResult(
+        tool_name=ToolName.realtor_sql,
+        status="ok",
+        realtor=RealtorSQLResult(
+            listings=[_build_listing(i) for i in range(20)],
+            total_found=20,
+            sql_executed="SELECT * FROM lead_properties WHERE very_long_condition = true",
+            slots_used=RealtorSearchSlots(city="Heredia"),
+        ),
+    )
+    rag_result = ToolResult(
+        tool_name=ToolName.rag,
+        status="ok",
+        rag=RAGResult(
+            chunks=[
+                RAGChunk(
+                    chunk_id=f"chunk-{i}",
+                    doc_id=f"doc-{i}",
+                    content="contenido-" + ("z" * 1200),
+                    score=0.99,
+                    source_url=f"https://docs.example.com/{i}",
+                )
+                for i in range(8)
+            ],
+            query_used="que documentos hay sobre politica comercial",
+        ),
+    )
+
+    compacted = _compact_tool_results([realtor_result, rag_result])
+    assert len(compacted) == 2
+
+    compacted_realtor = compacted[0].realtor
+    assert compacted_realtor is not None
+    assert len(compacted_realtor.listings) <= settings.synth_realtor_listing_limit
+    assert compacted_realtor.sql_executed == ""
+    for listing in compacted_realtor.listings:
+        assert len(listing.features) <= settings.synth_realtor_features_limit
+        assert len(listing.image_urls) <= settings.synth_realtor_images_per_listing
+
+    compacted_rag = compacted[1].rag
+    assert compacted_rag is not None
+    assert len(compacted_rag.chunks) <= settings.synth_rag_chunk_limit
+    for chunk in compacted_rag.chunks:
+        assert len(chunk.content) <= settings.synth_rag_chunk_max_chars
+
+
+def test_run_sends_compacted_payload_to_llm(monkeypatch) -> None:
+    captured_payload: dict[str, object] = {}
+    captured_max_tokens: dict[str, int] = {}
+
+    async def fake_resolve_prompts(*, tenant_id: str, vertical: str, channel: str) -> PromptBundle:
+        return PromptBundle(
+            planner_system_prompt="planner",
+            synthesizer_system_prompt="synth",
+        )
+
+    async def fake_generate_json(*, system_instruction: str, payload: dict, temperature: float, max_output_tokens: int):
+        captured_payload.update(payload)
+        captured_max_tokens["value"] = max_output_tokens
+        return {"text": "ok", "evidence_ids": ["listing-0"], "needs_cards": True}
+
+    monkeypatch.setattr(prompt_service, "resolve_prompts", fake_resolve_prompts)
+    monkeypatch.setattr(llm_service, "generate_json", fake_generate_json)
+
+    service = SynthesizerService()
+    result = asyncio.run(
+        service.run(
+            tenant_id="64f357a0-98eb-44f1-9f41-6e615ed26180",
+            raw_input={"channel": "web_html", "vertical": "realtor"},
+            tool_results=[
+                ToolResult(
+                    tool_name=ToolName.realtor_sql,
+                    status="ok",
+                    realtor=RealtorSQLResult(
+                        listings=[_build_listing(i) for i in range(20)],
+                        total_found=20,
+                        sql_executed="SELECT * FROM lead_properties",
+                        slots_used=RealtorSearchSlots(city="Heredia"),
+                    ),
+                )
+            ],
+            response_mode=ResponseMode.text_plus_cards,
+            context_snapshot={
+                "conversation_summary": "quiero ver casas",
+                "vertical": "realtor",
+                "conversation_state": {"history": ["hola"] * 500},
+                "last_user_turn": "heredia",
+            },
+        )
+    )
+
+    assert result.text == "ok"
+    context_snapshot = str(captured_payload.get("context_snapshot") or "")
+    tool_results = captured_payload.get("tool_results") or []
+    assert len(context_snapshot) <= settings.synth_context_max_chars
+    assert isinstance(tool_results, list) and tool_results
+    first_realtor = tool_results[0].get("realtor") if isinstance(tool_results[0], dict) else None
+    assert isinstance(first_realtor, dict)
+    assert len(first_realtor.get("listings") or []) <= settings.synth_realtor_listing_limit
+    assert captured_max_tokens.get("value") == settings.synth_max_output_tokens
+
+
+def test_compact_context_snapshot_caps_payload_size() -> None:
+    context = {
+        "conversation_summary": "hola " * 200,
+        "vertical": "realtor",
+        "conversation_state": {"messages": ["heredia"] * 1000},
+        "last_user_turn": "alajuela " * 200,
+    }
+    compacted = _compact_context_snapshot(context)
+    assert len(compacted) <= settings.synth_context_max_chars
+    assert compacted.startswith("{")

@@ -19,8 +19,14 @@ class InferenceClient:
         self.timeout = int(os.getenv("INFERENCE_TIMEOUT", 60))
         self.connect_timeout = float(os.getenv("INFERENCE_CONNECT_TIMEOUT", 5))
         self.default_client_id = os.getenv("DEFAULT_CLIENT_ID", "")
-        inference_url = os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://inference-core-v3:8000"))
-        api_prefix = os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v3"))
+        inference_url = os.getenv(
+            "AGENT_CORE_API",
+            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+        )
+        api_prefix = os.getenv(
+            "AGENT_CORE_API_PREFIX",
+            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+        )
         self.base_url = inference_url.rstrip("/") + api_prefix
         logger.info("🔌 InferenceClient conectado a %s (Timeout: %ss)", self.base_url, self.timeout)
 

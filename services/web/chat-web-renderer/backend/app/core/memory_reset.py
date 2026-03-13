@@ -11,10 +11,13 @@ logger = logging.getLogger("memory_reset")
 class MemoryResetClient:
     def __init__(self):
         self.reset_url = os.getenv(
-            "INFERENCE_RESET_URL",
+            "AGENT_CORE_RESET_URL",
             os.getenv(
-                "INFERENCE_V2_RESET_URL",
-                "http://inference-core-v3:8000/api/v3/internal/memory/reset",
+                "INFERENCE_RESET_URL",
+                os.getenv(
+                    "INFERENCE_V2_RESET_URL",
+                    "http://agent-core:8000/api/v1/internal/memory/reset",
+                ),
             ),
         ).rstrip("/")
         self.timeout = float(os.getenv("INFERENCE_TIMEOUT", 60))

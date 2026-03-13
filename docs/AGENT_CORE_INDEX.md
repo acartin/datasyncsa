@@ -1,38 +1,35 @@
-# Agent Core Index
+# Agent Core Index (LangGraph Canonical)
 
-Entrada canonica para entender el diseno nuevo de chat en este repo.
+Este índice reemplaza la documentación anterior de `AGENT_CORE`.
 
-## Leer en este orden
+Estado actual:
+- Arquitectura objetivo: `agent-core` con `LangGraph`.
+- Alcance de esta fase: conversación y runtime del agente.
+- Fuera de alcance en esta fase: refactor interno de `scoring`.
 
-1. `docs/AGENT_CORE_DIAGRAMS.md`
+## Orden de lectura obligatorio
+
+1. `docs/AGENT_CORE_EVAL_PROMPT.md`
 2. `docs/AGENT_CORE_RULES.md`
 3. `docs/AGENT_CORE_ARCHITECTURE.md`
-4. `docs/AGENT_CORE_PROMPT_RUNTIME.md`
-5. `docs/SCORING_CORE_BOUNDARY.md`
-6. `docs/AGENT_CORE_FILE_MAP.md`
-7. `docs/AGENT_CORE_IMPLEMENTATION_PLAN.md`
-8. `docs/AGENT_CORE_PROMPT_SEQUENCE.md`
-
-## Servicios objetivo
-
-- `agent-core`
-- `scoring-core`
+4. `docs/AGENT_CORE_DIAGRAMS.md`
+5. `docs/AGENT_CORE_API_CONTRACT.md`
+6. `docs/AGENT_CORE_PROMPT_RUNTIME.md`
+7. `docs/AGENT_CORE_FILE_MAP.md`
+8. `docs/AGENT_CORE_IMPLEMENTATION_PLAN.md`
+9. `docs/AGENT_CORE_PROMPT_SEQUENCE.md`
+10. `docs/AGENT_CORE_PROMPT_STATUS.md`
 
 ## Objetivo
 
-Reemplazar la mezcla historica de `inference-core-v1` y `inference-core-v2` por una arquitectura con fronteras claras:
+Construir un `agent-core` nuevo con orquestación `LangGraph`, contratos tipados y fronteras estrictas:
+- lógica conversacional probabilística en LLMs
+- ejecución de herramientas determinista
+- control de riesgo determinista por `accept/reject`
 
-- `agent-core` decide y responde.
-- `scoring-core` evalua scoring de manera asincrona e independiente.
+## Regla de precedencia
 
-## Principio central
-
-Solo existe un decisor conversacional: el planner de `agent-core`.
-
-Todo lo demas es:
-
-- validacion determinista,
-- ejecucion de tools,
-- render de cards,
-- scoring asincrono,
-- o compatibilidad de APIs.
+Si hay contradicción:
+1. Código ejecutable vigente.
+2. `docs/AGENT_CORE_RULES.md`.
+3. Resto de documentos `AGENT_CORE`.

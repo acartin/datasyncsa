@@ -1,53 +1,46 @@
 # Agent Core Implementation Plan
 
-## Objetivo
+## Fase 0 - Congelación de arquitectura
 
-Construir `agent-core` y `scoring-core` en orden, sin reintroducir arquitectura por heuristicas.
+1. Establecer invariantes y contratos tipados.
+2. Definir nodos y edges de LangGraph.
+3. Congelar frontera con scoring (solo API).
 
-## Fase 0 - Congelar contexto
+## Fase 1 - Runtime mínimo de LangGraph
 
-- aprobar diagramas
-- aprobar reglas canonicamente
-- aprobar contratos de `schemas/agent_core/*`
-- aprobar frontera de `scoring-core`
+1. Implementar `state`, `nodes`, `workflow`.
+2. Conectar endpoint `/api/v1/chat` al grafo.
+3. Soportar rutas `answer`, `clarify`, `reject`.
 
-Resultado esperado:
+## Fase 2 - Tools deterministas
 
-- no mas discusiones sobre ubicacion de responsabilidades
+1. Integrar `RAG` tool.
+2. Integrar `SQL translator` tipado.
+3. Integrar `workflow executor` tipado.
+4. Integrar `card_renderer` determinista.
 
-## Fase 1 - `agent-core`
+## Fase 3 - Prompt runtime completo
 
-- implementar `normalize_input`
-- implementar planner -> gate -> tools -> cards -> synth -> guardrail -> persist
-- usar prompts desde `ai_system_prompts` + `lead_ai_prompts`
-- implementar verticales `generic` y `realtor` como configuracion
+1. Resolver prompts por tenant/canal.
+2. Trazar versiones de prompt por turno.
+3. Añadir observabilidad por nodo.
 
-Resultado esperado:
+## Fase 4 - Guardrails y políticas
 
-- reemplazo real del cerebro conversacional
+1. Activar gate binario por tenant.
+2. Activar guardrail binario de evidencia.
+3. Definir códigos de rechazo estables.
 
-## Fase 2 - `scoring-core`
+## Fase 5 - Persistencia y telemetría
 
-- extraer motor actual de scoring de `inference-core-v2`
-- mantener la misma BD y tablas
-- dejar a `agent-core` solo el disparo del side effect
+1. Persistir `decision`, `tool_results`, `envelope`.
+2. Exponer métricas por nodo y latencia total.
 
-Resultado esperado:
+## Fase 6 - Sustitución del camino principal
 
-- scoring independiente del agente
+1. Apuntar consumidores internos al `agent-core`.
+2. Retirar dependencia funcional de inference legacy para chat.
 
-## Fase 3 - Corte de consumidores
+## Nota de alcance
 
-- adaptar bridges y consumidores internos al nuevo borde de `agent-core`
-- cortar dependencias directas a `inference-core-v1`
-- cortar dependencias directas a `inference-core-v2`
-
-Resultado esperado:
-
-- el monorepo deja de depender de inference core legacy
-
-## Criterios de done
-
-- `agent-core` es el unico decisor conversacional
-- `scoring-core` es el unico duenio del scoring async
-- `inference-core-v1/v2` quedan fuera del camino principal
+En esta fase no se refactoriza internamente `scoring`.
