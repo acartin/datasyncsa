@@ -1,1 +1,3 @@
-# API layer for scoring-core
+from .scoring import router
+
+__all__ = ["router"]

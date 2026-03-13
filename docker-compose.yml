@@ -136,6 +136,9 @@ services:
       - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
       - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+      - SCORING_CORE_URL=http://scoring-core:8000
+      - SCORING_CORE_API_PREFIX=${SCORING_CORE_API_PREFIX:-/api/v1}
+      - SCORING_CORE_TIMEOUT_SECS=${SCORING_CORE_TIMEOUT_SECS:-8}
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
@@ -146,78 +149,12 @@ services:
     networks:
       - internal_network
 
-  # Scoring Core API
-  scoring-core:
-    build:
-      context: ./services/scoring-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-scoring-core
-    restart: always
-    command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --workers
-      - ${SCORING_CORE_WEB_CONCURRENCY:-1}
-    ports:
-      - "${SCORING_CORE_PORT:-8097}:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # Scoring Core Worker
-  scoring-core-worker:
-    build:
-      context: ./services/scoring-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
-    restart: always
-    command: ["python", "worker.py"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-      - scoring-core
-    networks:
-      - internal_network
-
   # Inference Core V2 async scoring worker (persistent jobs)
   inference-core-v2-worker:
     build:
       context: ./services/inference-stack-v2/inference-core-v2
       dockerfile: Dockerfile
+    profiles: ["legacy"]
     container_name: ${ENV_PREFIX}-backend-inference-v2-worker
     restart: always
     command: ["python", "worker.py"]
@@ -246,6 +183,89 @@ services:
       - postgres
       - redis
       - inference-core-v2
+    networks:
+      - internal_network
+
+  # Scoring Core API (async scoring domain service)
+  scoring-core:
+    build:
+      context: ./services/scoring-core
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-scoring-core
+    restart: always
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - ${SCORING_CORE_WEB_CONCURRENCY:-1}
+    ports:
+      - "${SCORING_CORE_PORT:-8097}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
+      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # Scoring Core async worker
+  scoring-core-worker:
+    build:
+      context: ./services/scoring-core
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
+    restart: always
+    command: ["python", "worker.py"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
+      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+      - scoring-core
     networks:
       - internal_network
 

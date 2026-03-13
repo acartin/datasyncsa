@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     scoring_bg_enabled: bool = os.getenv("SCORING_BG_ENABLED", "true").lower() == "true"
     scoring_job_max_attempts: int = int(os.getenv("SCORING_JOB_MAX_ATTEMPTS", "3"))
     scoring_job_debounce_secs: float = float(os.getenv("SCORING_JOB_DEBOUNCE_SECS", "1.5"))
+    scoring_core_url: str = os.getenv("SCORING_CORE_URL", "http://scoring-core:8000")
+    scoring_core_api_prefix: str = os.getenv(
+        "SCORING_CORE_API_PREFIX",
+        os.getenv("SCORING_API_PREFIX", "/api/v1"),
+    )
+    scoring_core_timeout_secs: float = float(os.getenv("SCORING_CORE_TIMEOUT_SECS", "8"))
     response_contracts_path: str = os.getenv(
         "RESPONSE_CONTRACTS_PATH",
         str(Path(__file__).resolve().parents[1] / "policies" / "response_contracts.json"),

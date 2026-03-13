@@ -14,6 +14,7 @@ from app.services.rag_retriever import RagRetriever
 from app.services.realtor_context_resolver import realtor_context_resolver
 from app.services.realtor_query_compiler import RealtorQueryCompiler
 from app.services.realtor_search_executor import RealtorSearchExecutor
+from app.services.scoring_client import ScoringClientError, scoring_core_client
 from app.services.shown_results_reference_resolver import shown_results_reference_resolver
 from app.services.turn_planning import (
     generic_turn_planner,
@@ -713,13 +714,13 @@ async def persist_memory(state: AgentState) -> Dict[str, Any]:
 
 async def enqueue_side_effects(state: AgentState) -> Dict[str, Any]:
     trace = list(state.get("trace") or []) + ["enqueue_side_effects"]
-    repo = state.get("repo")
     client_id = _coerce_uuid(state.get("client_id"))
     conversation_id = _coerce_uuid(state.get("conversation_id"))
     lead_id = _coerce_uuid(state.get("lead_id"))
+    channel = str(state.get("channel") or "webchat")
 
     side_effects: List[Dict[str, Any]] = []
-    if not repo or not client_id or not conversation_id or not lead_id:
+    if not client_id or not conversation_id or not lead_id:
         return {
             "trace": trace,
             "side_effects": side_effects,
@@ -740,54 +741,16 @@ async def enqueue_side_effects(state: AgentState) -> Dict[str, Any]:
         }
 
     try:
-        vertical_ctx = await repo.get_client_vertical_context(UUID(client_id))
-        if not vertical_ctx or not vertical_ctx.get("vertical_id") or not vertical_ctx.get("scoring_model_id"):
-            return {
-                "trace": trace,
-                "side_effects": side_effects,
-                "scoring_status": "disabled",
-                "scoring_job_id": None,
-                "scoring_eta": None,
-            }
-
-        metrics = await repo.get_conversation_metrics(UUID(conversation_id), UUID(client_id))
-        model_data = await repo.get_active_scoring_model(
-            vertical_id=int(vertical_ctx["vertical_id"]),
-            scoring_model_id=UUID(str(vertical_ctx["scoring_model_id"])),
-        )
-        if not model_data or not model_data.get("id"):
-            return {
-                "trace": trace,
-                "side_effects": side_effects,
-                "scoring_status": "disabled",
-                "scoring_job_id": None,
-                "scoring_eta": None,
-            }
-
-        prompt_data = await repo.get_active_scoring_prompt(UUID(str(model_data["id"])))
-        if not prompt_data or not prompt_data.get("id"):
-            return {
-                "trace": trace,
-                "side_effects": side_effects,
-                "scoring_status": "disabled",
-                "scoring_job_id": None,
-                "scoring_eta": None,
-            }
-
-        job_data = await repo.upsert_scoring_job(
-            lead_id=UUID(lead_id),
-            conversation_id=UUID(conversation_id),
-            client_id=UUID(client_id),
-            expected_lead_messages=(metrics or {}).get("lead_messages"),
-            model_id=UUID(str(model_data["id"])),
-            prompt_id=UUID(str(prompt_data["id"])),
-            max_attempts=max(1, int(settings.scoring_job_max_attempts or 1)),
-            debounce_secs=max(0.0, float(settings.scoring_job_debounce_secs or 0.0)),
+        job_data = await scoring_core_client.enqueue_scoring_job(
+            client_id=client_id,
+            lead_id=lead_id,
+            conversation_id=conversation_id,
+            channel=channel,
         )
         side_effects.append(
             {
                 "tool": "scoring_enqueue",
-                "status": "queued",
+                "status": str(job_data.get("status") or "queued"),
                 "job_id": job_data.get("id"),
             }
         )
@@ -797,6 +760,42 @@ async def enqueue_side_effects(state: AgentState) -> Dict[str, Any]:
             "scoring_status": "pending",
             "scoring_job_id": job_data.get("id"),
             "scoring_eta": job_data.get("scheduled_for"),
+        }
+    except ScoringClientError as exc:
+        if exc.status_code in {400, 404, 422}:
+            logger.info(
+                "Scoring side effect disabled by scoring-core conversation=%s status=%s detail=%s",
+                conversation_id,
+                exc.status_code,
+                exc.detail,
+            )
+            side_effects.append(
+                {
+                    "tool": "scoring_enqueue",
+                    "status": "disabled",
+                    "reason": exc.detail,
+                }
+            )
+            return {
+                "trace": trace,
+                "side_effects": side_effects,
+                "scoring_status": "disabled",
+                "scoring_job_id": None,
+                "scoring_eta": None,
+            }
+        logger.warning(
+            "Scoring side effect enqueue failed conversation=%s status=%s detail=%s",
+            conversation_id,
+            exc.status_code,
+            exc.detail,
+        )
+        side_effects.append({"tool": "scoring_enqueue", "status": "error"})
+        return {
+            "trace": trace,
+            "side_effects": side_effects,
+            "scoring_status": "error",
+            "scoring_job_id": None,
+            "scoring_eta": None,
         }
     except Exception:
         logger.exception("Failed to enqueue scoring side effect conversation=%s", conversation_id)
