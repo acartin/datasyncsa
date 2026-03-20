@@ -1342,6 +1342,7 @@ class ScoringRepository:
         next_scheduled_for: datetime,
         error_code: Optional[str],
         error_message: Optional[str],
+        expected_lead_messages: Optional[int] = None,
         expected_running_generation: Optional[int] = None,
     ) -> bool:
         params = {
@@ -1349,6 +1350,11 @@ class ScoringRepository:
             "scheduled_for": next_scheduled_for,
             "last_error_code": error_code,
             "last_error_message": error_message,
+            "expected_lead_messages": (
+                int(expected_lead_messages)
+                if expected_lead_messages is not None
+                else None
+            ),
         }
         if expected_running_generation is None:
             stmt = text("""
@@ -1357,6 +1363,7 @@ class ScoringRepository:
                     scheduled_for = :scheduled_for,
                     last_error_code = :last_error_code,
                     last_error_message = :last_error_message,
+                    expected_lead_messages = COALESCE(:expected_lead_messages, expected_lead_messages),
                     running_generation = NULL,
                     finished_at = NULL,
                     updated_at = NOW()
@@ -1370,6 +1377,7 @@ class ScoringRepository:
                     scheduled_for = :scheduled_for,
                     last_error_code = :last_error_code,
                     last_error_message = :last_error_message,
+                    expected_lead_messages = COALESCE(:expected_lead_messages, expected_lead_messages),
                     running_generation = NULL,
                     finished_at = NULL,
                     updated_at = NOW()

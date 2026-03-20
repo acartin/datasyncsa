@@ -7,6 +7,7 @@ from app.graph.nodes import (
     answer_guardrail,
     clarify_response,
     execute_tools,
+    hydrate_conversation_context,
     normalize_input,
     persist,
     plan_turn,
@@ -38,6 +39,7 @@ def build_agent_graph():
     graph = StateGraph(AgentCoreState)
 
     graph.add_node("normalize_input", normalize_input)
+    graph.add_node("hydrate_conversation_context", hydrate_conversation_context)
     graph.add_node("plan_turn", plan_turn)
     graph.add_node("policy_gate", policy_gate)
     graph.add_node("clarify_response", clarify_response)
@@ -47,7 +49,8 @@ def build_agent_graph():
     graph.add_node("persist", persist)
 
     graph.add_edge(START, "normalize_input")
-    graph.add_edge("normalize_input", "plan_turn")
+    graph.add_edge("normalize_input", "hydrate_conversation_context")
+    graph.add_edge("hydrate_conversation_context", "plan_turn")
     graph.add_edge("plan_turn", "policy_gate")
 
     graph.add_conditional_edges(

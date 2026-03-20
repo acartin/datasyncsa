@@ -21,6 +21,12 @@ from app.planners.planner_service import planner_service
 from app.renderers.card_renderer import card_renderer
 from app.repositories.persistence import runtime_repository
 from app.runtime.answer_guardrail import run_answer_guardrail
+from app.runtime.conversation_state import (
+    advance_conversation_state,
+    enforce_decision_response_mode,
+    normalize_conversation_state,
+    resolve_response_mode,
+)
 from app.runtime.policy_gate import run_policy_gate
 from app.services.scoring_client import scoring_client
 from app.core.prompt_service import prompt_service
@@ -78,6 +84,66 @@ def _fallback_synthesizer_output(
     )
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _sanitize_history(entries: Any) -> list[dict[str, Any]]:
+    if not isinstance(entries, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        entry: dict[str, Any] = {"role": role, "content": content}
+        if item.get("timestamp"):
+            entry["timestamp"] = str(item.get("timestamp"))
+        normalized.append(entry)
+    return normalized
+
+
+def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(base)
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _build_planner_context_snapshot(
+    *,
+    normalized_input: dict[str, Any],
+    merged_conversation_state: dict[str, Any],
+    persisted_snapshot: dict[str, Any],
+    merged_history: list[dict[str, Any]],
+) -> dict[str, Any]:
+    snapshot = dict(persisted_snapshot)
+    snapshot["conversation_summary"] = str(
+        normalized_input.get("conversation_summary")
+        or snapshot.get("conversation_summary")
+        or ""
+    ).strip()
+    snapshot["vertical"] = str(
+        normalized_input.get("vertical")
+        or snapshot.get("vertical")
+        or "generic"
+    ).strip()
+    snapshot["last_user_turn"] = str(
+        normalized_input.get("last_user_turn")
+        or snapshot.get("last_user_turn")
+        or ""
+    ).strip()
+    snapshot["conversation_state"] = merged_conversation_state
+    snapshot["recent_history"] = merged_history[-8:] if merged_history else []
+    return snapshot
+
+
 async def normalize_input(state: AgentCoreState) -> dict[str, Any]:
     started = time.perf_counter()
     raw = state.get("raw_input", {})
@@ -114,6 +180,82 @@ async def normalize_input(state: AgentCoreState) -> dict[str, Any]:
     }
 
 
+async def hydrate_conversation_context(state: AgentCoreState) -> dict[str, Any]:
+    started = time.perf_counter()
+    raw_input = dict(_as_dict(state.get("raw_input")))
+    normalized_input = dict(_as_dict(state.get("normalized_input")))
+    tenant_id = str(
+        state.get("tenant_id")
+        or raw_input.get("tenant_id")
+        or raw_input.get("clientId")
+        or raw_input.get("client_id")
+        or ""
+    ).strip()
+    conversation_id = str(
+        state.get("conversation_id")
+        or raw_input.get("conversationId")
+        or raw_input.get("conversation_id")
+        or ""
+    ).strip()
+
+    hydrated = {
+        "history": [],
+        "conversation_state": {},
+        "context_snapshot": {},
+        "lead_id": None,
+    }
+    if tenant_id and conversation_id:
+        hydrated = await runtime_repository.get_conversation_memory(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            max_messages=settings.chat_history_max_messages,
+        )
+
+    incoming_history = _sanitize_history(raw_input.get("history"))
+    db_history = _sanitize_history(hydrated.get("history"))
+    merged_history = db_history + incoming_history
+    if merged_history:
+        # Keep a bounded history window to avoid planner payload growth.
+        history_limit = max(4, int(settings.chat_history_max_messages) * 2)
+        merged_history = merged_history[-history_limit:]
+        raw_input["history"] = merged_history
+
+    db_state = _as_dict(hydrated.get("conversation_state"))
+    incoming_state = _as_dict(raw_input.get("conversation_state"))
+    merged_state = _deep_merge_dict(db_state, incoming_state)
+    canonical_state = normalize_conversation_state(
+        raw_state=merged_state,
+        history=merged_history,
+    )
+    raw_input["conversation_state"] = canonical_state
+    normalized_input["conversation_state"] = canonical_state
+
+    planner_context_snapshot = _build_planner_context_snapshot(
+        normalized_input=normalized_input,
+        merged_conversation_state=canonical_state,
+        persisted_snapshot=_as_dict(hydrated.get("context_snapshot")),
+        merged_history=merged_history,
+    )
+    normalized_input["context_snapshot"] = planner_context_snapshot
+
+    hydrated_lead_id = hydrated.get("lead_id")
+    if hydrated_lead_id and not (raw_input.get("lead_id") or raw_input.get("leadId")):
+        raw_input["lead_id"] = str(hydrated_lead_id)
+    resolved_lead_id = (
+        raw_input.get("lead_id")
+        or raw_input.get("leadId")
+        or hydrated_lead_id
+        or state.get("lead_id")
+    )
+
+    return {
+        **_timing(state, "hydrate_conversation_context", started),
+        "raw_input": raw_input,
+        "normalized_input": normalized_input,
+        "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
+    }
+
+
 async def plan_turn(state: AgentCoreState) -> dict[str, Any]:
     started = time.perf_counter()
     raw_input = state.get("raw_input") or {}
@@ -127,7 +269,10 @@ async def plan_turn(state: AgentCoreState) -> dict[str, Any]:
             raw_input=raw_input,
             normalized_input=normalized,
             history=history,
+            conversation_id=str(state.get("conversation_id") or ""),
+            lead_id=str(state.get("lead_id") or ""),
         )
+        decision = enforce_decision_response_mode(decision)
         return {
             **_timing(state, "plan_turn", started),
             "router_decision": decision,
@@ -236,18 +381,28 @@ async def synthesize(state: AgentCoreState) -> dict[str, Any]:
             missing_slots=[],
         )
 
+    context_snapshot = _as_dict(normalized.get("context_snapshot"))
+    context_snapshot = {
+        **context_snapshot,
+        "conversation_summary": normalized.get("conversation_summary", ""),
+        "vertical": normalized.get("vertical", "generic"),
+        "conversation_state": normalized.get("conversation_state", {}),
+        "last_user_turn": normalized.get("last_user_turn", ""),
+    }
+
     try:
         output = await synthesizer_service.run(
             tenant_id=str(raw_input.get("tenant_id") or raw_input.get("clientId") or raw_input.get("client_id") or "default"),
             raw_input=raw_input,
             tool_results=tool_results,
-            response_mode=decision.response_mode,
-            context_snapshot={
-                "conversation_summary": normalized.get("conversation_summary", ""),
-                "vertical": normalized.get("vertical", "generic"),
-                "conversation_state": normalized.get("conversation_state", {}),
-                "last_user_turn": normalized.get("last_user_turn", ""),
-            },
+            goal=decision.goal,
+            response_mode=resolve_response_mode(
+                decision=decision,
+                tool_results=tool_results,
+            ),
+            context_snapshot=context_snapshot,
+            conversation_id=str(state.get("conversation_id") or raw_input.get("conversationId") or raw_input.get("conversation_id") or ""),
+            lead_id=str(state.get("lead_id") or ""),
         )
         return {
             **_timing(state, "synthesize", started),
@@ -270,6 +425,8 @@ def answer_guardrail(state: AgentCoreState) -> dict[str, Any]:
     decision = state.get("router_decision")
     tool_results = state.get("tool_results") or []
     output = state.get("synthesizer_output")
+    normalized = state.get("normalized_input") or {}
+    context_snapshot = _as_dict(normalized.get("context_snapshot"))
     if not isinstance(decision, RouterDecision):
         decision = RouterDecision(
             goal=GoalType.answer,
@@ -282,6 +439,7 @@ def answer_guardrail(state: AgentCoreState) -> dict[str, Any]:
         goal=decision.goal,
         synthesizer_output=output,
         tool_results=tool_results,
+        context_snapshot=context_snapshot,
     )
 
     if not guardrail.accepted and output is None:
@@ -341,6 +499,25 @@ def _reject_message(reject_code: str) -> str:
     return "No puedo procesar esta solicitud con los controles de seguridad actuales."
 
 
+def _should_render_cards(
+    *,
+    decision: RouterDecision,
+    synthesizer_output: SynthesizerOutput,
+    tool_results: list[ToolResult],
+) -> bool:
+    if not tool_results:
+        return False
+    if decision.goal in {GoalType.realtor_search, GoalType.realtor_refine}:
+        for result in tool_results:
+            if result.status == "ok" and result.realtor is not None and result.realtor.listings:
+                return True
+    if not bool(synthesizer_output.needs_cards):
+        return False
+    if decision.response_mode == ResponseMode.text_plus_cards:
+        return True
+    return False
+
+
 async def persist(state: AgentCoreState) -> dict[str, Any]:
     started = time.perf_counter()
     raw_input = state.get("raw_input") or {}
@@ -352,6 +529,7 @@ async def persist(state: AgentCoreState) -> dict[str, Any]:
         tool_calls=[],
         missing_slots=[],
     )
+    decision = enforce_decision_response_mode(decision)
 
     gate_result = state.get("gate_result") if isinstance(state.get("gate_result"), GateResult) else None
     guardrail_result = (
@@ -430,8 +608,21 @@ async def persist(state: AgentCoreState) -> dict[str, Any]:
         )
     else:
         vertical = str((state.get("normalized_input") or {}).get("vertical") or "generic")
-        rendered_cards = card_renderer(tool_results, vertical=vertical)
+        resolved_response_mode = resolve_response_mode(
+            decision=decision,
+            tool_results=tool_results,
+        )
+        if resolved_response_mode != decision.response_mode:
+            decision = decision.model_copy(update={"response_mode": resolved_response_mode})
+        should_render_cards = _should_render_cards(
+            decision=decision,
+            synthesizer_output=output,
+            tool_results=tool_results,
+        )
+        rendered_cards = card_renderer(tool_results, vertical=vertical) if should_render_cards else []
         response_mode = ResponseMode.text_plus_cards if rendered_cards else ResponseMode.text_only
+        if response_mode != decision.response_mode:
+            decision = decision.model_copy(update={"response_mode": response_mode})
         envelope = AnswerEnvelope(
             conversation_id=conversation_id,
             text=output.text.strip() or "No encontré evidencia suficiente para responder.",
@@ -441,6 +632,19 @@ async def persist(state: AgentCoreState) -> dict[str, Any]:
             goal=decision.goal,
             confidence=decision.confidence,
         )
+
+    normalized_for_persistence = _as_dict(state.get("normalized_input"))
+    persisted_state = advance_conversation_state(
+        current_state=_as_dict(normalized_for_persistence.get("conversation_state")),
+        decision=decision,
+        tool_results=tool_results,
+        envelope=envelope,
+        synthesizer_output=output,
+        user_turn_text=str(raw_input.get("queryText") or raw_input.get("text") or ""),
+    )
+    raw_input_for_persistence = dict(raw_input)
+    raw_input_for_persistence["conversation_state"] = persisted_state
+    normalized_for_persistence["conversation_state"] = persisted_state
 
     scoring_status = "disabled"
     scoring_job_id: str | None = None
@@ -471,8 +675,8 @@ async def persist(state: AgentCoreState) -> dict[str, Any]:
         "gate_result": _serialize_model(gate_result),
         "guardrail_result": _serialize_model(guardrail_result),
         "timings_ms": state.get("node_timings_ms") or {},
-        "raw_input": raw_input,
-        "normalized_input": state.get("normalized_input") or {},
+        "raw_input": raw_input_for_persistence,
+        "normalized_input": normalized_for_persistence,
         "lead_id": str(lead_id) if lead_id else None,
         "errors": state.get("errors") or [],
         "scoring_status": scoring_status,

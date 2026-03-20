@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from uuid import uuid4
 
 from main import app
+from app.services.agent_core_bridge import AgentCoreBridgeError
 
 
 @pytest.fixture
@@ -28,22 +29,23 @@ async def test_chat_v2_endpoint_missing_client_id(client):
 @pytest.mark.asyncio
 async def test_chat_v2_endpoint_success(client, mocker):
     """Test successful /api/v2/chat endpoint"""
-    # Mock orchestrator
-    mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
-    mock_instance = mocker.AsyncMock()
-    mock_orchestrator.return_value = mock_instance
-    
+    mock_bridge = mocker.patch("app.api.chat_v2.agent_core_bridge")
+
     # Mock response
     mock_response = {
         "answer": "Test response",
+        "intent": "PROPERTY_SEARCH",
+        "components": [],
+        "realtor_turn": None,
         "conversation_id": str(uuid4()),
+        "lead_id": None,
         "scorecard_id": None,
         "scorecard": None,
         "scoring_status": "pending",
         "scoring_job_id": None,
         "scoring_eta": "2026-02-22T00:00:00+00:00",
     }
-    mock_instance.process_chat.return_value = mock_response
+    mock_bridge.chat = mocker.AsyncMock(return_value=mock_response)
     
     request_data = {
         "queryText": "Test query",
@@ -58,23 +60,26 @@ async def test_chat_v2_endpoint_success(client, mocker):
     assert "conversationId" in data
     assert "scorecardId" in data
     assert data["scoringStatus"] == "pending"
+    mock_bridge.chat.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_chat_v2_endpoint_accepts_cliente_id_alias(client, mocker):
     """Test /api/v2/chat accepts clienteId alias for client_id"""
-    mock_orchestrator = mocker.patch('app.api.chat_v2.ScoringOrchestrator')
-    mock_instance = mocker.AsyncMock()
-    mock_orchestrator.return_value = mock_instance
-    mock_instance.process_chat.return_value = {
+    mock_bridge = mocker.patch("app.api.chat_v2.agent_core_bridge")
+    mock_bridge.chat = mocker.AsyncMock(return_value={
         "answer": "Alias response",
+        "intent": "ANSWER",
+        "components": [],
+        "realtor_turn": None,
         "conversation_id": str(uuid4()),
+        "lead_id": None,
         "scorecard_id": None,
         "scorecard": None,
         "scoring_status": "pending",
         "scoring_job_id": None,
         "scoring_eta": None,
-    }
+    })
 
     request_data = {
         "queryText": "Test query",
@@ -82,6 +87,24 @@ async def test_chat_v2_endpoint_accepts_cliente_id_alias(client, mocker):
     }
     response = client.post("/api/v2/chat", json=request_data)
     assert response.status_code == 200
+    mock_bridge.chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chat_v2_endpoint_propagates_bridge_error(client, mocker):
+    mock_bridge = mocker.patch("app.api.chat_v2.agent_core_bridge")
+    mock_bridge.chat = mocker.AsyncMock(
+        side_effect=AgentCoreBridgeError(status_code=503, detail="agent-core unavailable")
+    )
+
+    request_data = {
+        "queryText": "Test query",
+        "clientId": str(uuid4()),
+    }
+    response = client.post("/api/v2/chat", json=request_data)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "agent-core unavailable"
 
 
 @pytest.mark.asyncio

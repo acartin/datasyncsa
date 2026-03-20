@@ -8,6 +8,20 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_prefix: str = "/api/v2"
+    agent_core_api: str = os.getenv(
+        "AGENT_CORE_API",
+        os.getenv("INFERENCE_API_URL", "http://agent-core:8000"),
+    )
+    agent_core_api_prefix: str = os.getenv(
+        "AGENT_CORE_API_PREFIX",
+        os.getenv("INFERENCE_API_PREFIX", "/api/v1"),
+    )
+    agent_core_timeout_secs: float = float(
+        os.getenv("AGENT_CORE_TIMEOUT_SECS", os.getenv("INFERENCE_TIMEOUT", "60"))
+    )
+    agent_core_connect_timeout_secs: float = float(
+        os.getenv("AGENT_CORE_CONNECT_TIMEOUT_SECS", os.getenv("INFERENCE_CONNECT_TIMEOUT", "5"))
+    )
     
     # Database
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/datasyncsa")

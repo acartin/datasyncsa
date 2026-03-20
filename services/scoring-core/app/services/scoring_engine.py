@@ -12,6 +12,7 @@ import time
 from typing import Dict, Any, List, Optional, Tuple
 
 from app.core.config import settings
+from app.core.llm_trace_logger import llm_trace_logger
 from app.services.prompt_builder import PromptBuilder
 from app.services.prompt_linter import PromptLinter
 
@@ -70,6 +71,7 @@ class ScoringEngine:
         conversation_text: str,
         model_config: Dict[str, Any],
         prompt_config: Dict[str, Any],
+        trace_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Analyze a conversation and return scoring results.
@@ -153,7 +155,8 @@ class ScoringEngine:
             llm_response = await self._call_gemini(
                 system_prompt=system_prompt,
                 conversation_text=conversation_text,
-                response_schema=response_schema
+                response_schema=response_schema,
+                trace_context=trace_context,
             )
             result = llm_response.get("payload", {}) if isinstance(llm_response, dict) else {}
             llm_meta = llm_response.get("meta", llm_meta) if isinstance(llm_response, dict) else llm_meta
@@ -410,7 +413,8 @@ class ScoringEngine:
         self,
         system_prompt: str,
         conversation_text: str,
-        response_schema: Dict[str, Any]
+        response_schema: Dict[str, Any],
+        trace_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Call Gemini API with retries and timeout handling.
@@ -424,12 +428,32 @@ class ScoringEngine:
             Parsed JSON response from the LLM
         """
         last_error = None
+        prompt = (
+            "Analiza la conversacion y devuelve SOLO JSON valido que cumpla "
+            "estrictamente el schema solicitado.\n\n"
+            "CONVERSACION:\n"
+            f"{conversation_text}"
+        )
+        request_trace = {
+            "provider": "google_genai",
+            "model": self._model_id,
+            "system_instruction": system_prompt,
+            "contents": [prompt],
+            "conversation_text": conversation_text,
+            "response_schema": response_schema,
+            "config": {
+                "temperature": self._temperature,
+                "response_mime_type": "application/json",
+                "max_output_tokens": self._max_output_tokens,
+                "timeout_secs": self._timeout,
+            },
+        }
         
         for attempt in range(1, self._max_retries + 1):
             attempt_start = time.perf_counter()
             try:
                 result = await asyncio.wait_for(
-                    self._call_gemini_internal(system_prompt, conversation_text, response_schema),
+                    self._call_gemini_internal(system_prompt, prompt, response_schema),
                     timeout=self._timeout
                 )
                 duration_ms = (time.perf_counter() - attempt_start) * 1000.0
@@ -438,6 +462,22 @@ class ScoringEngine:
                     attempt,
                     duration_ms,
                     self._timeout,
+                )
+                await llm_trace_logger.log_event(
+                    trace_context=trace_context,
+                    status="ok",
+                    request={
+                        **request_trace,
+                        "attempt": attempt,
+                        "max_retries": self._max_retries,
+                    },
+                    response={
+                        "text": result.get("raw_text"),
+                        "json": result.get("payload"),
+                        "meta": result.get("meta"),
+                        "duration_ms": round(duration_ms, 3),
+                        "response_chars": len(str(result.get("raw_text") or "")),
+                    },
                 )
                 return result
             
@@ -451,6 +491,17 @@ class ScoringEngine:
                     self._timeout,
                 )
                 last_error = TimeoutError(f"LLM request timed out after {self._timeout}s")
+                await llm_trace_logger.log_event(
+                    trace_context=trace_context,
+                    status="error",
+                    request={
+                        **request_trace,
+                        "attempt": attempt,
+                        "max_retries": self._max_retries,
+                    },
+                    response={"duration_ms": round(duration_ms, 3)},
+                    error=last_error,
+                )
                 # Fail fast on timeout to avoid long stalls in async scoring.
                 break
             
@@ -464,6 +515,17 @@ class ScoringEngine:
                     e,
                 )
                 last_error = e
+                await llm_trace_logger.log_event(
+                    trace_context=trace_context,
+                    status="error",
+                    request={
+                        **request_trace,
+                        "attempt": attempt,
+                        "max_retries": self._max_retries,
+                    },
+                    response={"duration_ms": round(duration_ms, 3)},
+                    error=e,
+                )
             
             if attempt < self._max_retries:
                 delay = min(2 ** attempt, 10)
@@ -475,7 +537,7 @@ class ScoringEngine:
     async def _call_gemini_internal(
         self,
         system_prompt: str,
-        conversation_text: str,
+        prompt: str,
         response_schema: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
@@ -488,12 +550,6 @@ class ScoringEngine:
         except ImportError:
             raise ImportError("google-genai package not installed")
         
-        prompt = (
-            "Analiza la conversacion y devuelve SOLO JSON valido que cumpla "
-            "estrictamente el schema solicitado.\n\n"
-            "CONVERSACION:\n"
-            f"{conversation_text}"
-        )
         call_start = time.perf_counter()
         response = await asyncio.to_thread(
             self.client.models.generate_content,
@@ -528,6 +584,7 @@ class ScoringEngine:
                     "response_chars": len(raw_text),
                     "llm_latency_ms": float(gen_ms + parse_ms),
                 },
+                "raw_text": raw_text,
             }
         except json.JSONDecodeError as e:
             parse_ms = (time.perf_counter() - parse_start) * 1000.0

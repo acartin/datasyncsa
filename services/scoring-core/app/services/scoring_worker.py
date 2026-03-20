@@ -129,6 +129,7 @@ class ScoringWorker:
                     f"Conversation advanced from expected={expected_lead_messages} "
                     f"to latest={latest_lead_messages}; rescheduled."
                 ),
+                expected_lead_messages=int(latest_lead_messages),
                 expected_running_generation=running_generation,
             )
             if rescheduled:
@@ -231,6 +232,21 @@ class ScoringWorker:
                 "vertical_slug": vertical_ctx.get("vertical_slug", ""),
             },
             prompt_config=prompt_config,
+            trace_context={
+                "conversation_id": str(conversation_id),
+                "lead_id": str(lead_id),
+                "client_id": str(client_id),
+                "job_id": str(job_id),
+                "running_generation": running_generation,
+                "component": "scoring_engine",
+                "operation": "conversation_scoring",
+                "channel": str((snapshot.get("scoring_context") or {}).get("channel") or ""),
+                "vertical_name": str(vertical_ctx.get("vertical_name") or ""),
+                "vertical_slug": str(vertical_ctx.get("vertical_slug") or ""),
+                "scoring_model_id": str(model_data.get("id") or ""),
+                "prompt_id": str(prompt_config.get("id") or ""),
+                "prompt_version": prompt_config.get("version"),
+            },
         )
 
         # Re-check claim ownership right before persisting scorecard results.

@@ -64,7 +64,13 @@ class PromptService:
             + "clarify_message (requerido si goal=clarify), "
             + "response_mode (text_only|text_plus_cards). "
             + "tool_calls debe usar 'tool_name' literal, no 'name'. "
-            + "Si goal=clarify, tool_calls debe ser []."
+            + "Para tool_name='realtor_sql' usa SIEMPRE 'realtor_slots' (no 'parameters', no 'params', no SQL libre). "
+            + "En realtor_slots, property_type debe ser exactamente apartment|house|land|office. "
+            + "Para tool_name='rag' usa SIEMPRE 'rag'. "
+            + "Para tool_name='workflow' usa SIEMPRE 'workflow'. "
+            + "Si goal=clarify, tool_calls debe ser []. "
+            + "No recrees logica de estado; usa state_json/context_snapshot como fuente canonica. "
+            + "Contrato de salida:\n{router_decision_schema}"
         )
 
     async def resolve_synthesizer_prompt(
@@ -86,7 +92,18 @@ class PromptService:
             node_slug="synthesizer_system",
             vertical_slug=self._ai_vertical_slug(runtime_vertical),
         )
+        style_overlay = await prompt_repository.get_lead_prompt(
+            client_id=tenant_id,
+            slug="primary_chat",
+        )
         base_prompt = lead_prompt or ai_system_prompt or settings.synthesizer_system_prompt_default
+        if style_overlay:
+            base_prompt = (
+                base_prompt
+                + "\n\n"
+                + "Overlay de estilo del tenant (aplica solo tono/forma, no routing ni negocio):\n"
+                + style_overlay
+            )
 
         return (
             f"Tenant={tenant_id or 'default'} | Channel={channel} | Vertical={runtime_vertical}. "
@@ -94,7 +111,8 @@ class PromptService:
             + " "
             + "Contrato: "
             + "{\"text\":\"string\",\"evidence_ids\":[\"id\"],\"needs_cards\":true|false}. "
-            + "No uses claves alternativas ni markdown."
+            + "No uses claves alternativas ni markdown. "
+            + "No agregues logica de negocio ni decisiones de routing; solo sintetiza."
         )
 
     async def resolve_prompts(self, *, tenant_id: str, vertical: str, channel: str) -> PromptBundle:

@@ -13,6 +13,7 @@ from app.models.chat_v2 import (
     InternalMemoryResetResponse,
 )
 from app.services.scoring_orchestrator import ScoringOrchestrator
+from app.services.agent_core_bridge import AgentCoreBridgeError, agent_core_bridge
 from app.dependencies.database import get_db_session
 from app.services.cache_service import cache_service
 from app.core.config import settings
@@ -35,42 +36,23 @@ def _assert_internal_token(request: Request):
 @router.post("/chat", response_model=ChatV2Response)
 async def chat_v2_endpoint(
     request: ChatV2Request,
-    db_session: AsyncSession = Depends(get_db_session)
 ):
     """
-    Principal endpoint para interactuar con el bot v2.
-    
-    Realiza búsqueda semántica, genera respuesta con LLM y scoring configurable.
-    
-    Requerido:
-    - client_id: Tenant para resolver vertical y modelo de scoring
-    
+    Canonical chat endpoint for legacy v2 clients.
+
+    Behavior:
+    - Proxies the request to agent-core runtime (/api/v1/chat).
+    - Preserves ChatV2Response contract for backwards compatibility.
     """
     try:
-        # Initialize orchestrator
-        orchestrator = ScoringOrchestrator(db_session)
-        
-        # Process chat with scoring
-        response = await orchestrator.process_chat(request)
-        
-        return response
-        
-    except ValueError as e:
-        error = str(e)
-        logger.warning(f"Validation error in /api/v2/chat: {error}")
-        if error == "CLIENT_NOT_FOUND":
-            raise HTTPException(status_code=404, detail=error)
-        if error in ("TENANT_VERTICAL_NOT_CONFIGURED", "TENANT_SCORING_MODEL_NOT_CONFIGURED"):
-            raise HTTPException(status_code=422, detail=error)
-        if error.startswith("NO_ACTIVE_VERTICAL_SCORING_MODEL"):
-            raise HTTPException(status_code=404, detail=error)
-        if error.startswith("LLM_ENGINE_NOT_AVAILABLE"):
-            raise HTTPException(status_code=503, detail=error)
-        raise HTTPException(status_code=400, detail=error)
+        return await agent_core_bridge.chat(request)
+    except AgentCoreBridgeError as exc:
+        logger.warning("agent-core chat bridge error status=%s detail=%s", exc.status_code, exc.detail)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception("Unhandled error in /api/v2/chat")
+    except Exception:
+        logger.exception("Unhandled error in /api/v2/chat passthrough")
         raise HTTPException(status_code=500, detail="Internal inference error")
 
 

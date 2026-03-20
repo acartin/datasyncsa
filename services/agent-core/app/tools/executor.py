@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import text
@@ -81,7 +82,7 @@ class ToolExecutor:
             return ToolResult(
                 tool_name=ToolName.rag,
                 status="error",
-                error="missing_rag_query",
+                error="missing_rag_payload",
                 error_code="missing_payload",
             )
         try:
@@ -200,7 +201,21 @@ def _coerce_int(value: Any) -> int:
             return 0
         if isinstance(value, bool):
             return int(value)
-        return int(str(value).replace(",", "").strip())
+        if isinstance(value, int):
+            return value
+        if isinstance(value, Decimal):
+            return int(value)
+
+        cleaned = str(value).replace(",", "").strip()
+        if not cleaned:
+            return 0
+
+        try:
+            return int(cleaned)
+        except ValueError:
+            return int(Decimal(cleaned))
+    except (InvalidOperation, ValueError, TypeError):
+        return 0
     except Exception:
         return 0
 

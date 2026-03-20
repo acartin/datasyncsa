@@ -19,6 +19,7 @@ Estado actual:
 8. `docs/AGENT_CORE_IMPLEMENTATION_PLAN.md`
 9. `docs/AGENT_CORE_PROMPT_SEQUENCE.md`
 10. `docs/AGENT_CORE_PROMPT_STATUS.md`
+11. `docs/AGENT_CORE_LOG_EVAL_RUNNER.md`
 
 ## Objetivo
 

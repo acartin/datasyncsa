@@ -62,8 +62,10 @@ class Settings(BaseSettings):
     
     # Security
     internal_api_token: Optional[str] = os.getenv("INTERNAL_API_TOKEN")
-    
+
     # Logging
+    llm_trace_root: str = os.getenv("LLM_TRACE_ROOT", "/tmp/datasyncsa-llm-trace")
+    llm_trace_enabled: bool = os.getenv("LLM_TRACE_ENABLED", "true").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
     model_config = {

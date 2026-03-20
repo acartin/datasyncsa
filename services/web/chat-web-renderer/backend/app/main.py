@@ -85,7 +85,7 @@ async def dependencies_health():
     return result
 
 from app.core.inference_bridge import InferenceClient
-from app.core.memory_reset import MemoryResetClient
+from app.core.memory_reset import MemoryResetClient, RuntimeMemoryResetError
 from app.core.vertical_router import vertical_router
 from app.transformer.core import SDUITransformer
 from app.transformer.realtor_policy import RealtorRendererPolicy
@@ -182,6 +182,7 @@ async def chat_interaction(req: InternalChatRequest):
         ai_response = await inference_client.chat(user_query=req.message_text, session=session_context)
         
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
+        resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
         if new_conversation_id:
             await session_manager.upsert_session(
                 client_id=client_id,
@@ -189,6 +190,7 @@ async def chat_interaction(req: InternalChatRequest):
                 channel_user_id=channel_user_id,
                 data={
                     "conversation_id": new_conversation_id,
+                    "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
                     "last_interaction": datetime.now(timezone.utc).isoformat(),
                 },
@@ -278,10 +280,23 @@ async def chat_interaction(req: InternalChatRequest):
                 from app.schemas.ui import ChatMessage
                 final_components.append(ChatMessage(text=comp_data.get("text", ""), sender="bot"))
 
+        response_meta = {
+            "conversation_id": str(new_conversation_id or ""),
+            "lead_id": ai_response.get("lead_id"),
+            "intent": ai_response.get("intent"),
+            "scoringStatus": ai_response.get("scoring_status"),
+            "scoringJobId": ai_response.get("scoring_job_id"),
+            "scoringEta": ai_response.get("scoring_eta"),
+        }
+        if ai_response.get("metadata"):
+            response_meta["metadata"] = ai_response.get("metadata")
+        response_meta = {k: v for k, v in response_meta.items() if v is not None}
+
         return SDUIResponse(
             session_id=str(new_conversation_id or "init"),
             branding=branding,
-            components=final_components
+            components=final_components,
+            meta=response_meta,
         )
 
     except ValueError as e:
@@ -314,24 +329,34 @@ def _assert_internal_token(request: Request):
 async def internal_memory_reset(payload: InternalMemoryResetRequest, request: Request):
     """
     Internal endpoint: resets chat memory for a client.
-    Clears bridge session (Redis) and inference conversation memory.
+    Clears bridge session (Redis) and runtime memory in agent-core + scoring-core.
     """
     _assert_internal_token(request)
 
     client_id = str(payload.client_id)
     sessions_deleted = await session_manager.delete_sessions_by_client(client_id=client_id)
     try:
-        inference_result = await memory_reset_client.reset_inference_memory(
+        runtime_results = await memory_reset_client.reset_runtime_memory(
             client_id=client_id,
             reason=payload.reason,
         )
+    except RuntimeMemoryResetError as e:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "runtime_memory_reset_failed",
+                "failures": e.failures,
+                "partial_results": e.partial_results,
+            },
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Inference memory reset failed: {e}") from e
+        raise HTTPException(status_code=502, detail=f"Runtime memory reset failed: {e}") from e
 
     return {
         "status": "ok",
         "client_id": client_id,
         "session_deleted": sessions_deleted > 0,
         "sessions_deleted": sessions_deleted,
-        "inference": inference_result,
+        "resets": runtime_results,
+        "inference": runtime_results.get("agent_core"),  # Backward compatibility.
     }

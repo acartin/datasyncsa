@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-13T03:59:07Z`
+- Generated UTC: `2026-03-13T17:45:40Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `main`
-- Git commit: `9f44094`
+- Git branch: `HETZNER-LOCAL-2026-03-13-next`
+- Git commit: `094f66f`
 - Policy: High-signal only; assets/binarios excluidos.
 
 ## Contexto Maestro
@@ -14,10 +14,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-13T03:59:07Z`
+- Generated UTC: `2026-03-13T17:45:40Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `main`
-- Git commit: `9f44094`
+- Git branch: `HETZNER-LOCAL-2026-03-13-next`
+- Git commit: `094f66f`
 
 ## 1. MAPA DE INTENCIONES (DIRECTORIO)
 
@@ -214,6 +214,9 @@ services:
       - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
       - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+      - SCORING_CORE_URL=http://scoring-core:8000
+      - SCORING_CORE_API_PREFIX=${SCORING_CORE_API_PREFIX:-/api/v1}
+      - SCORING_CORE_TIMEOUT_SECS=${SCORING_CORE_TIMEOUT_SECS:-8}
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
@@ -224,7 +227,44 @@ services:
     networks:
       - internal_network
 
-  # Scoring Core API
+  # Inference Core V2 async scoring worker (persistent jobs)
+  inference-core-v2-worker:
+    build:
+      context: ./services/inference-stack-v2/inference-core-v2
+      dockerfile: Dockerfile
+    profiles: ["legacy"]
+    container_name: ${ENV_PREFIX}-backend-inference-v2-worker
+    restart: always
+    command: ["python", "worker.py"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
+      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
+      - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+      - inference-core-v2
+    networks:
+      - internal_network
+
+  # Scoring Core API (async scoring domain service)
   scoring-core:
     build:
       context: ./services/scoring-core
@@ -251,51 +291,11 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # Scoring Core Worker
-  scoring-core-worker:
-    build:
-      context: ./services/scoring-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
-    restart: always
-    command: ["python", "worker.py"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-      - scoring-core
-    networks:
-      - internal_network
-
-  # Inference Core V2 async scoring worker (persistent jobs)
-  inference-core-v2-worker:
-    build:
-      context: ./services/inference-stack-v2/inference-core-v2
-      dockerfile: Dockerfile
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
 ```
 ### `.env.example`
 
@@ -343,6 +343,15 @@ RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
 RAG_RETRIEVER_V2_TIMEOUT_SECS=10
 RAG_RETRIEVER_V2_RETRIES=2
 RAG_TOP_K=3
+AGENT_CORE_SYNTH_CONTEXT_MAX_CHARS=1800
+AGENT_CORE_SYNTH_STRING_MAX_CHARS=240
+AGENT_CORE_SYNTH_MAX_OUTPUT_TOKENS=900
+AGENT_CORE_SYNTH_RAG_CHUNK_LIMIT=3
+AGENT_CORE_SYNTH_RAG_CHUNK_MAX_CHARS=320
+AGENT_CORE_SYNTH_REALTOR_LISTING_LIMIT=4
+AGENT_CORE_SYNTH_REALTOR_FEATURES_LIMIT=8
+AGENT_CORE_SYNTH_REALTOR_IMAGES_PER_LISTING=1
+AGENT_CORE_SYNTH_WORKFLOW_OUTPUT_ITEMS=8
 CHAT_HISTORY_MAX_MESSAGES=20
 SESSION_TTL_SECONDS=86400
 VERTICAL_CACHE_TTL_SECONDS=300
@@ -361,12 +370,17 @@ SCORING_API_PREFIX=/api/v1
 
 # --- SCORING FEATURE FLAGS ---
 SCORING_BG_ENABLED=true
+SCORING_CORE_API_PREFIX=/api/v1
+SCORING_CORE_TIMEOUT_SECS=8
 SCORING_LLM_TIMEOUT_SECS=60
 SCORING_IDLE_DELAY_SECS=60
 SCORING_IDLE_CLOSE_SECS=60
 SCORING_WORKER_POLL_SECS=2
+SCORING_WORKER_CONCURRENCY=1
 SCORING_JOB_MAX_ATTEMPTS=3
 SCORING_JOB_LOCK_TTL_SECS=120
+SCORING_JOB_DEBOUNCE_SECS=1.5
+SCORING_RETRY_DELAY_SECS=5
 SCORING_ALLOW_HEURISTIC_FALLBACK=false
 SCORING_V2_ENABLED=false
 ADMIN_DYNAMIC_SCORING_UI=false
@@ -384,11 +398,12 @@ TEST_UI_PORT=8089
 PORTAINER_PORT=9000
 ETL_DOCS_PORT=8090
 INFERENCE_V2_PORT=8091
+INFERENCE_V3_PORT=8095
+SCORING_CORE_PORT=8097
 SEMANTIC_V2_PORT=8092
 GENERIC_BRIDGE_V2_PORT=8093
 PROPERTY_BRIDGE_V2_PORT=8094
 AGENT_CORE_PORT=8096
-SCORING_CORE_PORT=8097
 
 # --- EXTERNAL INTEGRATIONS ---
 # External ETL endpoint (required by admin-console ai-library module)
@@ -750,6 +765,8 @@ services/agent-core/app/runtime
 services/agent-core/app/services
 services/agent-core/app/synthesizers
 services/agent-core/app/tools
+services/agent-core/tests
+services/agent-core/tests/unit
 services/database
 services/etl-docs
 services/etl-docs/__pycache__
@@ -767,8 +784,6 @@ services/inference-stack-v2
 services/inference-stack-v2/inference-core-v2
 services/inference-stack-v2/inference-core-v2/__pycache__
 services/inference-stack-v2/inference-core-v2/app
-services/inference-stack-v2/inference-core-v2/migrations
-services/inference-stack-v2/inference-core-v2/scripts
 services/inference-stack-v2/inference-core-v2/tests
 services/inference-stack-v2/inference-core-v3
 services/inference-stack-v2/inference-core-v3/__pycache__
@@ -782,6 +797,7 @@ services/scoring-core
 services/scoring-core/app
 services/scoring-core/app/api
 services/scoring-core/app/core
+services/scoring-core/app/dependencies
 services/scoring-core/app/models
 services/scoring-core/app/repositories
 services/scoring-core/app/services
@@ -800,7 +816,6 @@ services/web/datasyncsa/js
 services/web/tests
 services/web/tests/assets
 tests
-tests/fixtures-shared
 tests/sandbox
 tests/sandbox/__pycache__
 tests/sandbox/dentist
@@ -808,7 +823,6 @@ tests/sandbox/dentist/__pycache__
 tests/sandbox/realtor
 tests/sandbox/realtor/__pycache__
 tests/scripts
-tests/smoke-stack
 tests/system
 tests/system/__pycache__
 ```
@@ -825,9 +839,29 @@ services/agent-core/main.py:6:app.include_router(api_router)
 services/property-bridge-v2/main.py:35:app = FastAPI(
 services/property-bridge-v2/main.py:353:if __name__ == "__main__":
 services/property-bridge-v2/main.py:359:    uvicorn.run(
+services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
+services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
+services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
+services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
+services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
+services/inference-stack-v2/inference-core-v3/main.py:44:app = FastAPI(
+services/inference-stack-v2/inference-core-v3/main.py:59:app.include_router(chat_v3_router, prefix=settings.api_prefix, tags=["chat-v3"])
+services/inference-stack-v2/inference-core-v3/main.py:72:if __name__ == "__main__":
+services/inference-stack-v2/inference-core-v3/main.py:73:    uvicorn.run(
 services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
+services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
+services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
+services/inference-stack-v2/semantic-adapter-v2/main.py:54:    uvicorn.run(app, host="0.0.0.0", port=8000)
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/scoring-core/worker.py:31:if __name__ == "__main__":
+services/scoring-core/main.py:44:app = FastAPI(
+services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
+services/scoring-core/main.py:72:if __name__ == "__main__":
+services/scoring-core/main.py:73:    uvicorn.run(
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
@@ -855,23 +889,6 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
-services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
-services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
-services/inference-stack-v2/inference-core-v3/main.py:44:app = FastAPI(
-services/inference-stack-v2/inference-core-v3/main.py:59:app.include_router(chat_v3_router, prefix=settings.api_prefix, tags=["chat-v3"])
-services/inference-stack-v2/inference-core-v3/main.py:72:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v3/main.py:73:    uvicorn.run(
-services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
-services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
-services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
-services/inference-stack-v2/semantic-adapter-v2/main.py:54:    uvicorn.run(app, host="0.0.0.0", port=8000)
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
-services/scoring-core/worker.py:17:if __name__ == "__main__":
-services/scoring-core/main.py:4:app = FastAPI(title="scoring-core")
 ```
 
 ## Rutas API Detectadas
@@ -879,7 +896,7 @@ services/scoring-core/main.py:4:app = FastAPI(title="scoring-core")
 ```text
 services/agent-core/app/api/chat.py:140:@router.get("/health")
 services/agent-core/app/api/chat.py:145:@router.post("/chat", response_model=ChatResponse)
-services/agent-core/app/api/chat.py:188:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/agent-core/app/api/chat.py:192:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
@@ -890,13 +907,22 @@ services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.pos
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:241:@router.get("/health")
 services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:261:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:267:@router.get("/health")
+services/web/chat-web-renderer/backend/app/api/external.py:257:@router.get("/health")
 services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:32:@router.post("/chat", response_model=ChatV3Response)
 services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:51:@router.get("/health")
 services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:61:@router.post("/cache/invalidate", response_model=CacheInvalidateResponse)
 services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:83:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
 services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
+services/scoring-core/app/api/scoring.py:50:@router.post("/scoring/jobs/enqueue", response_model=EnqueueScoreJobResponse)
+services/scoring-core/app/api/scoring.py:73:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
+services/scoring-core/app/api/scoring.py:92:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
+services/scoring-core/app/api/scoring.py:111:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
+services/scoring-core/app/api/scoring.py:135:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
+services/scoring-core/app/api/scoring.py:162:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
+services/scoring-core/app/api/scoring.py:202:@router.post("/cache/invalidate", response_model=CacheInvalidateResponse)
+services/scoring-core/app/api/scoring.py:230:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/scoring-core/app/api/scoring.py:253:@router.get("/health")
 services/web/admin-console/backend/app/modules/contacts/router.py:225:@router.get("/contacts", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/contacts/router.py:355:@router.get("/contacts/data", response_model=List[schemas.ContactGridRow])
 services/web/admin-console/backend/app/modules/contacts/router.py:374:@router.get("/contacts/channels/data", response_model=List[schemas.ContactChannelListRow])
@@ -1023,6 +1049,17 @@ services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router
 ## Contratos/Modelos Críticos
 
 ```text
+services/scoring-core/app/models/contracts.py:9:class ScoreConversationRequest(BaseModel):
+services/scoring-core/app/models/contracts.py:31:class EnqueueScoreJobResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:39:class ScoringJobResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:63:class ScoringOpsSummaryResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:82:class ScoreItemV2(BaseModel):
+services/scoring-core/app/models/contracts.py:90:class ScorecardV2(BaseModel):
+services/scoring-core/app/models/contracts.py:99:class ScorecardResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:117:class ActiveModelResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:126:class InternalMemoryResetRequest(BaseModel):
+services/scoring-core/app/models/contracts.py:136:class InternalMemoryResetResponse(BaseModel):
+services/scoring-core/app/models/contracts.py:143:class CacheInvalidateResponse(BaseModel):
 services/agent-core/app/models/contracts.py:23:class RealtorSearchSlots(BaseModel):
 services/agent-core/app/models/contracts.py:36:class RAGQuery(BaseModel):
 services/agent-core/app/models/contracts.py:42:class WorkflowCall(BaseModel):
@@ -1042,6 +1079,14 @@ services/agent-core/app/models/contracts.py:191:class SynthesizerInput(BaseModel
 services/agent-core/app/models/contracts.py:198:class SynthesizerOutput(BaseModel):
 services/agent-core/app/models/contracts.py:211:class GuardrailResult(BaseModel):
 services/agent-core/app/models/contracts.py:222:class AnswerEnvelope(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:4:class BaseComponent(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:52:class BrandingConfig(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/ui.py:77:class SDUIResponse(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:10:class InternalChatRequest(BaseModel):
+services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:45:class InternalChatResponse(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
 services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
@@ -1054,16 +1099,6 @@ services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class Scor
 services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
 services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:86:class ScoringJobResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:114:class ScoringOpsSummaryResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:137:class ScorecardResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:159:class ActiveModelResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:172:class InternalMemoryResetRequest(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:177:class InternalMemoryResetResponse(BaseModel):
 services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
 services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
 services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
@@ -1074,23 +1109,50 @@ services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
 services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
 services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
 services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:4:class BaseComponent(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:52:class BrandingConfig(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:77:class SDUIResponse(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:10:class InternalChatRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:45:class InternalChatResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:86:class ScoringJobResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:114:class ScoringOpsSummaryResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:137:class ScorecardResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:159:class ActiveModelResponse(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:172:class InternalMemoryResetRequest(BaseModel):
+services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:177:class InternalMemoryResetResponse(BaseModel):
 ```
 
 ## Tablas/SQL Referenciadas (DB Map)
 
 ```text
+services/agent-core/app/api/chat.py -> lead_id
+services/agent-core/app/core/prompt_service.py -> ai_system_prompt
+services/agent-core/app/core/prompt_service.py -> ai_vertical_slug
+services/agent-core/app/core/prompt_service.py -> lead_prompt
 services/agent-core/app/graph/nodes.py -> lead_id
+services/agent-core/app/graph/state.py -> lead_id
+services/agent-core/app/repositories/persistence.py -> lead_belongs_to_tenant
+services/agent-core/app/repositories/persistence.py -> lead_by_conversation_id
+services/agent-core/app/repositories/persistence.py -> lead_conversations
+services/agent-core/app/repositories/persistence.py -> lead_failed
+services/agent-core/app/repositories/persistence.py -> lead_id
+services/agent-core/app/repositories/persistence.py -> lead_increment
+services/agent-core/app/repositories/persistence.py -> lead_leads
+services/agent-core/app/repositories/persistence.py -> lead_messages
+services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompt
+services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompt_failed
+services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompts
+services/agent-core/app/repositories/prompt_repository.py -> lead_ai_prompts
+services/agent-core/app/repositories/prompt_repository.py -> lead_client_verticals
+services/agent-core/app/repositories/prompt_repository.py -> lead_clients
+services/agent-core/app/repositories/prompt_repository.py -> lead_prompt
+services/agent-core/app/repositories/prompt_repository.py -> lead_prompt_failed
 services/agent-core/app/services/scoring_client.py -> lead_id
 services/agent-core/app/services/scoring_client.py -> lead_id_required
 services/agent-core/app/tools/sql_translator.py -> lead_properties
+services/agent-core/app/tools/sql_translator.py -> lead_property_images
+services/agent-core/tests/unit/test_no_hardcoded_realtor_copy.py -> ai_system_prompt
+services/agent-core/tests/unit/test_no_hardcoded_realtor_copy.py -> lead_prompt
+services/agent-core/tests/unit/test_synthesizer_payload_compaction.py -> lead_properties
 services/etl-docs/src/ETL_DOCS/processor.py -> ai_vectors
 services/etl-docs/src/shared/vector_store.py -> ai_knowledge_documents
 services/etl-docs/src/shared/vector_store.py -> ai_vectors
@@ -1169,7 +1231,6 @@ services/inference-stack-v2/inference-core-v3/app/graph/builder.py -> lead_state
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_followup_planner
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_followup_planner_node
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_messages
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_name
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_progression_state
 services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_snapshot
@@ -1203,6 +1264,7 @@ services/inference-stack-v2/inference-core-v3/app/services/realtor_search_execut
 services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_properties
 services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_property_images
 services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_propierties
+services/inference-stack-v2/inference-core-v3/app/services/scoring_client.py -> lead_id
 services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> ai_system_prompt_bundle
 services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> ai_system_prompts
 services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> lead_ai_prompts
@@ -1238,6 +1300,53 @@ services/inference-stack-v2/inference-core-v3/tests/unit/test_vertical_runtime_r
 services/inference-stack-v2/inference-core-v3/tests/unit/test_vertical_runtime_repository.py -> lead_reuses_existing_conversation_lead
 services/inference-stack-v2/semantic-adapter-v2/app/vector_repo.py -> ai_vectors
 services/property-bridge-v2/main.py -> lead_scoring
+services/scoring-core/app/api/scoring.py -> lead_id
+services/scoring-core/app/api/scoring.py -> lead_snapshot
+services/scoring-core/app/dependencies/database.py -> lead_id
+services/scoring-core/app/dependencies/database.py -> lead_leads
+services/scoring-core/app/dependencies/database.py -> lead_messages
+services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs
+services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_conversation
+services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_lead_created
+services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_status
+services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_status_scheduled
+services/scoring-core/app/models/contracts.py -> lead_id
+services/scoring-core/app/models/contracts.py -> lead_messages
+services/scoring-core/app/repositories/scoring_repository.py -> lead_ai_prompts
+services/scoring-core/app/repositories/scoring_repository.py -> lead_by_conversation_id
+services/scoring-core/app/repositories/scoring_repository.py -> lead_client_verticals
+services/scoring-core/app/repositories/scoring_repository.py -> lead_clients
+services/scoring-core/app/repositories/scoring_repository.py -> lead_conversation
+services/scoring-core/app/repositories/scoring_repository.py -> lead_conversations
+services/scoring-core/app/repositories/scoring_repository.py -> lead_count
+services/scoring-core/app/repositories/scoring_repository.py -> lead_current_scorecard
+services/scoring-core/app/repositories/scoring_repository.py -> lead_from_extraction
+services/scoring-core/app/repositories/scoring_repository.py -> lead_id
+services/scoring-core/app/repositories/scoring_repository.py -> lead_leads
+services/scoring-core/app/repositories/scoring_repository.py -> lead_lock_stmt
+services/scoring-core/app/repositories/scoring_repository.py -> lead_messages
+services/scoring-core/app/repositories/scoring_repository.py -> lead_row
+services/scoring-core/app/repositories/scoring_repository.py -> lead_score_items
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scorecards
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_bands
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_criteria
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_jobs
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_models
+services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_prompts
+services/scoring-core/app/repositories/scoring_repository.py -> lead_snapshot
+services/scoring-core/app/services/prompt_builder.py -> lead_scoring_bands
+services/scoring-core/app/services/prompt_builder.py -> lead_scoring_criteria
+services/scoring-core/app/services/prompt_linter.py -> lead_type
+services/scoring-core/app/services/scoring_job_service.py -> lead_id
+services/scoring-core/app/services/scoring_job_service.py -> lead_messages
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_by_conversation_id
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_current_scorecard
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_from_extraction
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_id
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_messages
+services/scoring-core/app/services/scoring_orchestrator.py -> lead_snapshot
+services/scoring-core/app/services/scoring_worker.py -> lead_id
+services/scoring-core/app/services/scoring_worker.py -> lead_messages
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard_v2_clone
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema_v2_clone
@@ -1968,6 +2077,7 @@ class SDUIResponse(BaseModel):
 ```
 import logging
 import asyncio
+import re
 from typing import Dict, Any, List, Union
 from app.schemas.ui import (
     SDUIResponse, ChatMessage, PropertyCard, PropertyGrid, 
@@ -2040,6 +2150,29 @@ class SDUITransformer:
             branding=branding,
             components=components
         )
+
+    def parse_canonical_components(self, canonical_components: List[Dict[str, Any]]) -> List[BaseComponent]:
+        components: List[BaseComponent] = []
+        for payload in canonical_components or []:
+            if not isinstance(payload, dict):
+                continue
+            card_type = str(payload.get("card_type") or "").strip().lower()
+            comp_type = str(payload.get("type") or "").strip().lower()
+
+            # Agent-core realtor cards arrive as card_type=property_card.
+            if card_type == "property_card" or comp_type == "property-card":
+                card = self._map_agent_core_property_card(payload)
+                if card:
+                    components.append(card)
+                continue
+
+            if comp_type == "chat":
+                text = str(payload.get("text") or "").strip()
+                if text:
+                    components.append(ChatMessage(text=text, sender="bot"))
+                continue
+
+        return components
 
     async def _get_branding_for_client(self, client_id: str, brand_project: Union[str, None]) -> BrandingConfig:
         """
@@ -2161,6 +2294,7 @@ class SDUITransformer:
         except Exception as e:
             logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
             return None
+
 ```
 ### `services/web/chat-web-renderer/frontend/core/renderer.js`
 
@@ -2712,6 +2846,7 @@ from app.repositories.persistence import runtime_repository
 from app.runtime.answer_guardrail import run_answer_guardrail
 from app.runtime.policy_gate import run_policy_gate
 from app.services.scoring_client import scoring_client
+from app.core.prompt_service import prompt_service
 from app.tools.executor import tool_executor
 from app.synthesizers.synthesizer_service import synthesizer_service
 from app.graph.state import AgentCoreState
@@ -2724,7 +2859,49 @@ def _timing(state: AgentCoreState, node_name: str, started: float) -> dict[str, 
     return {"node_timings_ms": timings}
 
 
-def normalize_input(state: AgentCoreState) -> dict[str, Any]:
+def _fallback_synthesizer_output(
+    *,
+    goal: GoalType,
+    tool_results: list[ToolResult],
+) -> SynthesizerOutput:
+    if goal in {GoalType.realtor_search, GoalType.realtor_refine}:
+        for result in tool_results:
+            if result.status != "ok" or result.realtor is None:
+                continue
+            listings = result.realtor.listings
+            if listings:
+                evidence_ids = [item.listing_id for item in listings[:3] if item.listing_id]
+                return SynthesizerOutput(
+                    text="Te comparto propiedades para que las revises.",
+                    evidence_ids=evidence_ids,
+                    needs_cards=True,
+                )
+        return SynthesizerOutput(
+            text="No encontré propiedades con esos criterios. Si quieres, afinamos zona, tipo o presupuesto.",
+            evidence_ids=[],
+            needs_cards=False,
+        )
+
+    if goal == GoalType.rag:
+        for result in tool_results:
+            if result.status != "ok" or result.rag is None:
+                continue
+            chunk_ids = [chunk.chunk_id for chunk in result.rag.chunks[:3] if chunk.chunk_id]
+            if chunk_ids:
+                return SynthesizerOutput(
+                    text="Encontré información relevante en los documentos y ya te la comparto.",
+                    evidence_ids=chunk_ids,
+                    needs_cards=False,
+                )
+
+    return SynthesizerOutput(
+        text="No pude sintetizar la respuesta en este momento, pero ya ejecuté la consulta solicitada.",
+        evidence_ids=[],
+        needs_cards=bool(tool_results),
+    )
+
+
+async def normalize_input(state: AgentCoreState) -> dict[str, Any]:
     started = time.perf_counter()
     raw = state.get("raw_input", {})
     if not isinstance(raw, dict):
@@ -2737,7 +2914,11 @@ def normalize_input(state: AgentCoreState) -> dict[str, Any]:
     )
     tenant_id = raw.get("tenant_id") or raw.get("clientId") or raw.get("client_id")
     channel = raw.get("channel") or "web_html"
-    vertical = str(raw.get("vertical") or "generic").strip() or "generic"
+    requested_vertical = str(raw.get("vertical") or "").strip() or "generic"
+    vertical = await prompt_service.resolve_runtime_vertical(
+        tenant_id=str(tenant_id) if tenant_id else None,
+        requested_vertical=requested_vertical,
+    )
 
     normalized_input = {
         "conversation_summary": str(raw.get("queryText") or raw.get("text") or "").strip(),
@@ -2846,67 +3027,20 @@ async def execute_tools(state: AgentCoreState) -> dict[str, Any]:
     started = time.perf_counter()
     raw_input = state.get("raw_input") or {}
     tenant_id = str(raw_input.get("tenant_id") or raw_input.get("clientId") or raw_input.get("client_id") or "default")
+    vertical = str((state.get("normalized_input") or {}).get("vertical") or "generic")
     decision = state.get("router_decision")
     if not decision:
         return {"tool_results": [], **_timing(state, "execute_tools", started)}
     calls = decision.tool_calls
     if not calls:
         return {"tool_results": [], **_timing(state, "execute_tools", started)}
-    results: list[ToolResult] = await tool_executor.execute_all(tenant_id=tenant_id, calls=calls)
+    results: list[ToolResult] = await tool_executor.execute_all(
+        tenant_id=tenant_id,
+        vertical=vertical,
+        calls=calls,
+    )
     return {"tool_results": results, **_timing(state, "execute_tools", started)}
 
-
-async def synthesize(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    raw_input = state.get("raw_input") or {}
-    decision = state.get("router_decision")
-    tool_results = state.get("tool_results") or []
-    normalized = state.get("normalized_input") or {}
-    if not isinstance(tool_results, list):
-        tool_results = []
-
-    if not isinstance(decision, RouterDecision):
-        decision = RouterDecision(
-            goal=GoalType.answer,
-            confidence=0.0,
-            tool_calls=[],
-            missing_slots=[],
-        )
-
-    try:
-        output = await synthesizer_service.run(
-            tenant_id=str(raw_input.get("tenant_id") or raw_input.get("clientId") or raw_input.get("client_id") or "default"),
-            raw_input=raw_input,
-            tool_results=tool_results,
-            response_mode=decision.response_mode,
-            context_snapshot={
-                "conversation_summary": normalized.get("conversation_summary", ""),
-                "vertical": normalized.get("vertical", "generic"),
-                "conversation_state": normalized.get("conversation_state", {}),
-                "last_user_turn": normalized.get("last_user_turn", ""),
-            },
-        )
-        return {
-            **_timing(state, "synthesize", started),
-            "synthesizer_output": output,
-        }
-    except Exception as exc:
-        output = SynthesizerOutput(
-            text="",
-            evidence_ids=[],
-            needs_cards=bool(tool_results),
-        )
-        return {
-            **_timing(state, "synthesize", started),
-            "synthesizer_output": output,
-            "errors": [str(exc)],
-        }
-
-
-def answer_guardrail(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    decision = state.get("router_decision")
-    tool_results = state.get("tool_results") or []
 ```
 ### `services/agent-core/app/planners/planner_service.py`
 
@@ -2919,6 +3053,7 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.llm_client import llm_service
+from app.core.llm_contract_normalizer import normalize_router_decision
 from app.core.prompt_service import prompt_service
 from app.models.contracts import RouterDecision
 
@@ -2935,7 +3070,7 @@ class PlannerService:
         vertical = str(raw_input.get("vertical") or normalized_input.get("vertical") or "generic").strip()
         channel = str(raw_input.get("channel") or "web_html").strip()
 
-        prompts = prompt_service.resolve_prompts(
+        prompts = await prompt_service.resolve_prompts(
             tenant_id=tenant_id,
             vertical=vertical,
             channel=channel,
@@ -2968,13 +3103,10 @@ class PlannerService:
             temperature=0.1,
             max_output_tokens=settings.llm_max_output_tokens,
         )
-        if isinstance(raw.get("RouterDecision"), dict):
-            raw = raw["RouterDecision"]
-        elif isinstance(raw.get("router_decision"), dict):
-            raw = raw["router_decision"]
+        normalized = normalize_router_decision(raw)
 
         try:
-            return RouterDecision.model_validate(raw)
+            return RouterDecision.model_validate(normalized)
         except ValidationError as exc:
             raise ValueError(f"planner_output_invalid:{exc}") from exc
 
@@ -2986,16 +3118,167 @@ planner_service = PlannerService()
 ```
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from app.core.config import settings
 from app.core.llm_client import llm_service
+from app.core.llm_contract_normalizer import normalize_synthesizer_output
 from app.core.prompt_service import prompt_service
 from app.models.contracts import (
+    PropertyListing,
+    RAGChunk,
+    RAGResult,
+    RealtorSQLResult,
     SynthesizerInput,
     SynthesizerOutput,
     ToolResult,
+    WorkflowResult,
 )
+
+
+def _truncate_text(value: Any, *, max_chars: int) -> str:
+    text = str(value or "").strip()
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    if max_chars <= 3:
+        return text[:max_chars]
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _compact_value(value: Any, *, max_chars: int) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return _truncate_text(value, max_chars=max_chars)
+    if isinstance(value, (dict, list)):
+        try:
+            packed = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except Exception:
+            packed = str(value)
+        return _truncate_text(packed, max_chars=max_chars)
+    return _truncate_text(value, max_chars=max_chars)
+
+
+def _compact_workflow_output(output: dict[str, Any], *, max_items: int, max_chars: int) -> dict[str, Any]:
+    if not isinstance(output, dict) or not output:
+        return {}
+
+    compacted: dict[str, Any] = {}
+    for idx, (raw_key, raw_value) in enumerate(output.items()):
+        if idx >= max_items:
+            break
+        key = _truncate_text(raw_key, max_chars=max_chars) or f"item_{idx}"
+        compacted[key] = _compact_value(raw_value, max_chars=max_chars)
+    return compacted
+
+
+def _compact_context_snapshot(context_snapshot: dict[str, Any]) -> str:
+    max_chars = max(300, int(settings.synth_context_max_chars))
+    summary_limit = max(120, max_chars // 3)
+    state_limit = max(120, max_chars // 2)
+
+    compacted = {
+        "conversation_summary": _truncate_text(
+            context_snapshot.get("conversation_summary"),
+            max_chars=summary_limit,
+        ),
+        "vertical": _truncate_text(context_snapshot.get("vertical"), max_chars=64),
+        "last_user_turn": _truncate_text(
+            context_snapshot.get("last_user_turn"),
+            max_chars=summary_limit,
+        ),
+        "conversation_state": _compact_value(
+            context_snapshot.get("conversation_state"),
+            max_chars=state_limit,
+        ),
+    }
+
+    serialized = json.dumps(compacted, ensure_ascii=False, separators=(",", ":"))
+    return _truncate_text(serialized, max_chars=max_chars)
+
+
+def _compact_tool_results(tool_results: list[ToolResult]) -> list[ToolResult]:
+    string_max_chars = max(40, int(settings.synth_string_max_chars))
+    rag_chunk_limit = max(1, int(settings.synth_rag_chunk_limit))
+    rag_chunk_max_chars = max(80, int(settings.synth_rag_chunk_max_chars))
+    realtor_listing_limit = max(1, int(settings.synth_realtor_listing_limit))
+    realtor_features_limit = max(0, int(settings.synth_realtor_features_limit))
+    realtor_images_limit = max(0, int(settings.synth_realtor_images_per_listing))
+    workflow_output_items = max(1, int(settings.synth_workflow_output_items))
+
+    compacted_results: list[ToolResult] = []
+    for result in tool_results:
+        compacted = ToolResult(
+            tool_name=result.tool_name,
+            status=result.status,
+            error_code=result.error_code,
+            error=_truncate_text(result.error, max_chars=string_max_chars) or None,
+        )
+
+        if result.rag is not None:
+            rag_chunks: list[RAGChunk] = []
+            for chunk in result.rag.chunks[:rag_chunk_limit]:
+                rag_chunks.append(
+                    RAGChunk(
+                        chunk_id=_truncate_text(chunk.chunk_id, max_chars=string_max_chars),
+                        doc_id=_truncate_text(chunk.doc_id, max_chars=string_max_chars),
+                        content=_truncate_text(chunk.content, max_chars=rag_chunk_max_chars),
+                        score=float(chunk.score),
+                        source_url=_truncate_text(chunk.source_url, max_chars=string_max_chars * 3) or None,
+                    )
+                )
+            compacted.rag = RAGResult(
+                chunks=rag_chunks,
+                query_used=_truncate_text(result.rag.query_used, max_chars=string_max_chars),
+            )
+
+        if result.realtor is not None:
+            listings: list[PropertyListing] = []
+            for listing in result.realtor.listings[:realtor_listing_limit]:
+                listings.append(
+                    PropertyListing(
+                        listing_id=_truncate_text(listing.listing_id, max_chars=string_max_chars),
+                        title=_truncate_text(listing.title, max_chars=string_max_chars * 2),
+                        city=_truncate_text(listing.city, max_chars=string_max_chars),
+                        neighborhood=_truncate_text(listing.neighborhood, max_chars=string_max_chars) or None,
+                        price=int(listing.price),
+                        currency=_truncate_text(listing.currency, max_chars=12) or "USD",
+                        rooms=listing.rooms,
+                        area_m2=listing.area_m2,
+                        property_type=_truncate_text(listing.property_type, max_chars=string_max_chars) or "generic",
+                        features=[
+                            _truncate_text(feature, max_chars=string_max_chars)
+                            for feature in listing.features[:realtor_features_limit]
+                        ],
+                        image_urls=[
+                            _truncate_text(url, max_chars=string_max_chars * 3)
+                            for url in listing.image_urls[:realtor_images_limit]
+                        ],
+                        listing_url=_truncate_text(listing.listing_url, max_chars=string_max_chars * 3) or None,
+                    )
+                )
+            compacted.realtor = RealtorSQLResult(
+                listings=listings,
+                total_found=int(result.realtor.total_found),
+                sql_executed="",
+                slots_used=result.realtor.slots_used,
+            )
+
+        if result.workflow is not None:
+            compacted.workflow = WorkflowResult(
+                workflow_name=_truncate_text(result.workflow.workflow_name, max_chars=string_max_chars),
+                success=bool(result.workflow.success),
+                output=_compact_workflow_output(
+                    result.workflow.output,
+                    max_items=workflow_output_items,
+                    max_chars=string_max_chars,
+                ),
+            )
+
+        compacted_results.append(compacted)
+
+    return compacted_results
 
 
 class SynthesizerService:
@@ -3012,27 +3295,29 @@ class SynthesizerService:
         vertical = str(raw_input.get("vertical") or "generic").strip()
         tenant = str(tenant_id or raw_input.get("tenant_id") or "default").strip()
 
-        prompts = prompt_service.resolve_prompts(
+        prompts = await prompt_service.resolve_prompts(
             tenant_id=tenant,
             vertical=vertical,
             channel=channel,
         )
 
+        compacted_results = _compact_tool_results(tool_results)
         synth_input = SynthesizerInput(
-            context_snapshot=str(context_snapshot),
-            tool_results=tool_results,
+            context_snapshot=_compact_context_snapshot(context_snapshot),
+            tool_results=compacted_results,
             response_mode=response_mode,
             tenant_tone=str(raw_input.get("tenant_tone") or "formal"),
         )
 
-        payload = synth_input.model_dump()
+        payload = synth_input.model_dump(mode="json")
         raw = await llm_service.generate_json(
             system_instruction=prompts.synthesizer_system_prompt,
             payload=payload,
             temperature=0.2,
-            max_output_tokens=settings.llm_max_output_tokens,
+            max_output_tokens=max(256, int(settings.synth_max_output_tokens)),
         )
-        return SynthesizerOutput.model_validate(raw)
+        normalized = normalize_synthesizer_output(raw)
+        return SynthesizerOutput.model_validate(normalized)
 
 
 synthesizer_service = SynthesizerService()
@@ -3043,9 +3328,10 @@ synthesizer_service = SynthesizerService()
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable
+from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
 from app.models.contracts import (
@@ -3057,6 +3343,8 @@ from app.models.contracts import (
     ToolName,
     ToolResult,
 )
+from app.runtime.runtime_registry import get_tool_registry_config
+from app.tools.canonical_property_contract import canonical_feature_keys
 from app.tools.rag_client import rag_client
 from app.tools.sql_translator import slots_to_sql
 from app.tools.workflow_executor import workflow_executor
@@ -3064,9 +3352,38 @@ from app.tools.workflow_executor import workflow_executor
 
 class ToolExecutor:
     def __init__(self, database_url: str | None = None) -> None:
-        self.database_url = database_url or settings.database_url
+        self.database_url = _to_asyncpg_url(database_url or settings.database_url)
+        self._engine = create_async_engine(self.database_url, pool_pre_ping=True)
 
-    async def execute(self, *, tenant_id: str, call: ToolCall) -> ToolResult:
+    async def execute(self, *, tenant_id: str, vertical: str, call: ToolCall) -> ToolResult:
+        try:
+            registry = get_tool_registry_config()
+        except Exception:
+            return ToolResult(
+                tool_name=call.tool_name,
+                status="error",
+                error_code="tool_registry_unavailable",
+                error="tool registry unavailable",
+            )
+
+        if call.tool_name not in registry.tool_specs:
+            return ToolResult(
+                tool_name=call.tool_name,
+                status="error",
+                error_code="tool_not_registered",
+                error="tool not registered in runtime registry",
+            )
+
+        vertical_key = vertical.lower().strip() if vertical else "generic"
+        vertical_config = registry.verticals.get(vertical_key) or registry.verticals.get("generic")
+        if vertical_config is None or call.tool_name not in vertical_config.enabled_tools:
+            return ToolResult(
+                tool_name=call.tool_name,
+                status="error",
+                error_code="tool_not_enabled_for_vertical",
+                error="tool not enabled for vertical",
+            )
+
         if call.tool_name == ToolName.rag:
             return await self._run_rag(tenant_id, call.rag)
         if call.tool_name == ToolName.realtor_sql:
@@ -3080,10 +3397,10 @@ class ToolExecutor:
             error="Unsupported tool",
         )
 
-    async def execute_all(self, tenant_id: str, calls: list[ToolCall]) -> list[ToolResult]:
+    async def execute_all(self, tenant_id: str, vertical: str, calls: list[ToolCall]) -> list[ToolResult]:
         results: list[ToolResult] = []
         for call in calls:
-            results.append(await self.execute(tenant_id=tenant_id, call=call))
+            results.append(await self.execute(tenant_id=tenant_id, vertical=vertical, call=call))
         return results
 
     async def _run_rag(self, tenant_id: str, payload: RAGQuery | None) -> ToolResult:
@@ -3115,14 +3432,18 @@ class ToolExecutor:
             )
         try:
             sql, params = slots_to_sql.compile(tenant_id=tenant_id, slots=payload.model_dump())
-            engine = create_engine(self.database_url, future=True)
             rows = []
             total = 0
-            with engine.connect() as connection:
-                rows_raw = connection.execute(text(sql), params).mappings().all()
+            async with self._engine.connect() as connection:
+                rows_raw = (await connection.execute(text(sql), params)).mappings().all()
                 total = len(rows_raw)
                 for row in rows_raw:
-                    rows.append(self._normalize_row(dict(row)))
+                    rows.append(
+                        self._normalize_row(
+                            dict(row),
+                            requested_property_type=payload.property_type,
+                        )
+                    )
             result = RealtorSQLResult(
                 listings=rows,
                 total_found=total,
@@ -3162,17 +3483,25 @@ class ToolExecutor:
                 error=str(exc),
             )
 
-    def _normalize_row(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_row(self, row: dict[str, Any], requested_property_type: str | None = None) -> dict[str, Any]:
+        feature_keys = canonical_feature_keys()
+        features_payload = _parse_json_object(row.get("features_json") or row.get("features"))
+        address = str(row.get("address_street") or "") or str(features_payload.get(feature_keys["address"]) or "")
+
         listing_id = str(row.get("listing_id") or row.get("id") or "")
         title = str(row.get("title") or "")
-        city = str(row.get("city") or "")
-        neighborhood = row.get("neighborhood")
+        city = address
+        neighborhood = None
         price = _coerce_int(row.get("price"))
         currency = str(row.get("currency") or "USD")
-        rooms = _coerce_int(row.get("rooms"))
-        area_m2 = _coerce_float(row.get("area_m2"))
-        property_type = str(row.get("property_type") or "generic")
-        raw_features = row.get("features_json") or row.get("features") or []
+        rooms = _coerce_int(features_payload.get(feature_keys["bedrooms_clean"]))
+        area_m2 = _coerce_float(features_payload.get(feature_keys["sqm_clean"]))
+        property_type = str(
+            features_payload.get("property_type")
+            or requested_property_type
+            or "generic"
+        )
+        raw_features = features_payload.get(feature_keys["amenities"]) or []
         raw_images = row.get("image_urls") or []
         listing_url = row.get("listing_url")
 
@@ -3216,16 +3545,6 @@ def _parse_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value if str(item).strip()]
     if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-            if isinstance(parsed, list):
-                return [str(item) for item in parsed if str(item).strip()]
-        except Exception:
-            pass
-    return []
-
-
-tool_executor = ToolExecutor()
 ```
 ### `services/agent-core/app/tools/rag_client.py`
 
@@ -3281,65 +3600,49 @@ rag_client = RAGClient()
 from __future__ import annotations
 
 from app.core.config import settings
-from app.models.contracts import GateRejectCode, GateResult, GoalType, RouterDecision, ToolCall
-
-
-_GOAL_TOOL_REQUIREMENTS = {
-    GoalType.realtor_search: {"realtor_sql"},
-    GoalType.realtor_refine: {"realtor_sql"},
-    GoalType.rag: {"rag"},
-    GoalType.workflow: {"workflow"},
-    GoalType.answer: set(),
-    GoalType.clarify: set(),
-}
-
-_VERTICAL_ALLOW = {
-    "generic": {
-        "goals": {GoalType.answer, GoalType.clarify, GoalType.rag, GoalType.workflow},
-        "tools": {"rag", "workflow"},
-    },
-    "realtor": {
-        "goals": {
-            GoalType.clarify,
-            GoalType.rag,
-            GoalType.realtor_search,
-            GoalType.realtor_refine,
-            GoalType.workflow,
-            GoalType.answer,
-        },
-        "tools": {"rag", "realtor_sql", "workflow"},
-    },
-}
+from app.models.contracts import GateRejectCode, GateResult, GoalType, RouterDecision, ToolName
+from app.runtime.runtime_registry import get_policy_gate_config
 
 
 def run_policy_gate(decision: RouterDecision, tenant_id: str | None, vertical: str) -> GateResult:
     if settings.allowed_tenants and tenant_id and tenant_id not in settings.allowed_tenants:
         return GateResult(accepted=False, reject_code=GateRejectCode.tenant_not_authorized)
 
-    if decision.confidence < settings.policy_min_confidence:
+    try:
+        gate_policy = get_policy_gate_config()
+    except Exception:
+        return GateResult(accepted=False, reject_code=GateRejectCode.schema_invalid)
+
+    min_confidence = gate_policy.defaults.min_confidence
+    max_tool_calls = gate_policy.defaults.max_tool_calls
+    allow_side_effects = gate_policy.defaults.allow_side_effects
+
+    if decision.confidence < min_confidence:
         return GateResult(accepted=False, reject_code=GateRejectCode.confidence_too_low)
 
-    if len(decision.tool_calls) > settings.policy_max_tool_calls:
+    if len(decision.tool_calls) > max_tool_calls:
         return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
 
     vertical_key = vertical.lower() if vertical else "generic"
-    policy = _VERTICAL_ALLOW.get(vertical_key, _VERTICAL_ALLOW["generic"])
+    policy = gate_policy.verticals.get(vertical_key) or gate_policy.verticals.get("generic")
+    if policy is None:
+        return GateResult(accepted=False, reject_code=GateRejectCode.schema_invalid)
 
-    if decision.goal not in policy["goals"]:
+    if decision.goal not in policy.allowed_goals:
         return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
 
     for tool_call in decision.tool_calls:
-        if tool_call.tool_name not in policy["tools"]:
+        if tool_call.tool_name not in policy.allowed_tools:
             return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
 
-    required = _GOAL_TOOL_REQUIREMENTS.get(decision.goal, set())
-    used = {call.tool_name.value for call in decision.tool_calls}
+    required = gate_policy.required_tools_by_goal.get(decision.goal, set())
+    used = {call.tool_name for call in decision.tool_calls}
     if required and not required.issubset(used):
         return GateResult(accepted=False, reject_code=GateRejectCode.missing_required_slots)
 
     if (
-        not settings.policy_allow_side_effects
-        and any(call.tool_name.value == "workflow" for call in decision.tool_calls)
+        not allow_side_effects
+        and ToolName.workflow in used
     ):
         return GateResult(accepted=False, reject_code=GateRejectCode.side_effects_blocked)
 
@@ -3382,6 +3685,19 @@ def _tool_result_ids(tool_results: list[ToolResult]) -> set[str]:
     return ids
 
 
+def _is_realtor_empty_result(tool_results: list[ToolResult]) -> bool:
+    realtor_seen = False
+    for tr in tool_results:
+        if tr.realtor is None:
+            continue
+        realtor_seen = True
+        if tr.status != "ok":
+            return False
+        if tr.realtor.listings:
+            return False
+    return realtor_seen
+
+
 def run_answer_guardrail(
     *,
     goal: GoalType,
@@ -3402,7 +3718,13 @@ def run_answer_guardrail(
     if claimed_ids and not all(item in valid_ids for item in claimed_ids):
         return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.hallucinated_listing_id)
 
-    if tool_results and not claimed_ids and goal in {GoalType.rag, GoalType.realtor_search, GoalType.realtor_refine, GoalType.workflow}:
+    if (
+        tool_results
+        and not claimed_ids
+        and goal in {GoalType.rag, GoalType.realtor_search, GoalType.realtor_refine, GoalType.workflow}
+    ):
+        if goal in {GoalType.realtor_search, GoalType.realtor_refine} and _is_realtor_empty_result(tool_results):
+            return GuardrailResult(accepted=True)
         return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.no_evidence_cited)
 
     if tool_results:

@@ -149,11 +149,138 @@ class RuntimeRepository:
         db_deleted = await self._delete_conversations_by_client(normalized_client)
         return int(traces_deleted) + int(db_deleted)
 
+    async def get_conversation_memory(
+        self,
+        *,
+        conversation_id: str,
+        tenant_id: str,
+        max_messages: int | None = None,
+    ) -> dict[str, Any]:
+        conversation_token = str(conversation_id or "").strip()
+        tenant_uuid = _as_uuid(tenant_id)
+        if not conversation_token or not tenant_uuid:
+            return {
+                "history": [],
+                "conversation_state": {},
+                "context_snapshot": {},
+                "lead_id": None,
+            }
+
+        history_limit = max(
+            2,
+            int(max_messages or settings.chat_history_max_messages) * 2,
+        )
+
+        stmt = text(
+            """
+            SELECT
+                lc.lead_id,
+                lc.messages,
+                lc.context_snapshot
+            FROM lead_conversations lc
+            JOIN lead_leads ll ON ll.id = lc.lead_id
+            WHERE lc.conversation_id = :conversation_id
+              AND ll.client_id = :client_id
+            ORDER BY lc.updated_at DESC NULLS LAST, lc.last_message_at DESC NULLS LAST, lc.id DESC
+            LIMIT 1
+            """
+        )
+        try:
+            async with self._engine.begin() as conn:
+                row = (
+                    await conn.execute(
+                        stmt,
+                        {
+                            "conversation_id": conversation_token,
+                            "client_id": tenant_uuid,
+                        },
+                    )
+                ).mappings().first()
+        except Exception as exc:
+            logger.warning(
+                "runtime_repo_get_memory_failed tenant=%s conversation=%s: %s",
+                tenant_uuid,
+                conversation_token,
+                exc,
+            )
+            return {
+                "history": [],
+                "conversation_state": {},
+                "context_snapshot": {},
+                "lead_id": None,
+            }
+
+        if not row:
+            return {
+                "history": [],
+                "conversation_state": {},
+                "context_snapshot": {},
+                "lead_id": None,
+            }
+
+        history_raw = row.get("messages")
+        if isinstance(history_raw, str):
+            try:
+                history_raw = json.loads(history_raw)
+            except Exception:
+                history_raw = []
+
+        history: list[dict[str, Any]] = []
+        if isinstance(history_raw, list):
+            for item in history_raw:
+                normalized = self._normalize_history_entry(item)
+                if normalized:
+                    history.append(normalized)
+        if len(history) > history_limit:
+            history = history[-history_limit:]
+
+        context_snapshot = row.get("context_snapshot")
+        if isinstance(context_snapshot, str):
+            try:
+                context_snapshot = json.loads(context_snapshot)
+            except Exception:
+                context_snapshot = {}
+        if not isinstance(context_snapshot, dict):
+            context_snapshot = {}
+
+        conversation_state = context_snapshot.get("conversation_state")
+        if not isinstance(conversation_state, dict):
+            conversation_state = {}
+
+        return {
+            "history": history,
+            "conversation_state": conversation_state,
+            "context_snapshot": context_snapshot,
+            "lead_id": _as_uuid(str(row["lead_id"])) if row.get("lead_id") else None,
+        }
+
     @staticmethod
     def _append_line(path: Path, line: str) -> None:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(line)
             handle.write("\n")
+
+    @staticmethod
+    def _normalize_history_entry(entry: Any) -> dict[str, Any] | None:
+        if not isinstance(entry, dict):
+            return None
+
+        role = str(entry.get("role") or "").strip().lower()
+        if role not in {"user", "assistant"}:
+            return None
+
+        content = str(entry.get("content") or "").strip()
+        if not content:
+            return None
+
+        normalized: dict[str, Any] = {
+            "role": role,
+            "content": content,
+        }
+        timestamp = entry.get("timestamp")
+        if timestamp:
+            normalized["timestamp"] = str(timestamp)
+        return normalized
 
     @staticmethod
     def _serialize(payload: Any) -> Any:

@@ -93,6 +93,44 @@ async def test_chat_uses_composite_session_storage(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chat_persists_lead_id_from_core_response(monkeypatch):
+    monkeypatch.setattr(main_module.inference_client, "chat", AsyncMock(return_value={
+        "conversation_id": "conv-1",
+        "lead_id": "11111111-2222-3333-4444-555555555555",
+        "answer": "ok",
+        "intent": None,
+        "sources": [],
+    }))
+    monkeypatch.setattr(
+        main_module.vertical_router,
+        "resolve_vertical_for_client_async",
+        AsyncMock(return_value="generic"),
+    )
+    monkeypatch.setattr(
+        main_module.vertical_router,
+        "get_handler_async",
+        AsyncMock(return_value=_DummyPolicy()),
+    )
+    monkeypatch.setattr(main_module.transformer, "_extract_properties_from_sources", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        main_module.transformer,
+        "_get_branding_for_client",
+        AsyncMock(return_value={"agent_name": "x"}),
+    )
+
+    monkeypatch.setattr(main_module.session_manager, "get_session_multichannel", AsyncMock(return_value={}))
+    upsert_session_mc = AsyncMock(return_value=None)
+    monkeypatch.setattr(main_module.session_manager, "upsert_session", upsert_session_mc)
+
+    await main_module.chat_interaction(_request())
+
+    assert upsert_session_mc.await_count == 1
+    data = upsert_session_mc.await_args.kwargs["data"]
+    assert data["conversation_id"] == "conv-1"
+    assert data["lead_id"] == "11111111-2222-3333-4444-555555555555"
+
+
+@pytest.mark.asyncio
 async def test_chat_realtor_passes_through_core_property_components(monkeypatch):
     monkeypatch.setattr(main_module.inference_client, "chat", AsyncMock(return_value={
         "conversation_id": "conv-2",

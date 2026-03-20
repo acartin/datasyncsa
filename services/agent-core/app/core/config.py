@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     )
     rag_retriever_timeout_secs: int = int(os.getenv("RAG_RETRIEVER_V2_TIMEOUT_SECS", "10"))
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "3"))
+    chat_history_max_messages: int = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "20"))
     synth_context_max_chars: int = int(os.getenv("AGENT_CORE_SYNTH_CONTEXT_MAX_CHARS", "1800"))
     synth_string_max_chars: int = int(os.getenv("AGENT_CORE_SYNTH_STRING_MAX_CHARS", "240"))
     synth_rag_chunk_limit: int = int(os.getenv("AGENT_CORE_SYNTH_RAG_CHUNK_LIMIT", "3"))
@@ -62,6 +63,8 @@ class Settings(BaseSettings):
     workflow_registry_json: str = os.getenv("WORKFLOW_REGISTRY_JSON", "{}")
 
     persistence_root: str = os.getenv("AGENT_CORE_PERSISTENCE_ROOT", "/tmp/agent-core")
+    llm_trace_root: str = os.getenv("LLM_TRACE_ROOT", "/tmp/datasyncsa-llm-trace")
+    llm_trace_enabled: bool = os.getenv("LLM_TRACE_ENABLED", "true").lower() == "true"
     internal_api_token: str = os.getenv("INTERNAL_API_TOKEN", "")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

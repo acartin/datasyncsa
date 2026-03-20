@@ -133,14 +133,17 @@ services:
       - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
       - RAG_RETRIEVER_V2_TIMEOUT_SECS=${RAG_RETRIEVER_V2_TIMEOUT_SECS:-10}
       - SCORING_BG_ENABLED=${SCORING_BG_ENABLED:-true}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
+      - AGENT_CORE_API=http://agent-core:8000
+      - SCORING_CORE_API=http://scoring-core:8000
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
       - SCORING_CORE_URL=http://scoring-core:8000
       - SCORING_CORE_API_PREFIX=${SCORING_CORE_API_PREFIX:-/api/v1}
       - SCORING_CORE_TIMEOUT_SECS=${SCORING_CORE_TIMEOUT_SECS:-8}
+      - LLM_TRACE_ROOT=/app/log
+      - LLM_TRACE_ENABLED=true
     volumes:
       - ./schemas:/app/schemas:ro
+      - ./log:/app/log
     depends_on:
       - postgres
       - redis
@@ -224,8 +227,11 @@ services:
       - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
       - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
       - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+      - LLM_TRACE_ROOT=/app/log
+      - LLM_TRACE_ENABLED=true
     volumes:
       - ./schemas:/app/schemas:ro
+      - ./log:/app/log
     depends_on:
       - postgres
       - redis
@@ -260,8 +266,11 @@ services:
       - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
       - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
       - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+      - LLM_TRACE_ROOT=/app/log
+      - LLM_TRACE_ENABLED=true
     volumes:
       - ./schemas:/app/schemas:ro
+      - ./log:/app/log
     depends_on:
       - postgres
       - redis
@@ -433,6 +442,7 @@ services:
       - AGENT_CORE_API_PREFIX=/api/v1
       - INFERENCE_API_PREFIX=/api/v1
       - AGENT_CORE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
+      - SCORING_CORE_RESET_URL=http://scoring-core:8000/api/v1/internal/memory/reset
       - INFERENCE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}

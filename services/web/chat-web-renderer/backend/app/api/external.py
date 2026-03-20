@@ -136,6 +136,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
         )
         
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
+        resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
         if new_conversation_id:
             await session_manager.upsert_session(
                 client_id=client_id,
@@ -143,6 +144,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
                 channel_user_id=channel_user_id,
                 data={
                     "conversation_id": new_conversation_id,
+                    "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
                 },
             )

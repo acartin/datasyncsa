@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Dict
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 class BaseComponent(BaseModel):
@@ -78,3 +78,4 @@ class SDUIResponse(BaseModel):
     session_id: str
     branding: Optional[BrandingConfig] = None
     components: List[Union[ChatMessage, PropertyCard, MortgageCalculator, PropertyGrid, PropertyMap, ActionMenu, PhotoCarousel]]
+    meta: Dict[str, Any] = Field(default_factory=dict)

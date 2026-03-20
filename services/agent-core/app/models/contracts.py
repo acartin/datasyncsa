@@ -27,6 +27,10 @@ class RealtorSearchSlots(BaseModel):
     min_price: Optional[int] = None
     min_rooms: Optional[int] = None
     max_rooms: Optional[int] = None
+    min_bathrooms: Optional[float] = None
+    max_bathrooms: Optional[float] = None
+    min_garage: Optional[int] = None
+    max_garage: Optional[int] = None
     min_area_m2: Optional[float] = None
     max_area_m2: Optional[float] = None
     neighborhood: Optional[str] = None
@@ -189,7 +193,7 @@ CardModel = PropertyCard | SearchSummaryCard | RAGSourceCard
 
 
 class SynthesizerInput(BaseModel):
-    context_snapshot: str
+    context_snapshot: dict[str, Any]
     tool_results: list[ToolResult]
     response_mode: ResponseMode
     tenant_tone: str
