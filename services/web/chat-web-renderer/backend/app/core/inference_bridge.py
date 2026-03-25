@@ -10,9 +10,9 @@ logger = logging.getLogger("inference_bridge")
 
 class InferenceClient:
     """
-    El 'Cable' que conecta el Bridge con el Cerebro de IA (Inference Core).
+    El cable que conecta el renderer con el runtime conversacional activo.
     Se encarga de enviar el payload con metadatos y recibir la respuesta plana.
-    Opera contra el runtime activo del inference core.
+    Opera contra el runtime activo del asistente.
     """
 
     def __init__(self):
@@ -20,12 +20,18 @@ class InferenceClient:
         self.connect_timeout = float(os.getenv("INFERENCE_CONNECT_TIMEOUT", 5))
         self.default_client_id = os.getenv("DEFAULT_CLIENT_ID", "")
         inference_url = os.getenv(
-            "AGENT_CORE_API",
-            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+            "AI_RUNTIME_API",
+            os.getenv(
+                "AGENT_CORE_API",
+                os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+            ),
         )
         api_prefix = os.getenv(
-            "AGENT_CORE_API_PREFIX",
-            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+            "AI_RUNTIME_API_PREFIX",
+            os.getenv(
+                "AGENT_CORE_API_PREFIX",
+                os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+            ),
         )
         self.base_url = inference_url.rstrip("/") + api_prefix
         logger.info("🔌 InferenceClient conectado a %s (Timeout: %ss)", self.base_url, self.timeout)

@@ -1,0 +1,77 @@
+---
+title: ai-runtime realtor graph
+---
+flowchart TD
+    n___start__([START])
+    n_resolve_references[resolve_references]
+    n_after_resolve_references{after_resolve_references}
+    n_ask_clarification[ask_clarification]
+    n_classify_intent[classify_intent]
+    n_after_classify_intent{after_classify_intent}
+    n_route_next_intent[route_next_intent]
+    n_after_route_next_intent{after_route_next_intent}
+    n_search[search]
+    n_after_search{after_search}
+    n_render_cards[render_cards]
+    n_after_render_cards{after_render_cards}
+    n_financial_calc[financial_calc]
+    n_compare_properties[compare_properties]
+    n_mutate_comparison_set[mutate_comparison_set]
+    n_collect_appointment_data[collect_appointment_data]
+    n_after_collect_appointment_data{after_collect_appointment_data}
+    n_assign_agent[assign_agent]
+    n_rag_agencia[rag_agencia]
+    n_rag_documents[rag_documents]
+    n_collect_lead_data[collect_lead_data]
+    n_llm_recommend[llm_recommend]
+    n_mensajear[mensajear]
+    n_check_queue[check_queue]
+    n_after_check_queue{after_check_queue}
+    n_lead_advisor[lead_advisor]
+    n_synthesize[synthesize]
+    n___end__((END))
+    n___start__ --> n_resolve_references
+    n_ask_clarification --> n___end__
+    n_assign_agent --> n_mensajear
+    n_collect_lead_data --> n_synthesize
+    n_compare_properties --> n_check_queue
+    n_financial_calc --> n_check_queue
+    n_lead_advisor --> n_synthesize
+    n_llm_recommend --> n_check_queue
+    n_mensajear --> n_check_queue
+    n_mutate_comparison_set --> n_check_queue
+    n_rag_agencia --> n_check_queue
+    n_rag_documents --> n_check_queue
+    n_synthesize --> n___end__
+    n_resolve_references --> n_after_resolve_references
+    n_after_resolve_references -->|ask_clarification| n_ask_clarification
+    n_after_resolve_references -->|collect_lead_data| n_collect_lead_data
+    n_after_resolve_references -->|classify_intent| n_classify_intent
+    n_classify_intent --> n_after_classify_intent
+    n_after_classify_intent -->|route_next_intent| n_route_next_intent
+    n_after_classify_intent -->|lead_advisor| n_lead_advisor
+    n_route_next_intent --> n_after_route_next_intent
+    n_after_route_next_intent -->|search| n_search
+    n_after_route_next_intent -->|financial_calc| n_financial_calc
+    n_after_route_next_intent -->|compare_properties| n_compare_properties
+    n_after_route_next_intent -->|mutate_comparison_set| n_mutate_comparison_set
+    n_after_route_next_intent -->|collect_appointment_data| n_collect_appointment_data
+    n_after_route_next_intent -->|rag_agencia| n_rag_agencia
+    n_after_route_next_intent -->|rag_documents| n_rag_documents
+    n_after_route_next_intent -->|collect_lead_data| n_collect_lead_data
+    n_after_route_next_intent -->|llm_recommend| n_llm_recommend
+    n_after_route_next_intent -->|mensajear| n_mensajear
+    n_after_route_next_intent -->|lead_advisor| n_lead_advisor
+    n_search --> n_after_search
+    n_after_search -->|search| n_search
+    n_after_search -->|lead_advisor| n_lead_advisor
+    n_after_search -->|check_queue| n_check_queue
+    n_after_search -->|render_cards| n_render_cards
+    n_render_cards --> n_after_render_cards
+    n_after_render_cards -->|check_queue| n_check_queue
+    n_collect_appointment_data --> n_after_collect_appointment_data
+    n_after_collect_appointment_data -->|assign_agent| n_assign_agent
+    n_after_collect_appointment_data -->|synthesize| n_synthesize
+    n_check_queue --> n_after_check_queue
+    n_after_check_queue -->|route_next_intent| n_route_next_intent
+    n_after_check_queue -->|lead_advisor| n_lead_advisor

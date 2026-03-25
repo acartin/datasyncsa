@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Desacoplar scoring de `agent-core` sin tocar BD ni logica funcional de scoring.
+Desacoplar scoring de `ai-runtime` sin tocar BD ni logica funcional de scoring.
 
 ## Regla central
 
@@ -25,7 +25,7 @@ Desacoplar scoring de `agent-core` sin tocar BD ni logica funcional de scoring.
 - fallback conservador por criterio
 - politica anti-stale por `generation`
 
-## Lo que sale de `agent-core`
+## Lo que sale de `ai-runtime`
 
 - resolver `scoring_model_id`
 - resolver `lead_scoring_prompts`
@@ -35,7 +35,7 @@ Desacoplar scoring de `agent-core` sin tocar BD ni logica funcional de scoring.
 
 ## Contrato minimo entre servicios
 
-`agent-core` solo debe emitir:
+`ai-runtime` solo debe emitir:
 
 - `conversation_id`
 - `lead_id`
@@ -63,4 +63,4 @@ La base funcional a extraer viene de:
 
 ## Beneficio
 
-`agent-core` puede reescribirse o cambiar planner/synth/tools sin afectar scoring.
+`ai-runtime` puede reescribirse o cambiar planner/synth/tools sin afectar scoring.

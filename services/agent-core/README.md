@@ -1,22 +1,14 @@
 # agent-core
 
-Servicio objetivo del runtime conversacional soberano.
+Servicio legacy del runtime conversacional anterior.
 
-Responsabilidades:
+Estado:
 
-- planner conversacional
-- policy gate
-- ejecucion de tools
-- card renderer
-- synthesizer
-- answer guardrail
-- persistencia del `AnswerEnvelope`
+- no es la autoridad conversacional activa del compose actual
+- el runtime vigente vive en `services/ai_runtime`
+- esta carpeta se conserva solo como referencia historica
 
-No incluye:
+Referencias:
 
-- scoring
-- compatibilidad legacy de borde
-
-Referencia canonica:
-
-- `docs/AGENT_CORE_INDEX.md`
+- activa: `docs/AI_RUNTIME_INDEX.md`
+- historica: `docs/OLD/agent-core/AGENT_CORE_INDEX.md`

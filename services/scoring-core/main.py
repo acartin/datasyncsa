@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Scoring Core",
-    description="Async scoring service decoupled from agent-core",
+    description="Async scoring service decoupled from ai-runtime",
     version="1.0.0",
     lifespan=lifespan,
 )

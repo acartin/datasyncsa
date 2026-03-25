@@ -1,79 +1,126 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-13T17:45:40Z`
+- Generated UTC: `2026-03-24T21:37:19Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-13-next`
-- Git commit: `094f66f`
-- Policy: High-signal only; assets/binarios excluidos.
+- Git branch: `HETZNER-LOCAL-2026-03-20`
+- Git commit: `67982d3`
+- Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
 
-- Fuente principal: `.agent/BRAIN_MAP.md`
 ### `.agent/BRAIN_MAP.md`
 
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-13T17:45:40Z`
+- Generated UTC: `2026-03-24T21:37:19Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-13-next`
-- Git commit: `094f66f`
+- Git branch: `HETZNER-LOCAL-2026-03-20`
+- Git commit: `67982d3`
 
-## 1. MAPA DE INTENCIONES (DIRECTORIO)
+## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
-| Carpeta | Responsabilidad Técnica | Importancia (1-5) |
+| Carpeta | Responsabilidad Tecnica | Importancia (1-5) |
 |---|---|---:|
-| `docker-compose.yml` | Orquestación de servicios (DB, Redis, APIs, bridges, UI, ETL). | 5 |
-| `services/agent-core` | Autoridad conversacional LangGraph (planner, gate, tools, synthesizer, persistencia). | 5 |
-| `services/scoring-core` | Dominio de scoring asíncrono desacoplado del runtime conversacional. | 5 |
-| `services/web/chat-web-renderer` | Canal web y renderer SDUI del chat. | 5 |
-| `services/generic-bridge-v2` | Wrapper de integración genérica hacia `agent-core`. | 4 |
-| `services/property-bridge-v2` | Wrapper del vertical realtor hacia `agent-core`. | 4 |
-| `services/inference-stack-v2/semantic-adapter-v2` | Recuperación semántica v2 (RAG retriever). | 5 |
-| `services/inference-stack-v2/inference-core-v2` | Compatibilidad legacy de scoring/APIs históricas (no autoridad principal de chat). | 3 |
-| `services/web/admin-console` | BFF FastAPI + renderer SDUI para consola operativa multi-tenant. | 5 |
-| `services/etl-docs` | Ingesta documental, colas RQ y vectorización. | 5 |
-| `schemas` | Contratos canónicos compartidos entre servicios. | 4 |
-| `tests` | Pruebas de integración y sistema cross-service. | 4 |
-| `volumes/r2_storage` | Storage documental montado (Cloudflare R2 vía rclone). | 5 |
-| `volumes/staging` | Buffer de staging para pipelines ETL. | 4 |
-| `services/inference-stack-v2/inference-core-v3` | Código legado archivado; fuera del camino operativo principal. | 1 |
-| `services/etl-processor` | Servicio deprecado (no usar para features nuevas). | 1 |
-| `services/legacy-ETL_DOCS` | Código ETL legacy/deprecado. | 1 |
+| `docker-compose.yml` | Orquestacion oficial del stack local. | 5 |
+| `services/ai_runtime` | Runtime conversacional LangGraph multitenant; autoridad principal de chat. | 5 |
+| `services/bridges/generic-bridge` | Adapter fino para verticales no realtor hacia `ai-runtime`. | 4 |
+| `services/bridges/property-bridge` | Adapter fino del vertical realtor hacia `ai-runtime`. | 4 |
+| `services/scoring-core` | Dominio separado de scoring asincrono con API y worker propios. | 5 |
+| `services/web/chat-web-renderer` | Canal web y renderer SDUI que consume `ai-runtime`. | 5 |
+| `services/web/admin-console` | Consola operativa multi-tenant. | 4 |
+| `services/etl-docs` | ETL documental, vectorizacion y reseteo de memoria best-effort. | 4 |
+| `services/data` | Repositorios y caches compartidos del runtime conversacional. | 5 |
+| `schemas` | Contratos compartidos entre servicios. | 4 |
+| `tests` | Pruebas cross-service, smoke y sandboxes. | 4 |
 
-## 2. ARQUITECTURA CORE (SDUI/SUID)
+## 2. ZONAS NO AUTORITATIVAS
 
-- Backend soberano: frontend renderiza contratos SDUI, no decide negocio.
-- Multi-tenant estricto: toda consulta operativa debe tener scope por `client_id`.
-- Contratos UI validados con Pydantic y consistentes con renderer.
+| Carpeta | Estado |
+|---|---|
+| `services/agent-core` | Legacy; no es el cerebro activo del compose actual. |
+| `services/inference-stack-v2` | Legacy archivado o compatibilidad historica. |
+| `services/etl-processor` | Deprecado. |
+| `services/ai-agents` | Exploracion; no participa en el runtime operativo. |
 
-## 3. ENTRY POINTS PRINCIPALES
+## 3. ARQUITECTURA CORE
 
-- `services/agent-core/main.py`
-- `services/scoring-core/main.py`
-- `services/web/admin-console/backend/app/main.py`
-- `services/web/chat-web-renderer/backend/app/main.py`
-- `services/inference-stack-v2/semantic-adapter-v2/main.py`
-- `services/inference-stack-v2/inference-core-v2/main.py`
-- `services/etl-docs/main.py`
+- `ai-runtime` resuelve tenant, vertical, bridge y estado de sesion.
+- `property-bridge` solo aplica a vertical `realtor`.
+- `generic-bridge` aplica a `healthcare` y `legal`.
+- `scoring-core` permanece separado y no debe absorber decisiones conversacionales.
+- `chat-web-renderer` es consumidor/canal, no autoridad de negocio.
+- Toda operacion conversacional debe mantener scope por `client_id`.
 
-## Referencia Canónica
+## 4. SERVICIOS DOCKER ACTIVOS
 
-- Índice arquitectónico: `docs/AGENT_CORE_INDEX.md`
-- Arquitectura runtime: `docs/AGENT_CORE_ARCHITECTURE.md`
-- Frontera de scoring: `docs/SCORING_CORE_BOUNDARY.md`
-
-## 4. ENTIDADES CRÍTICAS (DB)
-
-- Tenancy/seguridad: `lead_clients`, `auth_users`, `auth_roles`, `auth_client_user`
-- Leads/conversación: `lead_leads`, `lead_conversations`, `lead_statuses`, `lead_sources`
-- Scoring v2: `lead_scorecards`, `lead_score_items`, `lead_scoring_models`, `lead_scoring_criteria`, `lead_scoring_bands`, `lead_scoring_prompts`
-- RAG/documentos: `ai_knowledge_documents`, `ai_vectors`
+```text
+postgres
+admin-console-api
+admin-console-web
+datasyncsa-web
+redis
+etl-docs
+ai-runtime
+generic-bridge
+scoring-core
+property-bridge
+test-ui
+chat-web-renderer-api
+portainer
+scoring-core-worker
+chat-web-renderer-ui
+etl-docs-worker
 ```
 
-## Infraestructura y Entradas
+## 5. ENTRY POINTS PRINCIPALES
 
-### `docker-compose.yml`
+- `services/ai_runtime/main.py`
+- `services/scoring-core/main.py`
+- `services/bridges/generic-bridge/main.py`
+- `services/bridges/property-bridge/main.py`
+- `services/web/chat-web-renderer/backend/app/main.py`
+- `services/web/admin-console/backend/app/main.py`
+- `services/etl-docs/main.py`
+
+## 6. REFERENCIAS CANONICAS
+
+- `services/ai_runtime/ARCHITECTURE.md`
+- `.agent/RULES.md`
+- `.agent/PY_EXECUTION_MAP.md`
+
+## 7. ENTIDADES Y CAPAS CRITICAS
+
+- Tenancy/runtime: `client_id`, `tenant_config`, `session_id`, `conversation_id`
+- Estado conversacional: `services/ai_runtime/domain/state.py`
+- Datos compartidos: `services/data/cache/**`, `services/data/repositories/**`
+- Scoring: `lead_scorecards`, `lead_score_items`, `lead_scoring_models`, `lead_scoring_prompts`
+- RAG: FAQ por tenant y documentos por tenant en Postgres/pgvector
+```
+
+## Compose y Variables
+
+### Servicios activos del compose
+
+```text
+postgres
+admin-console-api
+admin-console-web
+redis
+etl-docs-worker
+ai-runtime
+property-bridge
+portainer
+chat-web-renderer-api
+etl-docs
+generic-bridge
+scoring-core
+scoring-core-worker
+test-ui
+chat-web-renderer-ui
+datasyncsa-web
+```
+### `docker-compose.yml:1-220`
 
 ```
 services:
@@ -135,12 +182,12 @@ services:
   # ---------------------------------------------------------------------------
   # BACKEND SERVICES
   # ---------------------------------------------------------------------------
-  # Inference Core V2
-  inference-core-v2:
+  # AI Runtime (LangGraph multitenant assistant)
+  ai-runtime:
     build:
-      context: ./services/inference-stack-v2/inference-core-v2
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-inference-v2
+      context: .
+      dockerfile: ./services/ai_runtime/Dockerfile
+    container_name: ${ENV_PREFIX}-backend-ai-runtime
     restart: always
     command:
       - uvicorn
@@ -150,9 +197,9 @@ services:
       - --port
       - "8000"
       - --workers
-      - ${INFERENCE_WEB_CONCURRENCY:-3}
+      - ${AI_RUNTIME_WEB_CONCURRENCY:-1}
     ports:
-      - "${INFERENCE_V2_PORT}:8000"
+      - "${AI_RUNTIME_PORT:-8096}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - TZ=${TZ:-UTC}
@@ -161,106 +208,14 @@ services:
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
-      - CHAT_HISTORY_CONTEXT_MAX_CHARS=${CHAT_HISTORY_CONTEXT_MAX_CHARS:-1800}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
-      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
-      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - PYTHONPATH=/app
     volumes:
       - ./schemas:/app/schemas:ro
+      - ./log:/app/log
     depends_on:
       - postgres
       - redis
-    networks:
-      - internal_network
-
-  # Agent Core (LangGraph conversational runtime)
-  agent-core:
-    build:
-      context: ./services/agent-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-agent-core
-    restart: always
-    command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --workers
-      - ${AGENT_CORE_WEB_CONCURRENCY:-1}
-    ports:
-      - "${AGENT_CORE_PORT:-8096}:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
-      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
-      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
-      - RAG_RETRIEVER_V2_TIMEOUT_SECS=${RAG_RETRIEVER_V2_TIMEOUT_SECS:-10}
-      - SCORING_BG_ENABLED=${SCORING_BG_ENABLED:-true}
-      - AGENT_CORE_API=${AGENT_CORE_API:-http://agent-core:8000}
-      - SCORING_CORE_API=${SCORING_CORE_API:-http://scoring-core:8000}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-      - SCORING_CORE_URL=http://scoring-core:8000
-      - SCORING_CORE_API_PREFIX=${SCORING_CORE_API_PREFIX:-/api/v1}
-      - SCORING_CORE_TIMEOUT_SECS=${SCORING_CORE_TIMEOUT_SECS:-8}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-      - semantic-adapter-v2
-      - scoring-core
-    networks:
-      - internal_network
-
-  # Inference Core V2 async scoring worker (persistent jobs)
-  inference-core-v2-worker:
-    build:
-      context: ./services/inference-stack-v2/inference-core-v2
-      dockerfile: Dockerfile
-    profiles: ["legacy"]
-    container_name: ${ENV_PREFIX}-backend-inference-v2-worker
-    restart: always
-    command: ["python", "worker.py"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
-      - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
-      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
-      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
-      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
-      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-      - inference-core-v2
     networks:
       - internal_network
 
@@ -296,63 +251,197 @@ services:
       - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
       - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
       - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
+      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+      - LLM_TRACE_ROOT=/app/log
+      - LLM_TRACE_ENABLED=true
+    volumes:
+      - ./schemas:/app/schemas:ro
+      - ./log:/app/log
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # Scoring Core async worker
+  scoring-core-worker:
+    build:
+      context: ./services/scoring-core
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
+    restart: always
+    command: ["python", "worker.py"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TZ=${TZ:-UTC}
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - LOG_LEVEL=INFO
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
+      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
+      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
+      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
+      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
+      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
+      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
+      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
+      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
+      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
+      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
+      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
+      - LLM_TRACE_ROOT=/app/log
+      - LLM_TRACE_ENABLED=true
+    volumes:
+      - ./schemas:/app/schemas:ro
+      - ./log:/app/log
+    depends_on:
+      - postgres
+      - redis
+      - scoring-core
+    networks:
+      - internal_network
+
+  # ETL Docs API
+  etl-docs:
+    build:
+      context: ./services/etl-docs
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-backend-etl-docs
+    restart: always
+    ports:
+      - "${ETL_DOCS_PORT}:8000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - REDIS_URL=redis://redis:6379/0
+      - PATH_STAGING=/app/data/staging
+      - PATH_STORAGE=/app/data/storage
+      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
+      - MEMORY_RESET_TIMEOUT=8
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+    volumes:
+      - ${HOST_PATH_STAGING}:/app/data/staging
+      - ${HOST_PATH_STORAGE}:/app/data/storage
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal_network
+
+  # ETL Docs Worker (RQ)
+  etl-docs-worker:
 ```
-### `.env.example`
+### `docker-compose.yml:300-390`
 
 ```
-# --- INFRASTRUCTURE ---
-ENV_PREFIX=ds-dev
-TZ=UTC
 
-# DB Credentials
-DB_USER=postgres
-DB_PASS=change-me
-DB_NAME=agentic
-DB_PORT=5432
+  # Chat Web Renderer API (Bridge)
+  chat-web-renderer-api:
+    build:
+      context: ./services/web/chat-web-renderer/backend
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-web-chat-web-renderer-api
+    restart: unless-stopped
+    ports:
+      - "${REALTOR_BRIDGE_PORT}:8000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_DATABASE=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_USERNAME=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_PASSWORD=${DB_PASS}
+      - REDIS_URL=redis://redis:6379/0
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - AI_RUNTIME_RESET_URL=http://ai-runtime:8000/api/v1/internal/memory/reset
+      - SCORING_CORE_RESET_URL=http://scoring-core:8000/api/v1/internal/memory/reset
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+    volumes:
+      - ./schemas:/app/schemas:ro
+    depends_on:
+      - postgres
+      - redis
+      - ai-runtime
+    networks:
+      - internal_network
 
-# Full Connection String (Internal Docker Network)
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@postgres:${DB_PORT}/${DB_NAME}
-TABLE_VECTORS=ai_vectors
-TABLE_PROPERTIES=lead_properties
-TABLE_IMAGES=lead_property_images
-TABLE_CLIENTS=lead_clients
-TABLE_BRANDING=lead_brand_configs
-TABLE_APPOINTMENTS=lead_appointments
-TABLE_LEADS=lead_leads
+  # Generic Bridge
+  generic-bridge:
+    build:
+      context: ./services/bridges/generic-bridge
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-web-generic-bridge
+    restart: unless-stopped
+    ports:
+      - "${GENERIC_BRIDGE_PORT:-8093}:8000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - REQUEST_TIMEOUT=30
+      - MAX_RETRIES=3
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - ai-runtime
+    networks:
+      - internal_network
 
-# --- STORAGE PATHS (CRITICAL) ---
-# Dev & Prod: Standardized to /srv/datasyncsa/volumes
-HOST_PATH_STAGING=/srv/datasyncsa/volumes/staging
-HOST_PATH_STORAGE=/srv/datasyncsa/volumes/r2_storage
+  # Property Bridge
+  property-bridge:
+    build:
+      context: ./services/bridges/property-bridge
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX}-web-property-bridge
+    restart: unless-stopped
+    ports:
+      - "${PROPERTY_BRIDGE_PORT:-8094}:8000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - REQUEST_TIMEOUT=30
+      - MAX_RETRIES=3
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - ai-runtime
+    networks:
+      - internal_network
 
-# --- API KEYS ---
-GOOGLE_API_KEY=replace-with-real-key
+  # Chat Web Renderer Frontend (Nginx)
+  chat-web-renderer-ui:
+    image: nginx:alpine
+    container_name: ${ENV_PREFIX}-web-chat-web-renderer-ui
+    restart: unless-stopped
+    ports:
+      - "${REALTOR_WEB_PORT}:80"
+    volumes:
+      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:ro
+      - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+```
+### `.env.example:50-120`
 
-# --- SECURITY ---
-SECRET_KEY=replace-with-long-random-secret
-INTERNAL_API_TOKEN=replace-with-internal-service-token
-ALLOWED_ORIGINS=http://admin-console.local:8085,http://admin-console-web:80,http://localhost:8085,http://127.0.0.1:8085
-
-# --- AI CONFIGURATION ---
-EMBEDDING_MODEL=models/gemini-embedding-001
-VISION_MODEL=gemini-2.0-flash
-LLM_MODEL=gemini-2.5-flash-lite
-LLM_TIMEOUT_SECS=30
-RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
-RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
-RAG_RETRIEVER_V2_TIMEOUT_SECS=10
-RAG_RETRIEVER_V2_RETRIES=2
-RAG_TOP_K=3
-AGENT_CORE_SYNTH_CONTEXT_MAX_CHARS=1800
-AGENT_CORE_SYNTH_STRING_MAX_CHARS=240
-AGENT_CORE_SYNTH_MAX_OUTPUT_TOKENS=900
-AGENT_CORE_SYNTH_RAG_CHUNK_LIMIT=3
-AGENT_CORE_SYNTH_RAG_CHUNK_MAX_CHARS=320
-AGENT_CORE_SYNTH_REALTOR_LISTING_LIMIT=4
-AGENT_CORE_SYNTH_REALTOR_FEATURES_LIMIT=8
-AGENT_CORE_SYNTH_REALTOR_IMAGES_PER_LISTING=1
-AGENT_CORE_SYNTH_WORKFLOW_OUTPUT_ITEMS=8
-CHAT_HISTORY_MAX_MESSAGES=20
+```
 SESSION_TTL_SECONDS=86400
 VERTICAL_CACHE_TTL_SECONDS=300
 
@@ -361,11 +450,12 @@ CHANNEL_GATEWAY_ENABLED=true
 VERTICAL_ROUTING_ENABLED=true
 META_ADAPTER_ENABLED=false
 
-# --- AGENT/SCORING SERVICE DISCOVERY ---
-AGENT_CORE_API=http://agent-core:8000
-AGENT_CORE_API_PREFIX=/api/v1
-AGENT_CORE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
+# --- AI/SCORING SERVICE DISCOVERY ---
+AI_RUNTIME_API=http://ai-runtime:8000
+AI_RUNTIME_API_PREFIX=/api/v1
+AI_RUNTIME_RESET_URL=http://ai-runtime:8000/api/v1/internal/memory/reset
 SCORING_CORE_API=http://scoring-core:8000
+SCORING_CORE_RESET_URL=http://scoring-core:8000/api/v1/internal/memory/reset
 SCORING_API_PREFIX=/api/v1
 
 # --- SCORING FEATURE FLAGS ---
@@ -397,13 +487,11 @@ CORPORATE_WEB_PORT=8088
 TEST_UI_PORT=8089
 PORTAINER_PORT=9000
 ETL_DOCS_PORT=8090
-INFERENCE_V2_PORT=8091
 INFERENCE_V3_PORT=8095
 SCORING_CORE_PORT=8097
-SEMANTIC_V2_PORT=8092
-GENERIC_BRIDGE_V2_PORT=8093
-PROPERTY_BRIDGE_V2_PORT=8094
-AGENT_CORE_PORT=8096
+GENERIC_BRIDGE_PORT=8093
+PROPERTY_BRIDGE_PORT=8094
+AI_RUNTIME_PORT=8096
 
 # --- EXTERNAL INTEGRATIONS ---
 # External ETL endpoint (required by admin-console ai-library module)
@@ -414,334 +502,10 @@ ETL_SERVICE_URL=
 SYSTEM_USER_EMAIL=
 SYSTEM_USER_PASSWORD=
 ```
-### `rclone-mount.service`
 
-```
-[Unit]
-Description=Rclone Mount for R2 Storage (Dev)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-User=acartin
-Group=acartin
-ExecStart=/usr/bin/rclone mount datasync-dev: /srv/datasyncsa/volumes/r2_storage \
-    --allow-other \
-    --vfs-cache-mode full \
-    --vfs-cache-max-size 10G \
-    --log-file /var/log/rclone-storage.log \
-    --log-level INFO
-ExecStop=/bin/fusermount -u /srv/datasyncsa/volumes/r2_storage
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-### `docs/AGENT_CORE_INDEX.md`
-
-```
-# Agent Core Index (LangGraph Canonical)
-
-Este índice reemplaza la documentación anterior de `AGENT_CORE`.
-
-Estado actual:
-- Arquitectura objetivo: `agent-core` con `LangGraph`.
-- Alcance de esta fase: conversación y runtime del agente.
-- Fuera de alcance en esta fase: refactor interno de `scoring`.
-
-## Orden de lectura obligatorio
-
-1. `docs/AGENT_CORE_EVAL_PROMPT.md`
-2. `docs/AGENT_CORE_RULES.md`
-3. `docs/AGENT_CORE_ARCHITECTURE.md`
-4. `docs/AGENT_CORE_DIAGRAMS.md`
-5. `docs/AGENT_CORE_API_CONTRACT.md`
-6. `docs/AGENT_CORE_PROMPT_RUNTIME.md`
-7. `docs/AGENT_CORE_FILE_MAP.md`
-8. `docs/AGENT_CORE_IMPLEMENTATION_PLAN.md`
-9. `docs/AGENT_CORE_PROMPT_SEQUENCE.md`
-10. `docs/AGENT_CORE_PROMPT_STATUS.md`
-
-## Objetivo
-
-Construir un `agent-core` nuevo con orquestación `LangGraph`, contratos tipados y fronteras estrictas:
-- lógica conversacional probabilística en LLMs
-- ejecución de herramientas determinista
-- control de riesgo determinista por `accept/reject`
-
-## Regla de precedencia
-
-Si hay contradicción:
-1. Código ejecutable vigente.
-2. `docs/AGENT_CORE_RULES.md`.
-3. Resto de documentos `AGENT_CORE`.
-```
-### `docs/AGENT_CORE_ARCHITECTURE.md`
-
-```
-# Agent Core Architecture (Target)
-
-## Resumen
-
-`agent-core` será un servicio de conversación `LangGraph-first`.
-
-Separa estrictamente:
-- decisión conversacional (planner LLM)
-- ejecución determinista (gate, tools, SQL translator, card renderer)
-- redacción final (synthesizer LLM)
-
-## Componentes
-
-1. Input Normalizer
-- Normaliza `tenant`, `channel`, `conversation_id`, `metadata`.
-- Construye contexto operativo mínimo.
-
-2. Planner LLM
-- Entrada: historial + contexto + prompt de planner.
-- Salida: `RouterDecision` tipado.
-- No ejecuta herramientas.
-
-3. Policy Gate
-- Valida esquema, permisos tenant, tools permitidas, budget y confidence.
-- Respuesta binaria `accept/reject`.
-
-4. Tool Runtime
-- Ejecuta tools permitidas en paralelo cuando aplique.
-- Submódulos:
-- `RAG` retriever
-- `SQL translator` determinista
-- `workflow executor` para side effects tipados
-
-5. Card Renderer
-- Convierte `ToolResult` a `CardModel`.
-- No usa LLM.
-
-6. Synthesizer LLM
-- Entrada: `SynthesizerInput` (contexto resumido + tool results).
-- Salida: `SynthesizerOutput`.
-- No ve `RouterDecision`.
-
-7. Answer Guardrail
-- Verifica claims, evidencia y schema de salida.
-- Respuesta binaria `accept/reject`.
-
-8. Persistence
-- Persiste envelope, decisión, tool results y trazas.
-- Emite evento o enqueue hacia scoring (sin lógica de scoring local).
-
-## Frontera con scoring
-
-- `agent-core` solo invoca API de scoring para encolado y consulta de estado.
-- No contiene motor, repositorios ni worker de scoring en su dominio.
-
-## Modelo de errores
-
-1. `goal=clarify`: respuesta de negocio válida.
-2. `gate reject`: rechazo de seguridad/política.
-3. `guardrail reject`: salida no confiable.
-4. `tool failure`: degradación controlada según contrato.
-```
-### `docs/SCORING_CORE_BOUNDARY.md`
-
-```
-# Scoring Core Boundary
-
-## Objetivo
-
-Desacoplar scoring de `agent-core` sin tocar BD ni logica funcional de scoring.
-
-## Regla central
-
-`scoring-core` es duenio de:
-
-- `lead_scoring_jobs`
-- `lead_scorecards`
-- `lead_score_items`
-- `lead_scoring_models`
-- `lead_scoring_criteria`
-- `lead_scoring_bands`
-- `lead_scoring_prompts`
-
-## Lo que se conserva
-
-- tablas actuales
-- worker async actual
-- `ScoringEngine`
-- prompt builder/linter de scoring
-- fallback conservador por criterio
-- politica anti-stale por `generation`
-
-## Lo que sale de `agent-core`
-
-- resolver `scoring_model_id`
-- resolver `lead_scoring_prompts`
-- hacer `upsert` en `lead_scoring_jobs`
-- exponer operaciones de scorecard/job
-- conocer detalle del scorecard
-
-## Contrato minimo entre servicios
-
-`agent-core` solo debe emitir:
-
-- `conversation_id`
-- `lead_id`
-- `client_id`
-
-Opcional:
-
-- metadata tecnica de canal
-
-No debe emitir:
-
-- `model_id`
-- `prompt_id`
-- prompt snapshot
-- reglas de scoring
-
-## Fuente de codigo actual
-
-La base funcional a extraer viene de:
-
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
-- `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
-
-## Beneficio
-
-`agent-core` puede reescribirse o cambiar planner/synth/tools sin afectar scoring.
-```
-### `docs/OLD/SERVER_PROVISIONING.md`
-
-```
-# Server Provisioning Guide: DatasyncSA Infrastructure
-
-This guide details the steps to configure a fresh Debian/Ubuntu server (Hetzner VPS or Local Machine) to host the DatasyncSA Docker stack with R2 storage integration.
-
-## 1. Prerequisites
-- **OS**: Debian 12 (Bookworm) or Ubuntu 22.04 LTS recommended.
-- **User**: A non-root user with sudo privileges (e.g., `acartin`).
-- **Cloudflare API**: Access Key ID and Secret Access Key for R2.
-
-## 2. Docker Installation
-Install the official Docker Engine and Compose plugin.
-
-```bash
-# Update and install dependencies
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
-
-# Add Docker's official GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Add the repository
-echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Enable for non-root user
-sudo usermod -aG docker $USER
-# LOGOUT AND LOGIN AGAIN FOR GROUPS TO UPDATE
-```
-
-## 3. Storage Configuration (R2 Mount)
-We use `rclone` to mount the Cloudflare R2 bucket as a local file system. This allows legacy applications to interact with cloud storage as if it were a local disk, providing a zero-friction migration path.
-
-### 3.1 Install & Configure Rclone
-```bash
-sudo apt-get install -y rclone fuse3
-
-# Interactive Configuration
-rclone config
-# 1. New remote -> Name: "r2-remote" (Un nombre genérico para la conexión)
-# 2. Type: "s3"
-# 3. Provider: "Cloudflare"
-# 4. Access Key ID: <YOUR_R2_ACCESS_KEY>
-# 5. Secret Access Key: <YOUR_R2_SECRET_KEY>
-# 6. Endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-# 7. ACL: private
-# 8. Finish and verify with: rclone lsd r2-remote:
-```
-
-### 3.2 Create Directory & Systemd Service
-Create the mount point and the service to auto-mount on boot.
-
-```bash
-# Create mount points
-sudo mkdir -p /srv/datasyncsa/volumes/r2_storage
-sudo chown -R $USER:$USER /srv/datasyncsa/volumes/r2_storage
-sudo mkdir -p /srv/datasyncsa/volumes/staging
-sudo chown -R $USER:$USER /srv/datasyncsa/volumes/staging
-
-# Create Service File
-sudo nano /etc/systemd/system/rclone-mount.service
-```
-
-Paste the following configuration. Replace `datasync-dev` with the actual bucket name you want to mount (e.g., `datasync-dev` for Ryzen, `datasync-prod` for Hetzner).
-
-```ini
-[Unit]
-Description=Rclone Mount for R2 Storage
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=notify
-User=acartin
-Group=acartin
-# NOTA: r2-remote es la conexión, datasync-dev es el bucket
-ExecStart=/usr/bin/rclone mount r2-remote:datasync-dev /srv/datasyncsa/volumes/r2_storage \
-    --allow-other \
-    --vfs-cache-mode full \
-    --vfs-cache-max-size 10G \
-    --log-file /var/log/rclone-storage.log \
-    --log-level INFO
-ExecStop=/bin/fusermount -u /srv/datasyncsa/volumes/r2_storage
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3.3 Enable Service
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now rclone-mount.service
-# Check status
-systemctl status rclone-mount.service
-# Verify mount works
-ls /srv/datasyncsa/volumes/r2_storage
-```
-
-## 4. Application Deployment
-Clone the repo (or copy files) to `/srv/datasyncsa`.
-
-```bash
-# 1. Copy config
-cp .env.example .env
-nano .env # Edit secrets like DB_PASSWORD, R2_KEYS
-
-# 2. Deploy Stack
-docker compose up -d --build
-```
-```
-
-## Topología Técnica (directorios clave)
+## Topologia Relevante
 
 ```text
-docs
-docs/Manuales
-docs/OLD
 schemas
 schemas/__pycache__
 schemas/agent_core
@@ -749,50 +513,69 @@ schemas/agent_core/contracts
 schemas/agent_core/runtime
 schemas/scoring_core
 schemas/scoring_core/contracts
-services
-services/agent-core
-services/agent-core/__pycache__
-services/agent-core/app
-services/agent-core/app/__pycache__
-services/agent-core/app/api
-services/agent-core/app/core
-services/agent-core/app/graph
-services/agent-core/app/models
-services/agent-core/app/planners
-services/agent-core/app/renderers
-services/agent-core/app/repositories
-services/agent-core/app/runtime
-services/agent-core/app/services
-services/agent-core/app/synthesizers
-services/agent-core/app/tools
-services/agent-core/tests
-services/agent-core/tests/unit
-services/database
+services/ai_runtime
+services/ai_runtime/__pycache__
+services/ai_runtime/config
+services/ai_runtime/config/__pycache__
+services/ai_runtime/domain
+services/ai_runtime/domain/__pycache__
+services/ai_runtime/graph
+services/ai_runtime/graph/__pycache__
+services/ai_runtime/graph/_shared
+services/ai_runtime/graph/_shared/__pycache__
+services/ai_runtime/graph/_shared/nodes
+services/ai_runtime/graph/_shared/prompts
+services/ai_runtime/graph/_shared/routers
+services/ai_runtime/graph/_shared/state
+services/ai_runtime/graph/_shared/tools
+services/ai_runtime/graph/generic
+services/ai_runtime/graph/generic/__pycache__
+services/ai_runtime/graph/generic/nodes
+services/ai_runtime/graph/generic/routers
+services/ai_runtime/graph/generic/state
+services/ai_runtime/graph/generic/tools
+services/ai_runtime/graph/realtor
+services/ai_runtime/graph/realtor/__pycache__
+services/ai_runtime/graph/realtor/nodes
+services/ai_runtime/graph/realtor/prompts
+services/ai_runtime/graph/realtor/routers
+services/ai_runtime/graph/realtor/state
+services/ai_runtime/graph/realtor/tools
+services/ai_runtime/rag
+services/ai_runtime/rag/__pycache__
+services/ai_runtime/rag/agency
+services/ai_runtime/rag/agency/__pycache__
+services/ai_runtime/rag/documents
+services/ai_runtime/rag/documents/__pycache__
+services/ai_runtime/runtime
+services/ai_runtime/runtime/__pycache__
+services/ai_runtime/workers
+services/ai_runtime/workers/__pycache__
+services/ai_runtime/workers/lead-worker
+services/bridges
+services/bridges/_shared
+services/bridges/generic-bridge
+services/bridges/generic-bridge/__pycache__
+services/bridges/property-bridge
+services/bridges/property-bridge/__pycache__
+services/data
+services/data/__pycache__
+services/data/cache
+services/data/cache/__pycache__
+services/data/models
+services/data/repositories
+services/data/repositories/__pycache__
 services/etl-docs
 services/etl-docs/__pycache__
 services/etl-docs/src
 services/etl-docs/src/ETL_DOCS
+services/etl-docs/src/ETL_DOCS/__pycache__
 services/etl-docs/src/shared
+services/etl-docs/src/shared/__pycache__
 services/etl-docs/tests
 services/etl-docs/tests/integration
 services/etl-docs/tests/smoke
 services/etl-docs/tests/unit
-services/etl-processor
-services/generic-bridge-v2
-services/generic-bridge-v2/__pycache__
-services/inference-stack-v2
-services/inference-stack-v2/inference-core-v2
-services/inference-stack-v2/inference-core-v2/__pycache__
-services/inference-stack-v2/inference-core-v2/app
-services/inference-stack-v2/inference-core-v2/tests
-services/inference-stack-v2/inference-core-v3
-services/inference-stack-v2/inference-core-v3/__pycache__
-services/inference-stack-v2/inference-core-v3/app
-services/inference-stack-v2/inference-core-v3/tests
-services/inference-stack-v2/semantic-adapter-v2
-services/inference-stack-v2/semantic-adapter-v2/app
-services/property-bridge-v2
-services/property-bridge-v2/__pycache__
 services/scoring-core
 services/scoring-core/app
 services/scoring-core/app/api
@@ -800,21 +583,69 @@ services/scoring-core/app/core
 services/scoring-core/app/dependencies
 services/scoring-core/app/models
 services/scoring-core/app/repositories
+services/scoring-core/app/repositories/__pycache__
 services/scoring-core/app/services
-services/web
+services/scoring-core/app/services/__pycache__
 services/web/admin-console
 services/web/admin-console/backend
+services/web/admin-console/backend/app
+services/web/admin-console/backend/app/__pycache__
+services/web/admin-console/backend/app/config
+services/web/admin-console/backend/app/contracts
+services/web/admin-console/backend/app/dal
+services/web/admin-console/backend/app/dashboards
+services/web/admin-console/backend/app/modules
+services/web/admin-console/backend/scripts
+services/web/admin-console/backend/tests
+services/web/admin-console/backend/tests/contract
+services/web/admin-console/backend/tests/integration
+services/web/admin-console/backend/tests/sandbox
+services/web/admin-console/backend/tests/smoke
 services/web/admin-console/docs
+services/web/admin-console/docs/Tema Velzon
+services/web/admin-console/docs/velzon_source
+services/web/admin-console/docs/velzon_source/assets
 services/web/admin-console/frontend
+services/web/admin-console/frontend/components
+services/web/admin-console/frontend/components/cards
+services/web/admin-console/frontend/components/forms
+services/web/admin-console/frontend/components/grids
+services/web/admin-console/frontend/components/layout
+services/web/admin-console/frontend/components/ui
+services/web/admin-console/frontend/js
+services/web/admin-console/frontend/renderer
+services/web/admin-console/frontend/renderer/engine
+services/web/admin-console/frontend/themes
+services/web/admin-console/frontend/themes/css
+services/web/admin-console/frontend/themes/fonts
+services/web/admin-console/frontend/themes/images
+services/web/admin-console/frontend/themes/js
+services/web/admin-console/frontend/themes/json
+services/web/admin-console/frontend/themes/libs
+services/web/admin-console/frontend/utils
+services/web/admin-console/frontend/vendor
+services/web/admin-console/frontend/vendor/jsoneditor
 services/web/chat-web-renderer
 services/web/chat-web-renderer/backend
+services/web/chat-web-renderer/backend/app
+services/web/chat-web-renderer/backend/app/__pycache__
+services/web/chat-web-renderer/backend/app/adapters
+services/web/chat-web-renderer/backend/app/api
+services/web/chat-web-renderer/backend/app/core
+services/web/chat-web-renderer/backend/app/planner
+services/web/chat-web-renderer/backend/app/schemas
+services/web/chat-web-renderer/backend/app/session
+services/web/chat-web-renderer/backend/app/transformer
+services/web/chat-web-renderer/backend/tests
+services/web/chat-web-renderer/backend/tests/integration
+services/web/chat-web-renderer/backend/tests/smoke
+services/web/chat-web-renderer/backend/tests/unit
 services/web/chat-web-renderer/frontend
-services/web/datasyncsa
-services/web/datasyncsa/css
-services/web/datasyncsa/img
-services/web/datasyncsa/js
-services/web/tests
-services/web/tests/assets
+services/web/chat-web-renderer/frontend/components
+services/web/chat-web-renderer/frontend/components/interactive
+services/web/chat-web-renderer/frontend/components/media
+services/web/chat-web-renderer/frontend/components/realtor
+services/web/chat-web-renderer/frontend/core
 tests
 tests/sandbox
 tests/sandbox/__pycache__
@@ -830,33 +661,19 @@ tests/system/__pycache__
 ## Entry Points Detectados
 
 ```text
-services/generic-bridge-v2/main.py:34:app = FastAPI(
-services/generic-bridge-v2/main.py:292:if __name__ == "__main__":
-services/generic-bridge-v2/main.py:298:    uvicorn.run(
-services/etl-processor/main.py:3:app = FastAPI()
-services/agent-core/main.py:5:app = FastAPI(title="agent-core")
-services/agent-core/main.py:6:app.include_router(api_router)
-services/property-bridge-v2/main.py:35:app = FastAPI(
-services/property-bridge-v2/main.py:353:if __name__ == "__main__":
-services/property-bridge-v2/main.py:359:    uvicorn.run(
-services/inference-stack-v2/inference-core-v2/worker.py:31:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v2/main.py:53:app = FastAPI(
-services/inference-stack-v2/inference-core-v2/main.py:70:app.include_router(chat_v2_router, prefix=settings.api_prefix, tags=["chat-v2"])
-services/inference-stack-v2/inference-core-v2/main.py:84:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v2/main.py:85:    uvicorn.run(
+services/bridges/property-bridge/main.py:41:app = FastAPI(
+services/bridges/property-bridge/main.py:360:if __name__ == "__main__":
+services/bridges/property-bridge/main.py:366:    uvicorn.run(
+services/bridges/generic-bridge/main.py:40:app = FastAPI(
+services/bridges/generic-bridge/main.py:299:if __name__ == "__main__":
+services/bridges/generic-bridge/main.py:305:    uvicorn.run(
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v3/main.py:44:app = FastAPI(
-services/inference-stack-v2/inference-core-v3/main.py:59:app.include_router(chat_v3_router, prefix=settings.api_prefix, tags=["chat-v3"])
-services/inference-stack-v2/inference-core-v3/main.py:72:if __name__ == "__main__":
-services/inference-stack-v2/inference-core-v3/main.py:73:    uvicorn.run(
 services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
-services/inference-stack-v2/semantic-adapter-v2/main.py:21:app = FastAPI(
-services/inference-stack-v2/semantic-adapter-v2/main.py:46:app.include_router(router, prefix="/api/v2")
-services/inference-stack-v2/semantic-adapter-v2/main.py:52:if __name__ == "__main__":
-services/inference-stack-v2/semantic-adapter-v2/main.py:54:    uvicorn.run(app, host="0.0.0.0", port=8000)
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/scoring-core/worker.py:31:if __name__ == "__main__":
 services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
@@ -894,26 +711,30 @@ services/web/admin-console/backend/app/main.py:78:app.include_router(grid_preset
 ## Rutas API Detectadas
 
 ```text
-services/agent-core/app/api/chat.py:140:@router.get("/health")
-services/agent-core/app/api/chat.py:145:@router.post("/chat", response_model=ChatResponse)
-services/agent-core/app/api/chat.py:192:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:35:@router.post("/chat", response_model=ChatV2Response)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:77:@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:99:@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:126:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:145:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:163:@router.get("/scoring/models/active", response_model=ActiveModelResponse)
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:210:@router.post("/cache/invalidate")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:241:@router.get("/health")
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py:261:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/bridges/property-bridge/main.py:218:@app.post("/chat", response_model=PropertyChatResponse)
+services/bridges/property-bridge/main.py:315:@app.get("/health")
+services/bridges/property-bridge/main.py:345:@app.get("/")
+services/bridges/generic-bridge/main.py:150:@app.post("/chat", response_model=GenericChatResponse)
+services/bridges/generic-bridge/main.py:256:@app.get("/health")
+services/bridges/generic-bridge/main.py:285:@app.get("/")
 services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:257:@router.get("/health")
-services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:32:@router.post("/chat", response_model=ChatV3Response)
-services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:51:@router.get("/health")
-services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:61:@router.post("/cache/invalidate", response_model=CacheInvalidateResponse)
-services/inference-stack-v2/inference-core-v3/app/api/chat_v3.py:83:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:45:@router.get("/health")
-services/inference-stack-v2/semantic-adapter-v2/app/api.py:66:@router.post("/search", response_model=SearchResponse)
+services/web/chat-web-renderer/backend/app/api/external.py:259:@router.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
+services/web/chat-web-renderer/backend/app/main.py:104:@app.post("/chat/init", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:116:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:315:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:329:@app.post("/internal/memory/reset")
+services/etl-docs/main.py:28:@app.get("/")
+services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
+services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
+services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
+services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
+services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
+services/ai_runtime/api.py:26:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:31:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:45:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/scoring-core/main.py:62:@app.get("/")
 services/scoring-core/app/api/scoring.py:50:@router.post("/scoring/jobs/enqueue", response_model=EnqueueScoreJobResponse)
 services/scoring-core/app/api/scoring.py:73:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
 services/scoring-core/app/api/scoring.py:92:@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
@@ -1016,27 +837,7 @@ services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.ge
 services/web/admin-console/backend/app/modules/leads_v2/router.py:134:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:182:@router.get("/{lead_id}/scoring", response_model=ScoringValuesV2)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:203:@router.get("/schema/current", response_model=ScoringSchemaV2)
-services/web/admin-console/backend/app/modules/users/router.py:20:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/users/router.py:98:@router.get("/data", response_model=List[UserRow])
-services/web/admin-console/backend/app/modules/users/router.py:102:@router.get("/roles/simple-list")
-services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("/{item_id}", response_model=UserRow)
-services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
-services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
-services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
-services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.post("/pdfs/upload")
-services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
-services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
-services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/main.py:56:@app.get("/health")
 services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
@@ -1044,2755 +845,1320 @@ services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.post("/pdfs/upload")
+services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
+services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
+services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/users/router.py:20:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/users/router.py:98:@router.get("/data", response_model=List[UserRow])
+services/web/admin-console/backend/app/modules/users/router.py:102:@router.get("/roles/simple-list")
+services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("/{item_id}", response_model=UserRow)
+services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
+services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
+services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
 ```
 
-## Contratos/Modelos Críticos
+## AI Runtime
 
-```text
-services/scoring-core/app/models/contracts.py:9:class ScoreConversationRequest(BaseModel):
-services/scoring-core/app/models/contracts.py:31:class EnqueueScoreJobResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:39:class ScoringJobResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:63:class ScoringOpsSummaryResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:82:class ScoreItemV2(BaseModel):
-services/scoring-core/app/models/contracts.py:90:class ScorecardV2(BaseModel):
-services/scoring-core/app/models/contracts.py:99:class ScorecardResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:117:class ActiveModelResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:126:class InternalMemoryResetRequest(BaseModel):
-services/scoring-core/app/models/contracts.py:136:class InternalMemoryResetResponse(BaseModel):
-services/scoring-core/app/models/contracts.py:143:class CacheInvalidateResponse(BaseModel):
-services/agent-core/app/models/contracts.py:23:class RealtorSearchSlots(BaseModel):
-services/agent-core/app/models/contracts.py:36:class RAGQuery(BaseModel):
-services/agent-core/app/models/contracts.py:42:class WorkflowCall(BaseModel):
-services/agent-core/app/models/contracts.py:53:class ToolCall(BaseModel):
-services/agent-core/app/models/contracts.py:70:class RouterDecision(BaseModel):
-services/agent-core/app/models/contracts.py:97:class GateResult(BaseModel):
-services/agent-core/app/models/contracts.py:110:class RAGChunk(BaseModel):
-services/agent-core/app/models/contracts.py:118:class RAGResult(BaseModel):
-services/agent-core/app/models/contracts.py:123:class PropertyListing(BaseModel):
-services/agent-core/app/models/contracts.py:138:class RealtorSQLResult(BaseModel):
-services/agent-core/app/models/contracts.py:145:class WorkflowResult(BaseModel):
-services/agent-core/app/models/contracts.py:151:class ToolResult(BaseModel):
-services/agent-core/app/models/contracts.py:161:class PropertyCard(BaseModel):
-services/agent-core/app/models/contracts.py:173:class SearchSummaryCard(BaseModel):
-services/agent-core/app/models/contracts.py:180:class RAGSourceCard(BaseModel):
-services/agent-core/app/models/contracts.py:191:class SynthesizerInput(BaseModel):
-services/agent-core/app/models/contracts.py:198:class SynthesizerOutput(BaseModel):
-services/agent-core/app/models/contracts.py:211:class GuardrailResult(BaseModel):
-services/agent-core/app/models/contracts.py:222:class AnswerEnvelope(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:4:class BaseComponent(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:52:class BrandingConfig(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/ui.py:77:class SDUIResponse(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:7:class InitRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:17:class ChatRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/chat.py:50:class InternalMemoryResetRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:10:class InternalChatRequest(BaseModel):
-services/web/chat-web-renderer/backend/app/schemas/internal_chat.py:45:class InternalChatResponse(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:4:class UIComponent(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:23:class UIMenuItem(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:30:class UISidebar(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:34:class UIAppShell(BaseModel):
-services/web/admin-console/backend/app/contracts/ui_schema.py:39:class WebIAFirstResponse(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:5:class ScoringBandV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:15:class ScoringCriterionV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:27:class ScoringSchemaV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:39:class ScoreItemValueV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:51:class ScoringValuesV2(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:63:class DynamicLeadGridColumn(BaseModel):
-services/web/admin-console/backend/app/contracts/scoring_schema.py:74:class DynamicGridConfig(BaseModel):
-services/etl-docs/src/shared/memory_reset.py:11:def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
-services/etl-docs/src/shared/schemas.py:27:class DocumentUploadMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:34:class CanonicalMetadata(BaseModel):
-services/etl-docs/src/shared/schemas.py:44:class CanonicalDocument(BaseModel):
-services/etl-docs/src/shared/schemas.py:73:class SemanticItem(BaseModel):
-services/etl-docs/src/shared/schemas.py:88:class RAGFilters(BaseModel):
-services/etl-docs/src/shared/schemas.py:92:class RAGQuery(BaseModel):
-services/etl-docs/src/shared/schemas.py:98:class RAGResult(BaseModel):
-services/etl-docs/src/shared/schemas.py:105:class RAGResponse(BaseModel):
-services/etl-docs/src/shared/schemas.py:113:class PropertyBase(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:7:class ChatV2Request(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:38:class ScoreItemV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:47:class ScorecardV2(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:57:class ChatV2Response(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:86:class ScoringJobResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:114:class ScoringOpsSummaryResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:137:class ScorecardResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:159:class ActiveModelResponse(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:172:class InternalMemoryResetRequest(BaseModel):
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py:177:class InternalMemoryResetResponse(BaseModel):
-```
-
-## Tablas/SQL Referenciadas (DB Map)
-
-```text
-services/agent-core/app/api/chat.py -> lead_id
-services/agent-core/app/core/prompt_service.py -> ai_system_prompt
-services/agent-core/app/core/prompt_service.py -> ai_vertical_slug
-services/agent-core/app/core/prompt_service.py -> lead_prompt
-services/agent-core/app/graph/nodes.py -> lead_id
-services/agent-core/app/graph/state.py -> lead_id
-services/agent-core/app/repositories/persistence.py -> lead_belongs_to_tenant
-services/agent-core/app/repositories/persistence.py -> lead_by_conversation_id
-services/agent-core/app/repositories/persistence.py -> lead_conversations
-services/agent-core/app/repositories/persistence.py -> lead_failed
-services/agent-core/app/repositories/persistence.py -> lead_id
-services/agent-core/app/repositories/persistence.py -> lead_increment
-services/agent-core/app/repositories/persistence.py -> lead_leads
-services/agent-core/app/repositories/persistence.py -> lead_messages
-services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompt
-services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompt_failed
-services/agent-core/app/repositories/prompt_repository.py -> ai_system_prompts
-services/agent-core/app/repositories/prompt_repository.py -> lead_ai_prompts
-services/agent-core/app/repositories/prompt_repository.py -> lead_client_verticals
-services/agent-core/app/repositories/prompt_repository.py -> lead_clients
-services/agent-core/app/repositories/prompt_repository.py -> lead_prompt
-services/agent-core/app/repositories/prompt_repository.py -> lead_prompt_failed
-services/agent-core/app/services/scoring_client.py -> lead_id
-services/agent-core/app/services/scoring_client.py -> lead_id_required
-services/agent-core/app/tools/sql_translator.py -> lead_properties
-services/agent-core/app/tools/sql_translator.py -> lead_property_images
-services/agent-core/tests/unit/test_no_hardcoded_realtor_copy.py -> ai_system_prompt
-services/agent-core/tests/unit/test_no_hardcoded_realtor_copy.py -> lead_prompt
-services/agent-core/tests/unit/test_synthesizer_payload_compaction.py -> lead_properties
-services/etl-docs/src/ETL_DOCS/processor.py -> ai_vectors
-services/etl-docs/src/shared/vector_store.py -> ai_knowledge_documents
-services/etl-docs/src/shared/vector_store.py -> ai_vectors
-services/generic-bridge-v2/main.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_leads
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_scoring_jobs
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_scoring_jobs_conversation
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_scoring_jobs_lead_created
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_scoring_jobs_status
-services/inference-stack-v2/inference-core-v2/app/dependencies/database.py -> lead_scoring_jobs_status_scheduled
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/models/chat_v2.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_ai_prompts
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_by_conversation_id
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_client_verticals
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_clients
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_conversation
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_conversations
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_count
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_current_scorecard
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_from_extraction
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_leads
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_lock_stmt
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_row
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_score_items
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scorecards
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scoring_bands
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scoring_criteria
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scoring_jobs
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scoring_models
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_scoring_prompts
-services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py -> lead_scoring_bands
-services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py -> lead_scoring_criteria
-services/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py -> lead_type
-services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_executor.py -> lead_leads
-services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_executor.py -> lead_properties
-services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_executor.py -> lead_property_images
-services/inference-stack-v2/inference-core-v2/app/services/realtor_turn_executor.py -> lead_propierties
-services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_ai_prompts
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_by_conversation_id
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_current_scorecard
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_from_extraction
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_profile
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_profile_text
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_properties
-services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py -> lead_id
-services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/tests/integration/test_api_chat_v2.py -> lead_id
-services/inference-stack-v2/inference-core-v2/tests/unit/test_hybrid_chat_context.py -> lead_profile
-services/inference-stack-v2/inference-core-v2/tests/unit/test_hybrid_chat_context.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v2/tests/unit/test_realtor_turn_executor.py -> lead_properties
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_job_service.py -> lead_id
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_job_service.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_by_conversation_id
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_current_scorecard
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_from_extraction
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_id
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_messages
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_orchestrator.py -> lead_properties
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_id
-services/inference-stack-v2/inference-core-v2/tests/unit/test_scoring_worker_generation.py -> lead_messages
-services/inference-stack-v2/inference-core-v3/app/graph/builder.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/app/graph/builder.py -> lead_followup_planner_node
-services/inference-stack-v2/inference-core-v3/app/graph/builder.py -> lead_state
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_followup_planner_node
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_name
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_snapshot_into_memory
-services/inference-stack-v2/inference-core-v3/app/graph/nodes.py -> lead_state
-services/inference-stack-v2/inference-core-v3/app/models/agent_state.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/models/agent_state.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/app/models/agent_state.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v3/app/models/chat_v3.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> ai_system_prompt
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> ai_system_prompt_bundle
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> ai_system_prompts
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_ai_prompts
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_by_conversation_id
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_client_verticals
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_clients
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_conversations
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_leads
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_messages
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_scoring_jobs
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_scoring_models
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_scoring_prompts
-services/inference-stack-v2/inference-core-v3/app/repositories/vertical_runtime_repository.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v3/app/services/answer_synthesizer.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/app/services/lead_followup_planner.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/app/services/lead_followup_planner.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/app/services/orchestrator.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/services/realtor_query_compiler.py -> lead_properties
-services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_leads
-services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_properties
-services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_property_images
-services/inference-stack-v2/inference-core-v3/app/services/realtor_search_executor.py -> lead_propierties
-services/inference-stack-v2/inference-core-v3/app/services/scoring_client.py -> lead_id
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> ai_system_prompt_bundle
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> ai_system_prompts
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> lead_ai_prompts
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> lead_properties
-services/inference-stack-v2/inference-core-v3/app/services/tenant_runtime.py -> lead_snapshot_read
-services/inference-stack-v2/inference-core-v3/app/services/turn_planning.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_blocks_capture_before_any_cards_are_shown
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_blocks_capture_when_turn_is_empty
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_does_not_force_name_capture_on_first_cards
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_enforces_two_turn_cooldown_between_capture_attempts
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_keeps_model_question_on_first_card_turn
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_payload_marks_first_cards_shown_now
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_reapplies_capture_name_after_first_cards_turn
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_followup_planner_updates_memory_and_marks_asked_field
-services/inference-stack-v2/inference-core-v3/tests/unit/test_lead_followup_planner.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_name
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_name_is_not_treated_as_real_name
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_snapshot
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_state
-services/inference-stack-v2/inference-core-v3/tests/unit/test_nodes.py -> lead_state_merges_lead_snapshot_into_memory
-services/inference-stack-v2/inference-core-v3/tests/unit/test_realtor_query_compiler.py -> lead_properties
-services/inference-stack-v2/inference-core-v3/tests/unit/test_realtor_search_executor.py -> lead_properties
-services/inference-stack-v2/inference-core-v3/tests/unit/test_response_contracts_loader.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/tests/unit/test_tenant_runtime.py -> ai_system_prompt_bundle
-services/inference-stack-v2/inference-core-v3/tests/unit/test_tenant_runtime.py -> lead_followup_planner
-services/inference-stack-v2/inference-core-v3/tests/unit/test_turn_planning.py -> lead_progression_state
-services/inference-stack-v2/inference-core-v3/tests/unit/test_vertical_runtime_repository.py -> lead_by_conversation_id
-services/inference-stack-v2/inference-core-v3/tests/unit/test_vertical_runtime_repository.py -> lead_id
-services/inference-stack-v2/inference-core-v3/tests/unit/test_vertical_runtime_repository.py -> lead_reuses_existing_conversation_lead
-services/inference-stack-v2/semantic-adapter-v2/app/vector_repo.py -> ai_vectors
-services/property-bridge-v2/main.py -> lead_scoring
-services/scoring-core/app/api/scoring.py -> lead_id
-services/scoring-core/app/api/scoring.py -> lead_snapshot
-services/scoring-core/app/dependencies/database.py -> lead_id
-services/scoring-core/app/dependencies/database.py -> lead_leads
-services/scoring-core/app/dependencies/database.py -> lead_messages
-services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs
-services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_conversation
-services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_lead_created
-services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_status
-services/scoring-core/app/dependencies/database.py -> lead_scoring_jobs_status_scheduled
-services/scoring-core/app/models/contracts.py -> lead_id
-services/scoring-core/app/models/contracts.py -> lead_messages
-services/scoring-core/app/repositories/scoring_repository.py -> lead_ai_prompts
-services/scoring-core/app/repositories/scoring_repository.py -> lead_by_conversation_id
-services/scoring-core/app/repositories/scoring_repository.py -> lead_client_verticals
-services/scoring-core/app/repositories/scoring_repository.py -> lead_clients
-services/scoring-core/app/repositories/scoring_repository.py -> lead_conversation
-services/scoring-core/app/repositories/scoring_repository.py -> lead_conversations
-services/scoring-core/app/repositories/scoring_repository.py -> lead_count
-services/scoring-core/app/repositories/scoring_repository.py -> lead_current_scorecard
-services/scoring-core/app/repositories/scoring_repository.py -> lead_from_extraction
-services/scoring-core/app/repositories/scoring_repository.py -> lead_id
-services/scoring-core/app/repositories/scoring_repository.py -> lead_leads
-services/scoring-core/app/repositories/scoring_repository.py -> lead_lock_stmt
-services/scoring-core/app/repositories/scoring_repository.py -> lead_messages
-services/scoring-core/app/repositories/scoring_repository.py -> lead_row
-services/scoring-core/app/repositories/scoring_repository.py -> lead_score_items
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scorecards
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_bands
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_criteria
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_jobs
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_models
-services/scoring-core/app/repositories/scoring_repository.py -> lead_scoring_prompts
-services/scoring-core/app/repositories/scoring_repository.py -> lead_snapshot
-services/scoring-core/app/services/prompt_builder.py -> lead_scoring_bands
-services/scoring-core/app/services/prompt_builder.py -> lead_scoring_criteria
-services/scoring-core/app/services/prompt_linter.py -> lead_type
-services/scoring-core/app/services/scoring_job_service.py -> lead_id
-services/scoring-core/app/services/scoring_job_service.py -> lead_messages
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_by_conversation_id
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_current_scorecard
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_from_extraction
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_id
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_messages
-services/scoring-core/app/services/scoring_orchestrator.py -> lead_snapshot
-services/scoring-core/app/services/scoring_worker.py -> lead_id
-services/scoring-core/app/services/scoring_worker.py -> lead_messages
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_dashboard_v2_clone
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_schema_v2_clone
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_detail_with_scoring_v2
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_id
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py -> lead_v2_service
-services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_detail_schema_v2_clone
-services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_id
-services/web/admin-console/backend/app/dashboards/seller_workspace/schema.py -> lead_messages
-services/web/admin-console/backend/app/main.py -> ai_library
-services/web/admin-console/backend/app/main.py -> ai_library_router
-services/web/admin-console/backend/app/main.py -> auth_router
-services/web/admin-console/backend/app/modules/ai_library/router.py -> ai_library
-services/web/admin-console/backend/app/modules/ai_library/router.py -> ai_library_view
-services/web/admin-console/backend/app/modules/auth/config.py -> auth_backend
-services/web/admin-console/backend/app/modules/auth/models.py -> auth_client_user
-services/web/admin-console/backend/app/modules/auth/models.py -> auth_roles
-services/web/admin-console/backend/app/modules/auth/models.py -> auth_users
-services/web/admin-console/backend/app/modules/auth/models.py -> lead_clients
-services/web/admin-console/backend/app/modules/auth/models.py -> lead_contacts
-services/web/admin-console/backend/app/modules/auth/router.py -> auth_backend
-services/web/admin-console/backend/app/modules/auth/router.py -> auth_router
-services/web/admin-console/backend/app/modules/clients/router.py -> lead_brand_configs
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_client_verticals
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_clients
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_countries
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_knowledge_documents
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_leads
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_properties
-services/web/admin-console/backend/app/modules/clients/service.py -> lead_scoring_models
-services/web/admin-console/backend/app/modules/contacts/categories.py -> lead_channel_categories
-services/web/admin-console/backend/app/modules/contacts/models.py -> lead_client_channels
-services/web/admin-console/backend/app/modules/contacts/models.py -> lead_clients
-services/web/admin-console/backend/app/modules/contacts/models.py -> lead_contact_channels
-services/web/admin-console/backend/app/modules/contacts/models.py -> lead_contacts
-services/web/admin-console/backend/app/modules/contacts/service.py -> lead_channel_categories
-services/web/admin-console/backend/app/modules/contacts/service.py -> lead_contact_channels
-services/web/admin-console/backend/app/modules/contacts/service.py -> lead_contacts
-services/web/admin-console/backend/app/modules/countries/service.py -> lead_countries
-services/web/admin-console/backend/app/modules/grid_presets/service.py -> lead_grid_presets
-services/web/admin-console/backend/app/modules/leads/router.py -> lead_by_id
-services/web/admin-console/backend/app/modules/leads/router.py -> lead_chat
-services/web/admin-console/backend/app/modules/leads/router.py -> lead_detail
-services/web/admin-console/backend/app/modules/leads/router.py -> lead_id
-services/web/admin-console/backend/app/modules/leads/router.py -> lead_service
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_appointments
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_by_id
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_contact_preferences
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_id
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_leads
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_name
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_scoring_definitions
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_sources
-services/web/admin-console/backend/app/modules/leads/service.py -> lead_statuses
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_client_verticals
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_bands
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_criteria
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_models
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_prompts
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_prompts_active_model
-services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_service.py -> lead_scoring_prompts_model_id_version_key
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_detail_components
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_detail_v2
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_detail_with_scoring_v2
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_id
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_scoring_values
-services/web/admin-console/backend/app/modules/leads_v2/router.py -> lead_v2_service
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_by_id
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_client_verticals
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_clients
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_contact_preferences
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_conversations
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_data
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_detail_with_scoring_v2
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_id
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_leads
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_messages
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_score_items
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scorecards
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scoring_bands
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scoring_criteria
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_scoring_models
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_sources
-services/web/admin-console/backend/app/modules/leads_v2/service.py -> lead_statuses
-services/web/admin-console/backend/app/modules/prompts/service.py -> lead_ai_prompts
-services/web/admin-console/backend/app/modules/prompts/service.py -> lead_clients
-services/web/admin-console/backend/app/modules/roles/service.py -> auth_roles
-services/web/admin-console/backend/app/modules/system_public_docs/router.py -> ai_library
-services/web/admin-console/backend/app/modules/system_public_docs/router.py -> lead_clients
-services/web/admin-console/backend/app/modules/users/service.py -> auth_client_user
-services/web/admin-console/backend/app/modules/users/service.py -> auth_roles
-services/web/admin-console/backend/app/modules/users/service.py -> auth_users
-services/web/admin-console/backend/app/modules/users/service.py -> lead_clients
-services/web/admin-console/backend/scripts/restore_pass.py -> auth_users
-services/web/admin-console/backend/scripts/verify_password_change.py -> auth_users
-services/web/admin-console/backend/tests/conftest.py -> auth_override
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> ai_library
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> ai_library_pdfs_data_maps_sync_status
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> ai_library_router_module
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> ai_library_view_contract
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> ai_library_view_hides_public_access_level_for_regular_tenant
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> auth_override
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> lead_by_id
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> lead_detail_contract_includes_chat_navigation
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> lead_id
-services/web/admin-console/backend/tests/contract/test_leads_ai_library_contracts.py -> lead_service
-services/web/admin-console/backend/tests/contract/test_sdui_router_contracts.py -> auth_override
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> auth_override
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> auth_returns_ok
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_by_id
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_detail_passes_user_scope
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_id
-services/web/admin-console/backend/tests/integration/test_security_and_scoping.py -> lead_service
-services/web/chat-web-renderer/backend/app/api/external.py -> ai_response
-services/web/chat-web-renderer/backend/app/api/external.py -> ai_text
-services/web/chat-web-renderer/backend/app/api/external.py -> auth_not_configured
-services/web/chat-web-renderer/backend/app/api/external.py -> auth_user_id
-services/web/chat-web-renderer/backend/app/api/external.py -> lead_id
-services/web/chat-web-renderer/backend/app/api/schemas.py -> auth_user_id
-services/web/chat-web-renderer/backend/app/core/database.py -> lead_brand_configs
-services/web/chat-web-renderer/backend/app/core/database.py -> lead_client_verticals
-services/web/chat-web-renderer/backend/app/core/database.py -> lead_clients
-services/web/chat-web-renderer/backend/app/core/database.py -> lead_properties
-services/web/chat-web-renderer/backend/app/core/database.py -> lead_property_images
-services/web/chat-web-renderer/backend/app/core/inference_bridge.py -> lead_id
-services/web/chat-web-renderer/backend/app/main.py -> ai_response
-services/web/chat-web-renderer/backend/app/main.py -> ai_text
-services/web/chat-web-renderer/backend/app/main.py -> lead_id
-services/web/chat-web-renderer/backend/app/schemas/internal_chat.py -> auth_user_id
-services/web/chat-web-renderer/backend/app/transformer/core.py -> ai_response
-services/web/chat-web-renderer/backend/app/transformer/core.py -> ai_text
-services/web/chat-web-renderer/backend/app/transformer/core.py -> lead_brand_configs
-services/web/chat-web-renderer/backend/app/transformer/generic_policy.py -> ai_response
-services/web/chat-web-renderer/backend/app/transformer/generic_policy.py -> ai_text
-services/web/chat-web-renderer/backend/app/transformer/realtor_policy.py -> ai_response
-services/web/chat-web-renderer/backend/app/transformer/realtor_policy.py -> ai_text
-services/web/chat-web-renderer/backend/tests/integration/test_api.py -> ai_text
-services/web/chat-web-renderer/backend/tests/integration/test_tenant_isolation.py -> ai_text
-services/web/chat-web-renderer/backend/tests/unit/test_chat_runtime.py -> ai_text
-services/web/chat-web-renderer/backend/tests/unit/test_external_api_security.py -> ai_text
-services/web/chat-web-renderer/backend/tests/unit/test_generic_policy.py -> ai_text
-services/web/chat-web-renderer/backend/tests/unit/test_internal_chat_schema.py -> auth_user_id
-services/web/chat-web-renderer/backend/tests/unit/test_realtor_policy.py -> ai_text
-```
-
-## Motor SUID/SDUI (archivos núcleo)
-
-### `services/web/admin-console/backend/app/contracts/ui_schema.py`
+### `services/ai_runtime/ARCHITECTURE.md`
 
 ```
-from pydantic import BaseModel
-from typing import List, Optional, Literal
+# Datasyncsa AI Architecture
 
-class UIComponent(BaseModel):
-    type: str
-    label: Optional[str] = None
-    color: Optional[str] = "primary" # Relaxed literal for now or keep it strict? Keeping strict might break valid Velzon tokens if not listed. Let's make it optional string for flexibility.
-    
-    # Generic fields for various components
-    components: Optional[List['UIComponent']] = None # Recursive for Grid
-    text: Optional[str] = None # For Typography
-    tag: Optional[str] = None # For Typography
-    buttons: Optional[List[dict]] = None # For Button Group
-    class_: Optional[str] = None # For custom classes (using class_ alias for 'class')
+## Objetivo
 
-    properties: dict = {}
+`services/ai_runtime` define el runtime conversacional multitenant nuevo de Datasyncsa AI con dos grafos LangGraph:
 
-    model_config = {
-        "extra": "allow", # Allow arbitrary fields like 'icon', 'metric', etc.
-        "populate_by_name": True
-    }
+- `grafo_realtor`
+- `grafo_generico`
 
-class UIMenuItem(BaseModel):
-    id: str
-    label: str
-    icon: Optional[str] = None
-    link: Optional[str] = None # For navigation
-    subItems: Optional[List['UIMenuItem']] = None # Recursive submenu
+El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`, toda sesion se hidrata con `tenant_config`, y Redis/PostgreSQL se consultan con scope tenant desde la base del runtime.
 
-class UISidebar(BaseModel):
-    brand: str
-    items: List[UIMenuItem]
+## Principios Innegociables
 
-class UIAppShell(BaseModel):
-    layout: Literal["dashboard-shell"] = "dashboard-shell"
-    sidebar: UISidebar
-    content: List['UIComponent'] # Initial content to load
+1. `client_id` vive en el estado desde el primer turno.
+2. El estado es acumulativo y se persiste por sesion.
+3. Prompts se componen en runtime con tres capas:
+   - `tone_prompt` del tenant
+   - prompt base del vertical
+   - contexto del turno
+4. El LLM clasifica y redacta.
+5. El codigo resuelve IDs, cola, reglas y side-effects.
+6. Redis usa llaves prefijadas por tenant:
+   - `{client_id}:session:{session_id}:state`
+   - `{client_id}:session:{session_id}:lead`
+   - `{client_id}:config`
+   - `{client_id}:agents`
 
-class WebIAFirstResponse(BaseModel):
-    # This might be deprecated or used for partial updates, but for app-init we'll use UIAppShell
-    layout: str
-    components: Optional[List[UIComponent]] = None
-    properties: Optional[dict] = None
-    tabs: Optional[List[dict]] = None
+## Mapa de Carpetas
+
+- `main.py`: entrypoint FastAPI minimo.
+- `api.py`: `/health` y `/chat`.
+- `domain/contracts.py`: entidades canonicas, request/response, intents.
+- `domain/state.py`: estado base, estado generic y estado realtor.
+- `domain/ports.py`: puertos abstractos para LLM, Redis, PG, RAG, mail y workers.
+- `config/tenant_loader.py`: carga y cache de tenant.
+- `config/prompt_composer.py`: tone + vertical + context.
+- `runtime/bootstrap.py`: wiring por defecto.
+- `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
+- `graph/_shared/**`: nodos, routers, prompts y tools comunes.
+- `graph/generic/**`: builder y nodos del vertical reducido.
+- `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
+- `rag/**`: repositorios pgvector aislados por tenant.
+- `workers/lead_worker.py`: worker fire-and-forget placeholder v1.
+
+## Flujo de Entrada
+
+### property-bridge
+
+1. Valida `client_id`.
+2. Envía `bridge=property-bridge`.
+3. `ConversationRuntime` carga `tenant_config`.
+4. `GraphRegistry` exige `vertical=realtor`.
+5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor`.
+
+### generic-bridge
+
+1. Valida `client_id`.
+2. Envía `bridge=generic-bridge`.
+3. `ConversationRuntime` carga `tenant_config`.
+4. `GraphRegistry` exige `vertical in {healthcare, legal}`.
+5. Se hidrata o recupera sesion y se ejecuta `grafo_generico`.
+
+## Estado Canonico
+
+El estado esta modelado en `domain/state.py` y contiene:
+
+- sesion: `session_id`, `conversation_id`, `user_id`, `client_id`, `vertical`, `bridge`, `current_turn`
+- prompts/config: `capabilities`, `tenant_config`
+- referencias: `resolved_references`, `pending_clarification`, `clarification_attempts`
+- cola: `intent_queue`, `active_intent`, `completed_intents`, `turn_outputs`
+- lead: `lead_advisor`, `lead`, `escalacion`
+- cita: `cita`
+- salida: `final_response`
+- realtor only:
+  - `search_filters`, `inventory`, `last_search_results`, `last_mentioned`
+  - `active_comparison`, `focus_scope`, `search_attempts`
+  - `cards_shown`, `cards_mode`, `render_mode`, `ui_payload`
+  - `financial_context`
+
+## LangGraph Control Loops
+
+### Shared flow
+
+`START -> resolve_references -> classify_intent -> route_next_intent`
+
+Routers compartidos:
+
+- `after_resolve_references`
+  - `ask_clarification`
+  - `collect_lead_data`
+  - `classify_intent`
+- `after_classify_intent`
+  - `route_next_intent`
+  - `lead_advisor`
+- `after_check_queue`
+  - `route_next_intent`
+  - `lead_advisor`
+
+### Clarification loop
+
+- entrada: referencia ambigua o dato faltante
+- una sola pregunta por turno
+- maximo 3 intentos
+- al llegar al limite, pasa a `collect_lead_data`
+
+### Intent queue
+
+- `classify_intent` genera hasta 4 intents
+- `route_next_intent` elige el siguiente intent ejecutable
+- cada nodo de capacidad cierra explicitamente `running -> done`
+- `check_queue` decide si quedan intents pendientes
+
+### Realtor enrich/reanalyze loop
+
+- `search`
+- si `0 resultados` y `attempts < 3` -> `search` otra vez con filtros relajados
+- si `0 < resultados < 4` -> `render_mode=text`
+- si `>= 4` -> `render_cards`
+
+## Separacion de Responsabilidades
+
+### LLM
+
+- `resolve_references`: clasifica tipo de referencia
+- `classify_intent`: detecta intenciones
+- `route_next_intent`: solo condiciones lazy
+- `synthesize`: respuesta final
+- `compare_properties`: solo redaccion
+- `llm_recommend`: solo redaccion
+- `text_to_sql`: traduccion controlada a SQL
+- `collect_lead_data` y `collect_appointment_data`: extraccion conversacional
+
+### Codigo deterministico
+
+- resolver referencias a IDs
+- filtrar capabilities por tenant
+- manejar la cola y dependencias
+- reglas `lead_advisor`
+- `render_cards`
+- `financial_calc`
+- `assign_agent`
+- aislamiento `client_id` en Redis y PostgreSQL
+
+## Prompt Runtime
+
+`prompt_composer.compose(node_type, tenant_config, vertical, context)` aplica:
+
+1. `tone_prompt` del tenant
+2. prompt del vertical o prompt base segun `node_type`
+3. contexto JSON serializado del turno
+
+Prompts incluidos:
+
+- base:
+  - `reference_classifier_prompt.py`
+  - `intent_detector_prompt.py`
+  - `lazy_condition_evaluator_prompt.py`
+  - `clarification_prompt.py`
+  - `lead_data_collector_prompt.py`
+- vertical:
+  - `vertical/realtor/{plan,synthesis}_prompt.py`
+  - `vertical/healthcare/{plan,synthesis}_prompt.py`
+  - `vertical/legal/{plan,synthesis}_prompt.py`
+- realtor:
+  - `text_to_sql_prompt.py`
+  - `comparison_synthesizer_prompt.py`
+  - `recommendation_prompt.py`
+  - `appointment_data_collector_prompt.py`
+
+## Persistencia y Caches
+
+### Redis
+
+- `SessionStore`: estado del grafo
+- `LeadStore`: scores y campos extraidos
+- `TenantCache`: config y agentes
+
+### PostgreSQL
+
+- `TenantRepository`: config editable por tenant
 ```
-### `services/web/admin-console/backend/app/modules/shared/sdui.py`
-
-```
-import base64
-import json
-from typing import Any, Dict
-
-
-def encode_schema_b64(schema: list[dict]) -> str:
-    return base64.b64encode(json.dumps(schema).encode()).decode()
-
-
-def edit_action(action_url: str, schema_b64: str, label: str = "Editar") -> Dict[str, Any]:
-    return {
-        "label": label,
-        "icon": "ri-pencil-line",
-        "action": "edit",
-        "action_url": action_url,
-        "schema": schema_b64,
-    }
-
-
-def delete_action(action_url: str, label: str = "Eliminar") -> Dict[str, Any]:
-    return {
-        "label": label,
-        "icon": "ri-delete-bin-line",
-        "action": "delete",
-        "action_url": action_url,
-        "color": "danger",
-    }
-
-
-def create_modal_action(
-    action_url: str,
-    schema_b64: str,
-    modal_title: str,
-    label: str,
-    icon: str = "ri-add-line",
-) -> Dict[str, Any]:
-    return {
-        "label": label,
-        "action": "modal-form",
-        "action_url": action_url,
-        "modal_title": modal_title,
-        "color": "success",
-        "icon": icon,
-        "schema": schema_b64,
-    }
-```
-### `services/web/admin-console/frontend/renderer/main.js`
-
-```
-/**
- * AI-First SDUI Renderer Engine (Modular Version)
- * Strictly follows 'visual_dictionary.json' and 'catalog_context.json'
- */
-
-import { renderContent, renderComponent } from './engine/registry.js';
-export { renderContent, renderComponent };
-import { hydrateGrids } from './engine/hydration.js';
-import './engine/actions.js'; // Attaches handlers to window
-const RUNTIME_VERSION = (window.AppConfig && window.AppConfig.APP_VERSION) ? window.AppConfig.APP_VERSION : '1';
-
-import { LinkAppShell } from '../components/layout/AppShell.js';
-import { LinkSidebar } from '../components/layout/Sidebar.js';
-import { LinkNavbar } from '../components/layout/Navbar.js';
-import { LinkProjectBanner } from '../components/layout/ProjectBanner.js';
-
-const API_BASE_URL = window.AppConfig.API_BASE_URL;
-const RENDERER_VERSION = RUNTIME_VERSION;
-console.log(`[Renderer] v${RENDERER_VERSION} Modular Initializing... (REGISTRY FIX)`);
-
-window.appState = { currentPath: null };
-window.navigateTo = navigateTo; // Expose for inline clicks
-window.hydrateGrids = hydrateGrids;
-
-async function init() {
-    const appRoot = document.getElementById('app-root');
-    try {
-        const token = localStorage.getItem('access_token');
-        const headers = {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        // Timeout Promise
-        const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Connection timed out. Backend is unresponsive.')), 5000)
-        );
-
-        // Race fetch against timeout
-        const requestAppInit = (url) => fetch(url, { headers, cache: 'no-store' });
-        let response = await Promise.race([
-            requestAppInit(`${API_BASE_URL}/app-init`),
-            timeout
-        ]);
-
-        // Defensive retry to avoid intermittent stale/unauthorized responses on hard reload.
-        if (response.status === 401 && token) {
-            response = await Promise.race([
-                requestAppInit(`${API_BASE_URL}/app-init?_ts=${Date.now()}`),
-                timeout
-            ]);
-        }
-
-        if (response.status === 401) {
-            window.location.href = '/login.html';
-            return;
-        }
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-        const appData = await response.json();
-
-        // Normal Boot Process...
-        if (appData.layout === 'dashboard-shell') {
-            if (appData.content) appData.contentHtml = renderContent(appData.content);
-            const shellHtml = LinkAppShell(appData);
-
-            const existingWrapper = document.getElementById('layout-wrapper');
-            if (existingWrapper) existingWrapper.outerHTML = shellHtml;
-            else document.body.insertAdjacentHTML('afterbegin', shellHtml);
-
-            setupThemeSwitcher();
-            updateHeaderProfile();
-            setupNavigation();
-
-            const currentPath = `${window.location.pathname}${window.location.search || ''}`;
-            if (currentPath && currentPath !== '/' && currentPath !== '/index.html') {
-                navigateTo(currentPath);
-            } else {
-                hydrateGrids();
-            }
-        }
-    } catch (error) {
-        console.error('Render Error:', error);
-        // EMERGENCY MODE UI
-        document.body.innerHTML = `
-            <div class="ac-emergency-screen">
-                <h1 class="ac-emergency-title">⚠️ EMERGENCY MODE</h1>
-                <p>The Application failed to initialize.</p>
-                <div class="ac-emergency-box">
-                    <textarea readonly class="ac-emergency-textarea">${(error.stack || error.message || JSON.stringify(error) || "Unknown Error")}</textarea>
-                    <button type="button" class="ac-emergency-copy-btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); this.innerText='COPIED!'">COPY ERROR TO CLIPBOARD</button>
-                </div>
-                <button class="ac-emergency-retry-btn" onclick="window.location.reload()">
-                    Retry Connection
-                </button>
-            </div>
-        `;
-    }
-}
-
-export async function navigateTo(href, pushState = true) {
-    if (!href || href === '#' || href.startsWith('#')) return;
-
-    // PERSISTENCE LOGIC START
-    // If we are leaving a grid view (e.g. /leads/me) to go to a detail view, save the grid URL.
-    const isDetailView = /\/leads(?:_v2)?\/[0-9a-fA-F-]{36}/.test(href);
-    if (isDetailView && window.location.pathname !== href) {
-        localStorage.setItem('last_active_grid_url', window.location.pathname);
-    }
-    // PERSISTENCE LOGIC END
-    // PERSISTENCE LOGIC END
-
-    window.appState.currentPath = href;
-    const pageRoot = document.getElementById('page-root');
-    if (!pageRoot) return;
-
-    pageRoot.innerHTML = `<div class="text-center mt-5"><div class="spinner-border text-primary" role="status"></div></div>`;
-
-    try {
-        const token = localStorage.getItem('access_token');
-        const headers = {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        const toggleTrailingSlash = (path) => {
-            const [pathname, query = ''] = String(path).split('?');
-            if (!pathname || pathname === '/') return path;
-            const toggled = pathname.endsWith('/') ? pathname.slice(0, -1) : `${pathname}/`;
-            return query ? `${toggled}?${query}` : toggled;
-        };
-
-        let resolvedHref = href;
-        let response = await fetch(`${API_BASE_URL}${resolvedHref}`, { headers, cache: 'no-store' });
-        if (!response.ok) throw new Error(`View not found (${response.status})`);
-
-        let contentType = response.headers.get('content-type') || '';
-        if (!contentType.toLowerCase().includes('application/json')) {
-            const altHref = toggleTrailingSlash(resolvedHref);
-            if (altHref !== resolvedHref) {
-                const altResponse = await fetch(`${API_BASE_URL}${altHref}`, { headers, cache: 'no-store' });
-                const altContentType = altResponse.headers.get('content-type') || '';
-                if (altResponse.ok && altContentType.toLowerCase().includes('application/json')) {
-                    resolvedHref = altHref;
-                    response = altResponse;
-                    contentType = altContentType;
-                }
-            }
-        }
-
-        if (!contentType.toLowerCase().includes('application/json')) {
-            throw new Error(`Invalid view payload (expected JSON). status=${response.status} content-type=${contentType} url=${response.url}`);
-        }
-
-        const viewData = await response.json();
-        if (viewData.debug_data) {
-            console.log("[Lead Detail Data]:", viewData.debug_data);
-        }
-        if (viewData.layout === 'dashboard-project-overview') {
-            const bannerHtml = LinkProjectBanner(viewData);
-            let tabsContentHtml = '';
-            if (viewData.tabs) {
-                tabsContentHtml = viewData.tabs.map(tab => {
-                    const activeClass = tab.active ? 'show active' : '';
-                    return `<div class="tab-pane fade ${activeClass}" id="${tab.id}" role="tabpanel">${renderContent(tab.components)}</div>`;
-                }).join('');
-            } else {
-                tabsContentHtml = `<div class="tab-pane fade show active" id="project-overview" role="tabpanel">${renderContent(viewData.components)}</div>`;
-            }
-            pageRoot.innerHTML = `${bannerHtml}<div class="tab-content text-muted mt-3">${tabsContentHtml}</div>`;
-        } else if (viewData.components) {
-            pageRoot.innerHTML = renderContent(viewData.components);
-        }
-
-        hydrateGrids();
-
-        if (pushState) history.pushState(null, '', resolvedHref);
-        document.body.classList.remove('vertical-sidebar-enable');
-    } catch (error) {
-        console.error('Navigation Error:', error);
-        pageRoot.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
-    }
-}
-
-function setupThemeSwitcher() {
-    const btn = document.querySelector('.light-dark-mode');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-        const html = document.documentElement;
-        const currentMode = html.getAttribute('data-bs-theme') || 'light';
-        const newMode = currentMode === 'light' ? 'dark' : 'light';
-        html.setAttribute('data-bs-theme', newMode);
-        html.setAttribute('data-layout-mode', newMode);
-        localStorage.setItem('theme-mode', newMode);
-    });
-    const savedMode = localStorage.getItem('theme-mode');
-    if (savedMode) {
-        document.documentElement.setAttribute('data-bs-theme', savedMode);
-        document.documentElement.setAttribute('data-layout-mode', savedMode);
-    }
-}
-
-function setupNavigation() {
-    document.addEventListener('click', (e) => {
-        const link = e.target.closest('a.nav-link') || e.target.closest('.js-navigate');
-        if (!link) return;
-        const href = link.getAttribute('href') || link.dataset.url;
-        if (!href || href === '#' || href.startsWith('#')) return;
-        e.preventDefault();
-        navigateTo(href, true);
-    });
-    window.addEventListener('popstate', () => {
-        const path = window.location.pathname;
-        if (path) navigateTo(path, false);
-    });
-}
+### `services/ai_runtime/main.py`
 
 ```
-### `services/web/admin-console/frontend/renderer/engine/registry.js`
+"""Minimal FastAPI entrypoint for the multitenant AI runtime."""
 
-```
-/**
- * Component Registry for SDUI Renderer
- * Maps component types to their respective Link functions.
- */
-
-import { LinkMetricCard } from '../../components/cards/MetricCard.js';
-import { LinkGridContainer } from '../../components/grids/Grid.js';
-import { LinkTypography } from '../../components/ui/Typography.js';
-import { LinkButtonGroup } from '../../components/ui/ButtonGroup.js';
-
-import { LinkLeadControlGrid } from '../../components/grids/LeadControlGrid.js';
-import { LinkTabs } from '../../components/ui/Tabs.js';
-import { LinkModalForm } from '../../components/forms/ModalForm.js';
-import { LinkFormContainer } from '../../components/forms/FormContainer.js';
-import { LinkRow, LinkCol } from '../../components/layout/Layout.js';
-import { LinkProjectBanner } from '../../components/layout/ProjectBanner.js';
-import { LinkCard } from '../../components/ui/Card.js';
-import { LinkGauge } from '../../components/ui/Gauge.js';
-import { LinkMemberListCard, LinkGenericCard, LinkFileGrid, LinkContactListDetailed } from '../../components/cards/DashboardWidgets.js';
-import { LinkScoreRow } from '../../components/ui/ScoreRow.js';
-import { LinkInfoRow } from '../../components/ui/InfoRow.js';
-import { LinkProfileHeader } from '../../components/ui/ProfileHeader.js';
-import { LinkBackLink } from '../../components/ui/BackLink.js';
-import { LinkEmptyState } from '../../components/ui/EmptyState.js';
-import { LinkAuditSplitView } from '../../components/ui/AuditSplitView.js';
-import { LinkLeadSourceView } from '../../components/ui/LeadSourceView.js';
-
-// Simple Wrapper for Custom Grid Container
-import { LinkCustomGridContainer } from '../../components/grids/CustomGridContainer.js';
-
-import { LinkGridVisual } from '../../components/grids/GridVisual.js';
-
-const registry = {
-    'custom-leads-grid': LinkCustomGridContainer, // Beta Engine
-    'card': LinkCard,
-    'card-metric': LinkMetricCard,
-    'grid': LinkGridContainer,
-    'typography': LinkTypography,
-    'button-group': LinkButtonGroup,
-    'grid-visual': LinkGridVisual,
-    'grid-leads-control': LinkLeadControlGrid,
-    'tabs': LinkTabs,
-    'modal-form': LinkModalForm,
-    'row': LinkRow,
-    'col': LinkCol,
-    'layout-row': LinkRow,
-    'layout-col': LinkCol,
-    'form-container': LinkFormContainer,
-    'project-banner': LinkProjectBanner,
-    'member-list': LinkMemberListCard,
-    'member-list-card': LinkMemberListCard,
-    'generic-card': LinkGenericCard,
-    'gauge': LinkGauge,
-    'file-grid': LinkFileGrid,
-    'contact-list-detailed': LinkContactListDetailed,
-    'score-row': LinkScoreRow,
-    'info-row': LinkInfoRow,
-    'profile-header': LinkProfileHeader,
-    'back-link': LinkBackLink,
-    'empty-state': LinkEmptyState,
-    'audit-split-view': LinkAuditSplitView,
-    'lead-source-view': LinkLeadSourceView
-};
-
-// --- GLOBAL FORM HANDLERS (Moved from FormContainer to ensure execution) ---
-
-if (!window.validateFileSize) {
-    window.validateFileSize = (input, helpId) => {
-        const file = input.files[0];
-        const helpText = document.getElementById(helpId);
-        if (!file) {
-            helpText.innerText = 'Max: 100MB';
-            helpText.classList.remove('text-danger', 'text-success');
-            helpText.classList.add('text-muted');
-            return;
-        }
-
-        const sizeMB = file.size / (1024 * 1024);
-        if (sizeMB > 100) {
-            input.value = ''; // Clear input
-            helpText.innerText = `Error: Archivo demasiado grande (${sizeMB.toFixed(2)} MB). Límite: 100MB`;
-            helpText.classList.remove('text-muted', 'text-success');
-            helpText.classList.add('text-danger');
-        } else {
-            helpText.innerText = `Tamaño: ${sizeMB.toFixed(2)} MB (OK)`;
-            helpText.classList.remove('text-muted', 'text-danger');
-            helpText.classList.add('text-success');
-        }
-    };
-}
-
-if (!window.handleFormSubmit) {
-    window.handleFormSubmit = async (event, formId) => {
-        event.preventDefault();
-        console.log('--- Handle Form Submit Triggered ---');
-
-        const form = document.getElementById(formId);
-        const formData = new FormData(form);
-        const action = form.getAttribute('action');
-        const method = form.getAttribute('method');
-        const btn = form.querySelector('button[type="submit"]');
-        const originalText = btn.innerText;
-
-        try {
-            btn.disabled = true;
-            btn.innerText = 'Guardando...';
-
-            // Get auth token if available
-            const token = localStorage.getItem('access_token');
-            const headers = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const fullUrl = window.AppConfig.API_BASE_URL + action;
-            console.log('Sending to:', fullUrl);
-            console.log('Token exists:', !!token);
-
-            const response = await fetch(fullUrl, {
-                method: method,
-                headers: headers,
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || `Error ${response.status}`);
-            }
-
-            const result = await response.json();
-
-            // Success Feedback
-            btn.classList.replace('btn-primary', 'btn-success');
-            btn.innerText = '¡Guardado!';
-            setTimeout(() => {
-                btn.classList.replace('btn-success', 'btn-primary');
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }, 2000);
-
-        } catch (error) {
-            console.error('Form Submit Error:', error);
-            btn.classList.replace('btn-primary', 'btn-danger');
-            btn.innerText = 'Error';
-            setTimeout(() => {
-                btn.classList.replace('btn-danger', 'btn-primary');
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }, 2000);
-        }
-    };
-}
-
-
-export function renderComponent(component) {
-    if (!component || !component.type) return '';
-
-    const LinkFn = registry[component.type];
-    if (LinkFn) {
-        return LinkFn(component);
-    }
-
-    // console.warn(`[Renderer] Missing component type: ${ component.type } `);
-    return `< div class= "alert alert-warning" > Unknown component: ${component.type}</div > `;
-}
-
-export function renderContent(components) {
-    if (!components) return '';
-    if (!Array.isArray(components)) return renderComponent(components);
-    return components.map(c => renderComponent(c)).join('');
-}
-```
-### `services/web/chat-web-renderer/backend/app/schemas/ui.py`
-
-```
-from typing import List, Optional, Union, Dict
-from pydantic import BaseModel, Field
-
-class BaseComponent(BaseModel):
-    type: str
-    id: Optional[str] = None
-
-class ChatMessage(BaseComponent):
-    type: str = "chat"
-    text: str
-    sender: str  # "bot" or "user"
-
-class PropertyCard(BaseComponent):
-    type: str = "property-card"
-    title: str
-    price: float
-    location: Optional[str] = None
-    image_url: Optional[str] = None
-    public_url: Optional[str] = None
-    features: Dict[str, Union[int, float, str]] = Field(default_factory=dict)
-    tags: List[str] = Field(default_factory=list)
-
-class MortgageCalculator(BaseComponent):
-    type: str = "mortgage-calculator"
-    property_price: float
-    default_interest: float = 8.5
-    allow_custom_input: bool = True
-
-class PropertyGrid(BaseComponent):
-    type: str = "property-grid"
-    title: str
-    properties: List[PropertyCard]
-    layout: str = "horizontal"
-
-class PropertyMap(BaseComponent):
-    type: str = "property-map"
-    center: Dict[str, float]  # {"lat": ..., "lng": ...}
-    zoom: int = 15
-    pois: List[Dict[str, Union[float, str]]] = Field(default_factory=list)
-    interactive: bool = True
-
-class ActionMenu(BaseComponent):
-    type: str = "action-menu"
-    title: Optional[str] = None
-    options: List[Dict[str, str]]  # [{"label": "Ver Más", "payload": "HOUSE_123"}]
-
-class PhotoCarousel(BaseComponent):
-    type: str = "photo-carousel"
-    images: List[str]
-    show_thumbnails: bool = False
-
-class BrandingConfig(BaseModel):
-    primary_color: str = "#4b38b3"
-    secondary_color: str = "#6366f1"
-    surface_color: Optional[str] = None
-    text_on_primary: Optional[str] = "#ffffff"
-    text_on_secondary: Optional[str] = "#ffffff"
-    text_on_surface: Optional[str] = "#f8fafc"
-    
-    # Fuentes
-    font_heading_name: Optional[str] = "Outfit"
-    font_heading_url: Optional[str] = None
-    font_body_name: Optional[str] = "Inter"
-    font_body_url: Optional[str] = None
-    
-    # Estética
-    border_radius: Optional[str] = "18px"
-    box_shadow_style: Optional[str] = "0 10px 25px rgba(0,0,0,0.1)"
-    
-    # Logos (Base64)
-    favicon_base64: Optional[str] = None
-    logo_header_base64: Optional[str] = None
-    brand_wordmark_base64: Optional[str] = None
-    
-    agent_name: str = "Hommie AI"
-
-class SDUIResponse(BaseModel):
-    session_id: str
-    branding: Optional[BrandingConfig] = None
-    components: List[Union[ChatMessage, PropertyCard, MortgageCalculator, PropertyGrid, PropertyMap, ActionMenu, PhotoCarousel]]
-```
-### `services/web/chat-web-renderer/backend/app/transformer/core.py`
-
-```
-import logging
-import asyncio
-import re
-from typing import Dict, Any, List, Union
-from app.schemas.ui import (
-    SDUIResponse, ChatMessage, PropertyCard, PropertyGrid, 
-    ActionMenu, MortgageCalculator, BaseComponent, BrandingConfig
-)
-from app.core.database import db_manager
-
-# Logger config
-logger = logging.getLogger("transformer")
-
-class SDUITransformer:
-    """
-    El 'Transformer' es el corazón polimórfico del Bridge.
-    Toma la respuesta cruda de la IA (texto + sources) y decide qué 
-    componentes visuales (Cards, Grids, Mapas) se deben renderizar.
-    """
-
-    async def transform(
-        self,
-        ai_response: Dict[str, Any],
-        session_id: str,
-        client_id: str = "default",
-        brand_project: Union[str, None] = None,
-        include_fallback_text: bool = True,
-    ) -> SDUIResponse:
-        """
-        Convierte el payload del Inference Core en una respuesta SDUI estructurada.
-        """
-        components: List[BaseComponent] = []
-        
-        # 1. Extraer el Texto Base (Siempre hay un mensaje de chat)
-        ai_text = (ai_response.get("answer", "") or "").strip()
-        if ai_text:
-            components.append(ChatMessage(text=ai_text, sender="bot"))
-        elif include_fallback_text:
-            components.append(ChatMessage(text="Lo siento, no pude generar una respuesta.", sender="bot"))
-
-        # 2. Procesar Fuentes (Sources) - Aquí ocurre la magia de "Grounding"
-        # Si la IA cita propiedades, las convertimos en Cards visuales.
-        sources = ai_response.get("sources", [])
-        property_cards = await self._extract_properties_from_sources(sources)
-
-        if property_cards:
-            if len(property_cards) == 1:
-                # Si es una sola, la mostramos directa
-                components.append(property_cards[0])
-                # Y quizás una calculadora para esa propiedad
-                components.append(MortgageCalculator(property_price=property_cards[0].price))
-            else:
-                # Si son varias, usamos un Grid/Carrusel
-                components.append(PropertyGrid(
-                    title="Propiedades Relacionadas",
-                    properties=property_cards
-                ))
-
-        # 3. Detectar Intenciones de Acción (Heurística simple por ahora)
-        if ai_text and ("cita" in ai_text.lower() or "visita" in ai_text.lower()):
-            components.append(ActionMenu(
-                options=[
-                    {"label": "📅 Agendar Visita", "payload": "SCHEDULE_VISIT"},
-                    {"label": "📞 Hablar con Asesor", "payload": "CALL_AGENT"}
-                ]
-            ))
-
-        # 4. Configuración de Branding (Multi-tenant Real)
-        branding = await self._get_branding_for_client(client_id, brand_project)
-
-        return SDUIResponse(
-            session_id=session_id,
-            branding=branding,
-            components=components
-        )
-
-    def parse_canonical_components(self, canonical_components: List[Dict[str, Any]]) -> List[BaseComponent]:
-        components: List[BaseComponent] = []
-        for payload in canonical_components or []:
-            if not isinstance(payload, dict):
-                continue
-            card_type = str(payload.get("card_type") or "").strip().lower()
-            comp_type = str(payload.get("type") or "").strip().lower()
-
-            # Agent-core realtor cards arrive as card_type=property_card.
-            if card_type == "property_card" or comp_type == "property-card":
-                card = self._map_agent_core_property_card(payload)
-                if card:
-                    components.append(card)
-                continue
-
-            if comp_type == "chat":
-                text = str(payload.get("text") or "").strip()
-                if text:
-                    components.append(ChatMessage(text=text, sender="bot"))
-                continue
-
-        return components
-
-    async def _get_branding_for_client(self, client_id: str, brand_project: Union[str, None]) -> BrandingConfig:
-        """
-        Retorna la configuración visual adaptada al cliente desde la DB.
-        """
-        db_brand = await asyncio.to_thread(db_manager.get_branding, client_id, brand_project)
-        if not db_brand:
-            return BrandingConfig()
-
-        # Si tenemos branding en DB, mapeamos campos
-        # lead_brand_configs: primary_color, secondary_color, project (como agent_name)
-        return BrandingConfig(
-            primary_color=db_brand.get("primary_color", "#4b38b3"),
-            secondary_color=db_brand.get("secondary_color", "#6366f1"),
-            surface_color=db_brand.get("surface_color"),
-            text_on_primary=db_brand.get("text_on_primary", "#ffffff"),
-            text_on_secondary=db_brand.get("text_on_secondary", "#ffffff"),
-            text_on_surface=db_brand.get("text_on_surface", "#f8fafc"),
-            
-            # Fuentes
-            font_heading_name=db_brand.get("font_heading_name", "Outfit"),
-            font_heading_url=db_brand.get("font_heading_url"),
-            font_body_name=db_brand.get("font_body_name", "Inter"),
-            font_body_url=db_brand.get("font_body_url"),
-            
-            # Estética
-            border_radius=db_brand.get("border_radius", "18px"),
-            box_shadow_style=db_brand.get("box_shadow_style", "0 10px 25px rgba(0,0,0,0.1)"),
-            
-            # Logos (Base64)
-            favicon_base64=db_brand.get("favicon_base64"),
-            logo_header_base64=db_brand.get("logo_header_base64"),
-            brand_wordmark_base64=db_brand.get("brand_wordmark_base64"),
-            
-            agent_name=db_brand.get("project", db_brand.get("agent_name", "Hommie AI"))
-        )
-
-    async def _extract_properties_from_sources(self, sources: List[Dict[str, Any]]) -> List[PropertyCard]:
-        """
-        Analiza los sources devueltos por RAG. Si encuentra metadatos de propiedades,
-        crea los objetos PropertyCard correspondientes consultando la base de datos real.
-        """
-        cards = []
-        prop_ids: List[Any] = []
-        seen_ids = set()
-
-        for source in sources:
-            metadata = source.get("metadata", {})
-            
-            # Buscamos el ID de la propiedad (puede venir como 'id' o 'external_prop_id')
-            prop_id = metadata.get("id") or metadata.get("id_propiedad")
-            if prop_id and prop_id not in seen_ids:
-                seen_ids.add(prop_id)
-                prop_ids.append(prop_id)
-
-        if not prop_ids:
-            return cards
-
-        # Ejecuta consultas de propiedades fuera del event loop principal
-        prop_results = await asyncio.gather(
-            *(asyncio.to_thread(db_manager.get_property, prop_id) for prop_id in prop_ids),
-            return_exceptions=True,
-        )
-
-        for prop_data in prop_results:
-            if isinstance(prop_data, Exception) or not prop_data:
-                continue
-            card = self._map_property_data_to_card(prop_data)
-            if card:
-                cards.append(card)
-        
-        return cards
-
-    async def search_properties_for_query(
-        self,
-        client_id: str,
-        query_text: str,
-        limit: int = 4,
-        include_terms: bool = True,
-    ) -> List[PropertyCard]:
-        properties = await asyncio.to_thread(
-            db_manager.search_properties,
-            client_id,
-            query_text,
-            limit,
-            include_terms,
-        )
-        cards: List[PropertyCard] = []
-        for prop_data in properties or []:
-            card = self._map_property_data_to_card(prop_data)
-            if card:
-                cards.append(card)
-        return cards
-
-    async def count_properties_for_query(self, client_id: str, query_text: str, include_terms: bool = True) -> int:
-        return await asyncio.to_thread(db_manager.count_properties, client_id, query_text, include_terms)
-
-    async def get_property_price_stats_for_query(self, client_id: str, query_text: str, include_terms: bool = False) -> Dict[str, Any]:
-        return await asyncio.to_thread(db_manager.get_property_price_stats, client_id, query_text, include_terms)
-
-    async def extract_property_filters_for_query(self, query_text: str) -> Dict[str, Any]:
-        return await asyncio.to_thread(db_manager.extract_property_filters, query_text)
-
-    def _map_property_data_to_card(self, prop_data: Dict[str, Any]) -> Union[PropertyCard, None]:
-        try:
-            title = (prop_data.get("title") or "Propiedad Sugerida").replace("&#8211;", "-")
-            location = f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", ")
-            features = prop_data.get("features") if isinstance(prop_data.get("features"), dict) else {}
-            tags = features.get("highlights", []) if isinstance(features, dict) else []
-            return PropertyCard(
-                id=str(prop_data.get("id")),
-                title=title,
-                price=float(prop_data.get("price", 0) or 0),
-                location=location,
-                image_url=prop_data["images"][0] if prop_data.get("images") else None,
-                public_url=prop_data.get("public_url"),
-                tags=tags if isinstance(tags, list) else [],
-            )
-        except Exception as e:
-            logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
-            return None
-
-```
-### `services/web/chat-web-renderer/frontend/core/renderer.js`
-
-```
-/**
- * REALTOR CHAT: POLYMORPHIC RENDERER CORE
- * Este es el cerebro del frontend. Recibe un JSON del Bridge y decide qué dibujar.
- */
-
-export class ChatRenderer {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.botName = "Hommie AI";
-    }
-
-    setBotName(name) {
-        if (name) this.botName = name;
-    }
-
-    scrollToBottom() {
-        this.container.scrollTop = this.container.scrollHeight;
-    }
-
-    renderResponse(sduiResponse) {
-        const components = Array.isArray(sduiResponse?.components) ? sduiResponse.components : [];
-
-        // Limpiamos mensajes de "Cargando..." si existen
-        if (this.container.querySelector('.text-muted')) {
-            this.container.innerHTML = '';
-        }
-
-        components.forEach((comp) => {
-            const element = this.createComponent(comp);
-            if (element) {
-                const bubble = this.wrapInBubble(element, comp.sender || 'bot');
-                this.container.appendChild(bubble);
-            }
-        });
-
-        // Scroll automático al final
-        this.container.scrollTop = this.container.scrollHeight;
-    }
-
-    createComponent(config) {
-        let el = null;
-
-        switch (config.type) {
-            case 'chat':
-                el = document.createElement('div');
-                el.innerText = config.text;
-                break;
-
-            case 'property-card':
-                el = document.createElement('property-card');
-                el.title = config.title;
-                el.price = config.price;
-                el.location = config.location;
-                el.imageUrl = config.image_url;
-                el.publicUrl = config.public_url;
-                break;
-
-            case 'property-grid':
-                el = document.createElement('property-grid');
-                el.title = config.title;
-                el.properties = config.properties;
-                break;
-
-            case 'action-menu':
-                el = document.createElement('action-menu');
-                el.options = config.options;
-                break;
-
-            case 'mortgage-calculator':
-                el = document.createElement('mortgage-calculator');
-                el.propertyPrice = config.property_price;
-                el.defaultInterest = config.default_interest;
-                break;
-
-            case 'property-map':
-                el = document.createElement('property-map');
-                el.center = config.center;
-                el.zoom = config.zoom;
-                el.pois = config.pois;
-                break;
-
-            case 'photo-carousel':
-                el = document.createElement('photo-carousel');
-                el.images = config.images;
-                el.showThumbnails = config.show_thumbnails;
-                break;
-
-            default:
-                console.warn(`Componente desconocido: ${config.type}`);
-        }
-
-        return el;
-    }
-
-    showTyping() {
-        const indicator = document.createElement('div');
-        indicator.id = 'typing-indicator';
-        indicator.className = 'typing-indicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
-        this.container.appendChild(indicator);
-        this.container.scrollTop = this.container.scrollHeight;
-    }
-
-    hideTyping() {
-        const indicator = document.getElementById('typing-indicator');
-        if (indicator) indicator.remove();
-    }
-
-    wrapInBubble(element, sender) {
-        const wrapper = document.createElement('div');
-        wrapper.className = `message-wrapper ${sender}`;
-
-        const name = document.createElement('div');
-        name.className = 'sender-name';
-        name.innerText = sender === 'user' ? 'Tú' : this.botName;
-
-        wrapper.appendChild(name);
-
-        const bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
-        bubble.appendChild(element);
-        wrapper.appendChild(bubble);
-
-        return wrapper;
-    }
-}
-```
-### `services/web/chat-web-renderer/backend/app/main.py`
-
-```
-import os
-import logging
-import time
-from datetime import datetime, timezone
-
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-import httpx
-from app.schemas.chat import InitRequest, InternalMemoryResetRequest
-from app.schemas.internal_chat import InternalChatRequest
-from app.schemas.ui import SDUIResponse
-
-app = FastAPI(title="Chat Web Renderer")
-logger = logging.getLogger("chat_web_renderer.main")
-
-cors_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:8087,http://192.168.0.37:8087",
-    ).split(",")
-    if origin.strip()
-]
-allow_credentials = "*" not in cors_origins
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins or ["*"],
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/health")
-async def health_check():
-    return {"status": "operational", "service": "chat-web-renderer-api"}
-
-
-@app.get("/health/dependencies")
-async def dependencies_health():
-    """
-    Lightweight dependency health for frontend status indicator.
-    """
-    timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
-    inference_base = os.getenv(
-        "AGENT_CORE_API",
-        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
-    ).rstrip("/")
-    inference_prefix = os.getenv(
-        "AGENT_CORE_API_PREFIX",
-        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-    )
-    inference_url = f"{inference_base}{inference_prefix}/health"
-    retriever_url = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000").rstrip("/") + "/api/v2/health"
-
-    result = {
-        "status": "operational",
-        "service": "chat-web-renderer-api",
-        "dependencies": {
-            "inference_core": {"ok": False, "url": inference_url},
-            "semantic_adapter_v2": {"ok": False, "url": retriever_url},
-        },
-    }
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        for name, url in (
-            ("inference_core", inference_url),
-            ("semantic_adapter_v2", retriever_url),
-        ):
-            try:
-                resp = await client.get(url)
-                result["dependencies"][name]["ok"] = resp.status_code == 200
-                if resp.status_code == 200:
-                    try:
-                        result["dependencies"][name]["detail"] = resp.json()
-                    except Exception:
-                        result["dependencies"][name]["detail"] = {"status_code": resp.status_code}
-                else:
-                    result["dependencies"][name]["error"] = f"HTTP {resp.status_code}"
-            except Exception as exc:
-                result["dependencies"][name]["error"] = str(exc)
-
-    all_ok = all(dep.get("ok") for dep in result["dependencies"].values())
-    result["status"] = "operational" if all_ok else "degraded"
-    return result
-
-from app.core.inference_bridge import InferenceClient
-from app.core.memory_reset import MemoryResetClient
-from app.core.vertical_router import vertical_router
-from app.transformer.core import SDUITransformer
-from app.transformer.realtor_policy import RealtorRendererPolicy
-from app.transformer.generic_policy import GenericRendererPolicy
-from app.session.manager import SessionManager
-
-inference_client = InferenceClient()
-memory_reset_client = MemoryResetClient()
-transformer = SDUITransformer()
-session_manager = SessionManager()
-
-vertical_router.register_strategy("realtor", "web_html", RealtorRendererPolicy(channel="web_html"))
-vertical_router.register_strategy("generic", "web_html", GenericRendererPolicy(channel="web_html"))
-
-@app.post("/chat/init", response_model=SDUIResponse)
-async def chat_init(req: InitRequest):
-    client_id = str(req.client_id)
-    return await transformer.transform(
-        {"answer": "", "sources": []},
-        "init",
-        client_id,
-        brand_project=req.brand_project,
-        include_fallback_text=False,
-    )
-
-
-@app.post("/chat", response_model=SDUIResponse)
-async def chat_interaction(req: InternalChatRequest):
-    """
-    Canonical chat endpoint using InternalChatRequest contract.
-    This endpoint is explicitly limited to web_html for predictable SDUI output.
-    """
-    if req.channel != "web_html":
-        raise HTTPException(
-            status_code=422,
-            detail="/chat only supports channel='web_html'; use channel-specific endpoints for other channels",
-        )
-    
-    client_id = str(req.client_id)
-    channel = req.channel
-    channel_user_id = req.channel_user_id
-    metadata = dict(req.metadata or {})
-    trace_id = str(metadata.get("debug_trace_id") or "")
-    incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
-    request_started = time.perf_counter()
-
-    session_data = await session_manager.get_session_multichannel(
-        client_id=client_id,
-        channel=channel,
-        channel_user_id=channel_user_id,
-    )
-    
-    session_context = {
-        "client_id": client_id,
-        "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
-        "lead_id": session_data.get("lead_id"),
-        "brand_project": req.brand_project or session_data.get("brand_project"),
-        "channel": channel,
-        "channel_user_id": channel_user_id,
-    }
-    
-    if metadata:
-        session_context.update(metadata)
-
-    logger.info(
-        "CHAT_RENDERER_INBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
-        "session_conversation_id=%s resolved_conversation_id=%s frontend_runtime_conversation_id=%s "
-        "frontend_stored_conversation_id=%s frontend_had_stored_conversation_id=%s "
-        "frontend_runtime_channel_user_id=%s frontend_stored_channel_user_id=%s "
-        "frontend_had_stored_channel_user_id=%s frontend_had_frontend_state=%s frontend_had_window_state=%s "
-        "frontend_message_seq=%s frontend_page_load_id=%s landing_page_url=%s referrer_url=%s",
-        trace_id or "-",
-        client_id,
-        channel,
-        channel_user_id,
-        incoming_conversation_id or "-",
-        session_data.get("conversation_id") or "-",
-        session_context.get("conversation_id") or "-",
-        metadata.get("frontend_runtime_conversation_id") or "-",
-        metadata.get("frontend_stored_conversation_id") or "-",
-        metadata.get("frontend_had_stored_conversation_id"),
-        metadata.get("frontend_runtime_channel_user_id") or "-",
-        metadata.get("frontend_stored_channel_user_id") or "-",
-        metadata.get("frontend_had_stored_channel_user_id"),
-        metadata.get("frontend_had_frontend_state"),
-        metadata.get("frontend_had_window_state"),
-        metadata.get("frontend_message_seq"),
-        metadata.get("frontend_page_load_id") or "-",
-        metadata.get("landing_page_url") or "-",
-        metadata.get("referrer_url") or "-",
-    )
-    
-    try:
-        ai_response = await inference_client.chat(user_query=req.message_text, session=session_context)
-        
-        new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
-        if new_conversation_id:
-            await session_manager.upsert_session(
-                client_id=client_id,
-                channel=channel,
-                channel_user_id=channel_user_id,
-                data={
-                    "conversation_id": new_conversation_id,
-                    "brand_project": session_context.get("brand_project"),
-                    "last_interaction": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-
-        logger.info(
-            "CHAT_RENDERER_OUTBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
-            "resolved_conversation_id=%s outgoing_conversation_id=%s conversation_reused=%s "
-            "session_fallback_used=%s components_count=%s answer_chars=%s latency_ms=%.1f",
-            trace_id or "-",
-            client_id,
-            channel,
-            channel_user_id,
-            incoming_conversation_id or "-",
-            session_context.get("conversation_id") or "-",
-            new_conversation_id or "-",
-            bool(incoming_conversation_id and str(incoming_conversation_id) == str(new_conversation_id)),
-            bool((not incoming_conversation_id) and session_data.get("conversation_id")),
-            len(ai_response.get("components") or []),
-            len((ai_response.get("answer") or "").strip()),
-            (time.perf_counter() - request_started) * 1000.0,
-        )
-        
-        vertical = await vertical_router.resolve_vertical_for_client_async(client_id)
-        policy_handler = await vertical_router.get_handler_async(client_id, channel)
-        if not policy_handler:
-            raise HTTPException(status_code=500, detail="No renderer policy available for resolved vertical/channel")
-        
-        ai_text = ai_response.get("answer")
-```
-### `services/web/admin-console/backend/app/main.py`
-
-```
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.config.settings import settings
-from fastapi.exceptions import RequestValidationError, ResponseValidationError
-from fastapi.responses import JSONResponse
-import logging
 
-# Import Feature Modules
-from app.dashboards.base_dash.router import router as base_dash_router
-from app.dashboards.manager_workspace.router import router as manager_workspace_router
-from app.dashboards.seller_workspace.router import router as seller_workspace_router
-from app.modules.clients.router import router as clients_router
-from app.modules.countries.router import router as countries_router
-from app.modules.prompts.router import router as prompts_router
-from app.modules.auth.router import router as auth_router
-from app.modules.users.router import router as users_router
-from app.modules.roles.router import router as roles_router
-from app.modules.contacts.router import router as contacts_router
-from app.modules.leads.router import router as leads_router
-from app.modules.leads_v2.router import router as leads_v2_router
-from app.modules.leads_v2.admin_scoring_router import router as admin_scoring_router
-from app.modules.campaigns.router import router as campaigns_router
-from app.modules.ai_library.router import router as ai_library_router
-from app.modules.system_public_docs.router import router as system_public_docs_router
-from app.modules.grid_presets.router import router as grid_presets_router
+from services.ai_runtime.api import router
+from services.ai_runtime.runtime.settings import settings
 
-app = FastAPI(title="Web IAFirst Operational API")
-logger = logging.getLogger(__name__)
+app = FastAPI(title=settings.app_name)
+app.include_router(router, prefix=settings.api_prefix)
+```
+### `services/ai_runtime/api.py`
 
-cors_origins = settings.cors_allow_origins or ["*"]
-allow_credentials = "*" not in cors_origins
+```
+"""FastAPI router for the AI runtime."""
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
+from __future__ import annotations
+
+import os
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+
+from services.ai_runtime.domain.contracts import (
+    ChatRequest,
+    ChatResponse,
+    InternalMemoryResetRequest,
+    InternalMemoryResetResponse,
+)
+from services.ai_runtime.runtime.bootstrap import runtime
+
+router = APIRouter()
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+
+
+@router.get("/health", response_model=HealthResponse)
+async def healthcheck() -> HealthResponse:
+    return HealthResponse(status="ok", service="datasyncsa-ai-runtime")
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    return await runtime.handle_turn(request)
+
+
+def _assert_internal_token(request: Request) -> None:
+    expected = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
+    if not expected:
+        return
+    provided = (request.headers.get("X-Internal-Token") or "").strip()
+    if provided != expected:
+        raise HTTPException(status_code=401, detail="Invalid internal token")
+
+
+@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+async def internal_memory_reset(
+    payload: InternalMemoryResetRequest,
+    request: Request,
+) -> InternalMemoryResetResponse:
+    _assert_internal_token(request)
+    return await runtime.reset_client_memory(payload.client_id)
+```
+### `services/ai_runtime/runtime/settings.py`
+
+```
+"""Environment-backed settings for the AI runtime."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class AISettings:
+    app_name: str = os.getenv("AI_RUNTIME_APP_NAME", "datasyncsa-ai-runtime")
+    api_prefix: str = os.getenv("AI_RUNTIME_API_PREFIX", "/api/v1")
+    redis_url: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/postgres")
+    session_ttl_seconds: int = int(os.getenv("AI_SESSION_TTL_SECONDS", "3600"))
+    request_timeout_seconds: int = int(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "30"))
+    mail_provider: str = os.getenv("AI_MAIL_PROVIDER", "placeholder")
+    llm_provider: str = os.getenv("AI_LLM_PROVIDER", "noop")
+
+
+settings = AISettings()
+
+```
+### `services/ai_runtime/runtime/bootstrap.py`
+
+```
+"""Dependency bootstrap for the AI runtime."""
+
+from __future__ import annotations
+
+from services.ai_runtime.config.tenant_loader import TenantLoader
+from services.ai_runtime.domain.contracts import MailDispatchResult
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.graph.registry import GraphRegistry
+from services.ai_runtime.rag.agency.repository import AgencyRAGRepository
+from services.ai_runtime.rag.documents.repository import DocumentsRAGRepository
+from services.ai_runtime.runtime.llm import NoopLLMPort
+from services.ai_runtime.runtime.service import ConversationRuntime
+from services.data.cache.lead_store import LeadStore
+from services.data.cache.session_store import SessionStore
+from services.data.cache.tenant_cache import TenantCache
+from services.data.repositories.agent_repository import AgentRepository
+from services.data.repositories.base import build_engine
+from services.data.repositories.conversation_repository import ConversationRepository
+from services.data.repositories.property_repository import PropertyRepository
+from services.data.repositories.tenant_repository import TenantRepository
+
+
+class PlaceholderMailer:
+    async def send(self, payload: dict[str, object]):
+        return MailDispatchResult(
+            enviado=False,
+            destinatarios=list(payload.get("destinatarios", [])),
+            error="mail provider not configured",
+        )
+
+
+class InlineWorkerDispatcher:
+    async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> None:
+        return None
+
+
+engine = build_engine()
+tenant_cache = TenantCache()
+tenant_repository = TenantRepository(engine)
+agent_repository = AgentRepository(engine)
+tenant_loader = TenantLoader(
+    tenant_repository=tenant_repository,
+    agent_repository=agent_repository,
+    tenant_cache=tenant_cache,
+)
+dependencies = GraphDependencies(
+    llm=NoopLLMPort(),
+    session_store=SessionStore(),
+    lead_store=LeadStore(),
+    tenant_cache=tenant_cache,
+    tenant_repository=tenant_repository,
+    conversation_repository=ConversationRepository(engine),
+    property_repository=PropertyRepository(engine),
+    agent_repository=agent_repository,
+    agency_rag_repository=AgencyRAGRepository(engine),
+    documents_rag_repository=DocumentsRAGRepository(engine),
+    mailer=PlaceholderMailer(),
+    worker_dispatcher=InlineWorkerDispatcher(),
+)
+runtime = ConversationRuntime(
+    tenant_loader=tenant_loader,
+    graph_registry=GraphRegistry(),
+    dependencies=dependencies,
+)
+```
+### `services/ai_runtime/runtime/service.py`
+
+```
+"""Conversation bootstrap and orchestration helpers."""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+from services.ai_runtime.config.tenant_loader import TenantLoader
+from services.ai_runtime.domain.contracts import ChatMessage
+from services.ai_runtime.domain.contracts import ChatRequest, ChatResponse, InternalMemoryResetResponse
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState, RealtorGraphState, build_base_state
+from services.ai_runtime.graph.registry import GraphRegistry
+
+
+def _resolve_bridge(vertical: str, bridge: str | None) -> str:
+    if bridge:
+        return bridge
+    return "property-bridge" if vertical == "realtor" else "generic-bridge"
+
+
+def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
+    components: list[dict[str, object]] = []
+    ui_payload = getattr(final_state, "ui_payload", None) or {}
+    for card in ui_payload.get("property_cards", []):
+        components.append(
+            {
+                "type": "property-card",
+                "listing_id": card.get("property_id_internal"),
+                "title": card.get("title"),
+                "price": card.get("price"),
+                "image_url": card.get("primary_image_url"),
+                "city": card.get("province"),
+                "neighborhood": card.get("province"),
+            }
+        )
+    return components
+
+
+class ConversationRuntime:
+    """Coordinates tenant loading, state hydration, graph execution, and persistence."""
+
+    def __init__(
+        self,
+        *,
+        tenant_loader: TenantLoader,
+        graph_registry: GraphRegistry,
+        dependencies: GraphDependencies,
+    ):
+        self.tenant_loader = tenant_loader
+        self.graph_registry = graph_registry
+        self.dependencies = dependencies
+
+    async def handle_turn(self, request: ChatRequest) -> ChatResponse:
+        tenant_config = await self.tenant_loader.load(request.client_id)
+        bridge = _resolve_bridge(tenant_config.vertical, request.bridge)
+        user_id = (
+            request.user_id
+            or str(request.metadata.get("channel_user_id") or "")
+            or str(request.metadata.get("user_id") or "")
+            or str(request.metadata.get("lead_id") or "")
+            or f"anonymous:{request.client_id}"
+        )
+        session_id = request.session_id or str(uuid4())
+        conversation_id = request.conversation_id or str(uuid4())
+        existing_payload = await self.dependencies.session_store.get_state(request.client_id, session_id)
+
+        if existing_payload:
+            state_cls = RealtorGraphState if tenant_config.vertical == "realtor" else GenericGraphState
+            base_state = state_cls.model_validate(existing_payload)
+            base_state.current_turn += 1
+            base_state.messages.append(ChatMessage(role="user", content=request.message))
+            conversation_id = base_state.conversation_id
+        else:
+            state = build_base_state(
+                session_id=session_id,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                client_id=request.client_id,
+                vertical=tenant_config.vertical,
+                bridge=bridge,
+                tenant_config=tenant_config,
+                initial_message=request.message,
+            )
+            if tenant_config.vertical == "realtor":
+                base_state = RealtorGraphState.model_validate(state.model_dump())
+            else:
+                base_state = GenericGraphState.model_validate(state.model_dump())
+            conversation_id = base_state.conversation_id
+
+        graph = self.graph_registry.get_graph(tenant_config.vertical, bridge, self.dependencies)
+        final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
+        final_state = (
+            RealtorGraphState.model_validate(final_payload)
+            if tenant_config.vertical == "realtor"
+            else GenericGraphState.model_validate(final_payload)
+        )
+        components = _build_components(final_state)
+        rag_outputs = [
+            item
+            for item in final_state.turn_outputs
+            if item.get("type") in {"rag_agencia", "rag_docs"}
+        ]
+        sources = [chunk for output in rag_outputs for chunk in output.get("chunks", [])]
+        await self.dependencies.session_store.set_state(
+            request.client_id,
+            session_id,
+            final_state.model_dump(mode="json"),
+            tenant_config.redis_ttl_seconds,
+        )
+        return ChatResponse(
+            session_id=session_id,
+            conversation_id=conversation_id,
+            client_id=request.client_id,
+            vertical=tenant_config.vertical,
+            answer=final_state.final_response or "",
+            components=components,
+            sources=sources,
+            ui_payload=getattr(final_state, "ui_payload", None),
+            render_mode=getattr(final_state, "render_mode", None),
+            cards_mode=getattr(final_state, "cards_mode", None),
+            escalated=final_state.escalacion.solicitada,
+            scoring_status="disabled",
+            metadata={"bridge": bridge, "turn": final_state.current_turn},
+        )
+
+    async def reset_client_memory(self, client_id: str) -> InternalMemoryResetResponse:
+        conversations_deleted = await self.dependencies.session_store.delete_by_client(client_id)
+        cache_keys_deleted = 0
+        cache_keys_deleted += await self.dependencies.lead_store.delete_by_client(client_id)
+        cache_keys_deleted += await self.dependencies.tenant_cache.delete_client_runtime(client_id)
+        return InternalMemoryResetResponse(
+            client_id=client_id,
+            conversations_deleted=conversations_deleted,
+            cache_keys_deleted=cache_keys_deleted,
+        )
+```
+### `services/ai_runtime/domain/state.py`
+
+```
+"""Graph state contracts for generic and realtor assistants."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from services.ai_runtime.domain.contracts import (
+    Appointment,
+    BridgeName,
+    ChatMessage,
+    IntentDefinition,
+    LeadExtracted,
+    LeadPlaceholder,
+    LeadScores,
+    Property,
+    TenantConfig,
+    Vertical,
 )
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={"detail": "Request Validation Error"},
+
+class SearchFilters(BaseModel):
+    ubicacion: str | None = None
+    habitaciones: int | None = None
+    banos: float | None = None
+    precio_max: float | None = None
+    precio_min: float | None = None
+    currency: str | None = None
+    provincia: str | None = None
+    amenidades: list[str] = Field(default_factory=list)
+    tipo: str | None = None
+    operacion: str | None = None
+
+
+class FinancialContext(BaseModel):
+    property_id: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    prima: float | None = None
+    plazo: int | None = None
+    banco: str | None = None
+    resultado: dict[str, Any] | None = None
+
+
+class EscalationState(BaseModel):
+    solicitada: bool = False
+    motivo: str | None = None
+    agente_asignado: str | None = None
+    datos_capturados: dict[str, Any] = Field(default_factory=dict)
+
+
+class LeadAdvisorState(BaseModel):
+    lead_scores: LeadScores = Field(default_factory=LeadScores)
+    lead_extracted: LeadExtracted = Field(default_factory=LeadExtracted)
+    lead_completo: bool = False
+    should_ask: bool = False
+    field_to_ask: str | None = None
+
+
+class BaseGraphState(BaseModel):
+    """Shared state that exists from the first turn onward."""
+
+    model_config = ConfigDict(extra="allow")
+
+    session_id: str
+    conversation_id: str
+    user_id: str
+    client_id: str
+    vertical: Vertical
+    bridge: BridgeName
+    current_turn: int = 1
+    messages: list[ChatMessage] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    tenant_config: TenantConfig
+    resolved_references: list[dict[str, Any]] = Field(default_factory=list)
+    pending_clarification: str | None = None
+    clarification_attempts: int = 0
+    intent_queue: list[IntentDefinition] = Field(default_factory=list)
+    active_intent: IntentDefinition | None = None
+    completed_intents: list[IntentDefinition] = Field(default_factory=list)
+    turn_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    cita: Appointment
+    escalacion: EscalationState = Field(default_factory=EscalationState)
+    lead_advisor: LeadAdvisorState = Field(default_factory=LeadAdvisorState)
+    lead: LeadPlaceholder = Field(default_factory=LeadPlaceholder)
+    final_response: str | None = None
+
+
+class GenericGraphState(BaseGraphState):
+    """State for healthcare and legal tenants."""
+
+    pass
+
+
+class RealtorGraphState(BaseGraphState):
+    """State for the full realtor graph."""
+
+    search_filters: SearchFilters = Field(default_factory=SearchFilters)
+    inventory: list[Property] = Field(default_factory=list)
+    last_search_results: list[Property] = Field(default_factory=list)
+    last_mentioned: Property | None = None
+    active_comparison: list[str] = Field(default_factory=list)
+    focus_scope: str | None = None
+    search_attempts: int = 0
+    cards_shown: list[str] = Field(default_factory=list)
+    cards_mode: str | None = None
+    render_mode: str | None = None
+    ui_payload: dict[str, Any] | None = None
+    financial_context: FinancialContext = Field(default_factory=FinancialContext)
+
+
+def build_base_state(
+    *,
+    session_id: str,
+    conversation_id: str,
+    user_id: str,
+    client_id: str,
+    vertical: Vertical,
+    bridge: BridgeName,
+    tenant_config: TenantConfig,
+    initial_message: str,
+) -> BaseGraphState:
+    """Bootstrap the canonical base state for a new session."""
+
+    return BaseGraphState(
+        session_id=session_id,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        client_id=client_id,
+        vertical=vertical,
+        bridge=bridge,
+        capabilities=list(tenant_config.capabilities),
+        tenant_config=tenant_config,
+        messages=[ChatMessage(role="user", content=initial_message)],
+        cita=Appointment(client_id=client_id),
     )
 
-@app.exception_handler(ResponseValidationError)
-async def response_validation_exception_handler(request, exc):
-    logger.exception("Response contract validation failed", exc_info=exc)
-    return JSONResponse(
-        status_code=500, 
-        content={"detail": "Response Contract Violation"},
-    )
-
-@app.get("/health")
-async def health_check():
-    return {"status": "operational", "version": "1.0"}
-
-# Include Feature Routers
-app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
-app.include_router(manager_workspace_router, prefix="/dashboard")
-app.include_router(seller_workspace_router, prefix="/dashboard")
-app.include_router(leads_router, prefix="/leads", tags=["Leads Operations"])
-app.include_router(leads_v2_router, prefix="/leads_v2", tags=["Leads v2 Operations"])
-app.include_router(admin_scoring_router)
-app.include_router(campaigns_router, prefix="/campaigns", tags=["Campaigns Operations"])
-app.include_router(ai_library_router, prefix="/ai-library", tags=["AI Library Management"])
-app.include_router(system_public_docs_router)
-
-app.include_router(clients_router, tags=["Clients"])
-app.include_router(countries_router, tags=["Countries (System)"])
-app.include_router(prompts_router, tags=["AI Prompts"])
-app.include_router(auth_router) # Tags are defined inside the router
-app.include_router(users_router)
-app.include_router(roles_router)
-app.include_router(contacts_router, tags=["Contacts"])
-app.include_router(grid_presets_router)
 ```
-
-## Inyección IA / Orquestadores
-
-### `services/agent-core/app/graph/workflow.py`
+### `services/ai_runtime/graph/registry.py`
 
 ```
+"""Graph registry for bridge and vertical selection."""
+
+from __future__ import annotations
+
+from services.ai_runtime.domain.contracts import BridgeName, Vertical
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.graph.generic.graph import build_generic_graph
+from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+
+
+class GraphRegistry:
+    """Select the correct LangGraph builder for the resolved tenant vertical."""
+
+    def get_graph(self, vertical: Vertical, bridge: BridgeName, deps: GraphDependencies):
+        if bridge == "property-bridge" and vertical != "realtor":
+            raise ValueError("property-bridge solo puede usarse con vertical realtor")
+        if bridge == "generic-bridge" and vertical == "realtor":
+            raise ValueError("generic-bridge no puede usarse con vertical realtor")
+        if vertical == "realtor":
+            return build_realtor_graph(deps)
+        return build_generic_graph(deps)
+```
+### `services/ai_runtime/graph/generic/graph.py`
+
+```
+"""Builder for the reduced generic LangGraph."""
+
 from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from app.models.contracts import GoalType
-from app.graph.nodes import (
-    answer_guardrail,
-    clarify_response,
-    execute_tools,
-    normalize_input,
-    persist,
-    plan_turn,
-    policy_gate,
+from services.ai_runtime.domain.state import GenericGraphState
+from services.ai_runtime.domain.contracts import TenantConfig
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.graph._shared.nodes import (
+    ask_clarification,
+    check_queue,
+    classify_intent,
+    collect_lead_data,
+    lead_advisor,
+    resolve_references,
+    route_next_intent,
     synthesize,
 )
-from app.graph.state import AgentCoreState
+from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.routers.common import after_check_queue, after_classify_intent, after_resolve_references
+from services.ai_runtime.graph._shared.tools.mensajear import mensajear
+from services.ai_runtime.graph.generic.nodes.capabilities import assign_agent, collect_appointment_data, rag_agencia
+from services.ai_runtime.graph.generic.routers.routes import after_collect_appointment_data, after_route_next_intent
 
 
-def _route_after_policy_gate(state: AgentCoreState) -> str:
-    gate = state.get("gate_result")
-    decision = state.get("router_decision")
+def _wrap_async(function, deps: GraphDependencies):
+    async def _inner(state: dict):
+        return await function(state, deps)
 
-    if gate is None or not getattr(gate, "accepted", False):
-        return "persist"
-    if decision is not None and decision.goal == GoalType.clarify:
-        return "clarify_response"
-    return "execute_tools"
+    return _inner
 
 
-def _route_after_guardrail(state: AgentCoreState) -> str:
-    guardrail = state.get("guardrail_result")
-    if guardrail is None or not getattr(guardrail, "accepted", False):
-        return "persist"
-    return "persist"
+def _mail_node(deps: GraphDependencies):
+    async def _inner(state: dict):
+        tenant_config = TenantConfig.model_validate(state["tenant_config"])
+        graph_state = GenericGraphState.model_validate(state)
+        output = (
+            await mensajear(
+                dependencies=deps,
+                client_id=state["client_id"],
+                tipo="appointment_confirmation",
+                destinatarios=[],
+                datos_cita=state.get("cita", {}),
+                tenant_config=tenant_config,
+            )
+        ).model_dump(mode="json")
+        return {
+            "turn_outputs": [*state.get("turn_outputs", []), {"type": "mensajear", **output}],
+            **complete_active_intent(graph_state, {"type": "mensajear", **output}),
+        }
+
+    return _inner
 
 
-def build_agent_graph():
-    graph = StateGraph(AgentCoreState)
+def build_generic_graph(deps: GraphDependencies):
+    workflow = StateGraph(dict)
+    workflow.add_node("resolve_references", _wrap_async(resolve_references, deps))
+    workflow.add_node("ask_clarification", _wrap_async(ask_clarification, deps))
+    workflow.add_node("classify_intent", _wrap_async(classify_intent, deps))
+    workflow.add_node("route_next_intent", _wrap_async(route_next_intent, deps))
+    workflow.add_node("collect_lead_data", _wrap_async(collect_lead_data, deps))
+    workflow.add_node("rag_agencia", _wrap_async(rag_agencia, deps))
+    workflow.add_node("collect_appointment_data", _wrap_async(collect_appointment_data, deps))
+    workflow.add_node("assign_agent", _wrap_async(assign_agent, deps))
+    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("check_queue", _wrap_async(check_queue, deps))
+    workflow.add_node("lead_advisor", _wrap_async(lead_advisor, deps))
+    workflow.add_node("synthesize", _wrap_async(synthesize, deps))
 
-    graph.add_node("normalize_input", normalize_input)
-    graph.add_node("plan_turn", plan_turn)
-    graph.add_node("policy_gate", policy_gate)
-    graph.add_node("clarify_response", clarify_response)
-    graph.add_node("execute_tools", execute_tools)
-    graph.add_node("synthesize", synthesize)
-    graph.add_node("answer_guardrail", answer_guardrail)
-    graph.add_node("persist", persist)
-
-    graph.add_edge(START, "normalize_input")
-    graph.add_edge("normalize_input", "plan_turn")
-    graph.add_edge("plan_turn", "policy_gate")
-
-    graph.add_conditional_edges(
-        "policy_gate",
-        _route_after_policy_gate,
+    workflow.add_edge(START, "resolve_references")
+    workflow.add_conditional_edges(
+        "resolve_references",
+        after_resolve_references,
         {
-            "clarify_response": "clarify_response",
-            "execute_tools": "execute_tools",
-            "persist": "persist",
+            "ask_clarification": "ask_clarification",
+            "collect_lead_data": "collect_lead_data",
+            "classify_intent": "classify_intent",
         },
     )
-
-    graph.add_edge("clarify_response", "persist")
-    graph.add_edge("execute_tools", "synthesize")
-    graph.add_edge("synthesize", "answer_guardrail")
-    graph.add_conditional_edges(
-        "answer_guardrail",
-        _route_after_guardrail,
+    workflow.add_edge("ask_clarification", END)
+    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_conditional_edges(
+        "classify_intent",
+        after_classify_intent,
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+    )
+    workflow.add_conditional_edges(
+        "route_next_intent",
+        after_route_next_intent,
         {
-            "persist": "persist",
+            "rag_agencia": "rag_agencia",
+            "collect_lead_data": "collect_lead_data",
+            "collect_appointment_data": "collect_appointment_data",
+            "mensajear": "mensajear",
+            "lead_advisor": "lead_advisor",
         },
     )
-
-    graph.add_edge("persist", END)
-
-    return graph.compile()
-
-
-agent_graph = build_agent_graph()
+    workflow.add_edge("rag_agencia", "check_queue")
+    workflow.add_conditional_edges(
+        "collect_appointment_data",
+        after_collect_appointment_data,
+        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+    )
+    workflow.add_edge("assign_agent", "mensajear")
+    workflow.add_edge("mensajear", "check_queue")
+    workflow.add_conditional_edges(
+        "check_queue",
+        after_check_queue,
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+    )
+    workflow.add_edge("lead_advisor", "synthesize")
+    workflow.add_edge("synthesize", END)
+    return workflow.compile()
 ```
-### `services/agent-core/app/graph/nodes.py`
+### `services/ai_runtime/graph/realtor/graph.py`
 
 ```
+"""Builder for the full realtor LangGraph."""
+
 from __future__ import annotations
 
+from langgraph.graph import END, START, StateGraph
+
+from services.ai_runtime.domain.contracts import TenantConfig
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.state import RealtorGraphState
+from services.ai_runtime.graph._shared.nodes import (
+    ask_clarification,
+    check_queue,
+    classify_intent,
+    collect_lead_data,
+    lead_advisor,
+    resolve_references,
+    route_next_intent,
+    synthesize,
+)
+from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.routers.common import after_check_queue, after_classify_intent, after_resolve_references
+from services.ai_runtime.graph._shared.tools.mensajear import mensajear
+from services.ai_runtime.graph.realtor.nodes.appointments import assign_agent, collect_appointment_data
+from services.ai_runtime.graph.realtor.nodes.decisioning import compare_properties, llm_recommend, mutate_comparison_set
+from services.ai_runtime.graph.realtor.nodes.search_and_cards import rag_agencia, rag_documents, render_cards, search
+from services.ai_runtime.graph.realtor.routers.routes import (
+    after_collect_appointment_data,
+    after_render_cards,
+    after_route_next_intent,
+    after_search,
+)
+from services.ai_runtime.graph.realtor.tools.financial_calc import financial_calc
+
+
+def _wrap_async(function, deps: GraphDependencies):
+    async def _inner(state: dict):
+        return await function(state, deps)
+
+    return _inner
+
+
+def _mail_node(deps: GraphDependencies):
+    async def _inner(state: dict):
+        tenant_config = TenantConfig.model_validate(state["tenant_config"])
+        graph_state = RealtorGraphState.model_validate(state)
+        result = await mensajear(
+            dependencies=deps,
+            client_id=state["client_id"],
+            tipo="appointment_confirmation",
+            destinatarios=[],
+            datos_cita=state.get("cita", {}),
+            tenant_config=tenant_config,
+        )
+        output = {"type": "mensajear", **result.model_dump(mode="json")}
+        return {
+            "turn_outputs": [*state.get("turn_outputs", []), output],
+            **complete_active_intent(graph_state, output),
+        }
+
+    return _inner
+
+
+def build_realtor_graph(deps: GraphDependencies):
+    workflow = StateGraph(dict)
+    workflow.add_node("resolve_references", _wrap_async(resolve_references, deps))
+    workflow.add_node("ask_clarification", _wrap_async(ask_clarification, deps))
+    workflow.add_node("classify_intent", _wrap_async(classify_intent, deps))
+    workflow.add_node("route_next_intent", _wrap_async(route_next_intent, deps))
+    workflow.add_node("search", _wrap_async(search, deps))
+    workflow.add_node("render_cards", _wrap_async(render_cards, deps))
+    workflow.add_node("financial_calc", _wrap_async(financial_calc, deps))
+    workflow.add_node("compare_properties", _wrap_async(compare_properties, deps))
+    workflow.add_node("mutate_comparison_set", _wrap_async(mutate_comparison_set, deps))
+    workflow.add_node("collect_appointment_data", _wrap_async(collect_appointment_data, deps))
+    workflow.add_node("assign_agent", _wrap_async(assign_agent, deps))
+    workflow.add_node("rag_agencia", _wrap_async(rag_agencia, deps))
+    workflow.add_node("rag_documents", _wrap_async(rag_documents, deps))
+    workflow.add_node("collect_lead_data", _wrap_async(collect_lead_data, deps))
+    workflow.add_node("llm_recommend", _wrap_async(llm_recommend, deps))
+    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("check_queue", _wrap_async(check_queue, deps))
+    workflow.add_node("lead_advisor", _wrap_async(lead_advisor, deps))
+    workflow.add_node("synthesize", _wrap_async(synthesize, deps))
+
+    workflow.add_edge(START, "resolve_references")
+    workflow.add_conditional_edges(
+        "resolve_references",
+        after_resolve_references,
+        {
+            "ask_clarification": "ask_clarification",
+            "collect_lead_data": "collect_lead_data",
+            "classify_intent": "classify_intent",
+        },
+    )
+    workflow.add_edge("ask_clarification", END)
+    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_conditional_edges(
+        "classify_intent",
+        after_classify_intent,
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+    )
+    workflow.add_conditional_edges(
+        "route_next_intent",
+        after_route_next_intent,
+        {
+            "search": "search",
+            "financial_calc": "financial_calc",
+            "compare_properties": "compare_properties",
+            "mutate_comparison_set": "mutate_comparison_set",
+            "collect_appointment_data": "collect_appointment_data",
+            "rag_agencia": "rag_agencia",
+            "rag_documents": "rag_documents",
+            "collect_lead_data": "collect_lead_data",
+            "llm_recommend": "llm_recommend",
+            "mensajear": "mensajear",
+            "lead_advisor": "lead_advisor",
+        },
+    )
+    workflow.add_conditional_edges(
+        "search",
+        after_search,
+        {"search": "search", "lead_advisor": "lead_advisor", "check_queue": "check_queue", "render_cards": "render_cards"},
+    )
+    workflow.add_conditional_edges("render_cards", after_render_cards, {"check_queue": "check_queue"})
+    workflow.add_edge("financial_calc", "check_queue")
+    workflow.add_edge("compare_properties", "check_queue")
+    workflow.add_edge("mutate_comparison_set", "check_queue")
+    workflow.add_edge("rag_agencia", "check_queue")
+    workflow.add_edge("rag_documents", "check_queue")
+    workflow.add_edge("llm_recommend", "check_queue")
+    workflow.add_conditional_edges(
+        "collect_appointment_data",
+        after_collect_appointment_data,
+        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+    )
+    workflow.add_edge("assign_agent", "mensajear")
+    workflow.add_edge("mensajear", "check_queue")
+    workflow.add_conditional_edges(
+        "check_queue",
+        after_check_queue,
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+    )
+    workflow.add_edge("lead_advisor", "synthesize")
+    workflow.add_edge("synthesize", END)
+    return workflow.compile()
+```
+
+## Bridges y Canal Web
+
+### `services/bridges/generic-bridge/main.py`
+
+```
+"""
+Generic Bridge
+Adapts generic chat requests to the active AI runtime API
+"""
+import asyncio
+import logging
 import time
-import uuid
-from typing import Any
-
-from app.core.config import settings
-from app.models.contracts import (
-    AnswerEnvelope,
-    GoalType,
-    GuardrailRejectCode,
-    GuardrailResult,
-    GateResult,
-    GateRejectCode,
-    ResponseMode,
-    RouterDecision,
-    SynthesizerOutput,
-    ToolResult,
-)
-from app.planners.planner_service import planner_service
-from app.renderers.card_renderer import card_renderer
-from app.repositories.persistence import runtime_repository
-from app.runtime.answer_guardrail import run_answer_guardrail
-from app.runtime.policy_gate import run_policy_gate
-from app.services.scoring_client import scoring_client
-from app.core.prompt_service import prompt_service
-from app.tools.executor import tool_executor
-from app.synthesizers.synthesizer_service import synthesizer_service
-from app.graph.state import AgentCoreState
-
-
-def _timing(state: AgentCoreState, node_name: str, started: float) -> dict[str, Any]:
-    elapsed = (time.perf_counter() - started) * 1000.0
-    timings = dict(state.get("node_timings_ms", {}))
-    timings[node_name] = timings.get(node_name, 0.0) + elapsed
-    return {"node_timings_ms": timings}
-
-
-def _fallback_synthesizer_output(
-    *,
-    goal: GoalType,
-    tool_results: list[ToolResult],
-) -> SynthesizerOutput:
-    if goal in {GoalType.realtor_search, GoalType.realtor_refine}:
-        for result in tool_results:
-            if result.status != "ok" or result.realtor is None:
-                continue
-            listings = result.realtor.listings
-            if listings:
-                evidence_ids = [item.listing_id for item in listings[:3] if item.listing_id]
-                return SynthesizerOutput(
-                    text="Te comparto propiedades para que las revises.",
-                    evidence_ids=evidence_ids,
-                    needs_cards=True,
-                )
-        return SynthesizerOutput(
-            text="No encontré propiedades con esos criterios. Si quieres, afinamos zona, tipo o presupuesto.",
-            evidence_ids=[],
-            needs_cards=False,
-        )
-
-    if goal == GoalType.rag:
-        for result in tool_results:
-            if result.status != "ok" or result.rag is None:
-                continue
-            chunk_ids = [chunk.chunk_id for chunk in result.rag.chunks[:3] if chunk.chunk_id]
-            if chunk_ids:
-                return SynthesizerOutput(
-                    text="Encontré información relevante en los documentos y ya te la comparto.",
-                    evidence_ids=chunk_ids,
-                    needs_cards=False,
-                )
-
-    return SynthesizerOutput(
-        text="No pude sintetizar la respuesta en este momento, pero ya ejecuté la consulta solicitada.",
-        evidence_ids=[],
-        needs_cards=bool(tool_results),
-    )
-
-
-async def normalize_input(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    raw = state.get("raw_input", {})
-    if not isinstance(raw, dict):
-        raw = {}
-
-    conversation_id = str(
-        raw.get("conversationId")
-        or raw.get("conversation_id")
-        or uuid.uuid4()
-    )
-    tenant_id = raw.get("tenant_id") or raw.get("clientId") or raw.get("client_id")
-    channel = raw.get("channel") or "web_html"
-    requested_vertical = str(raw.get("vertical") or "").strip() or "generic"
-    vertical = await prompt_service.resolve_runtime_vertical(
-        tenant_id=str(tenant_id) if tenant_id else None,
-        requested_vertical=requested_vertical,
-    )
-
-    normalized_input = {
-        "conversation_summary": str(raw.get("queryText") or raw.get("text") or "").strip(),
-        "vertical": vertical,
-        "conversation_state": raw.get("conversation_state") or {},
-        "last_user_turn": str(raw.get("queryText") or raw.get("text") or ""),
-    }
-
-    return {
-        **_timing(state, "normalize_input", started),
-        "normalized_input": normalized_input,
-        "tenant_id": str(tenant_id) if tenant_id else None,
-        "channel": str(channel),
-        "conversation_id": conversation_id,
-        "errors": [],
-    }
-
-
-async def plan_turn(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    raw_input = state.get("raw_input") or {}
-    normalized = state.get("normalized_input") or {}
-    history = state.get("raw_input", {}).get("history", [])
-    if not isinstance(history, list):
-        history = []
-
-    try:
-        decision = await planner_service.run(
-            raw_input=raw_input,
-            normalized_input=normalized,
-            history=history,
-        )
-        return {
-            **_timing(state, "plan_turn", started),
-            "router_decision": decision,
-        }
-    except Exception as exc:
-        decision = RouterDecision(
-            goal=GoalType.clarify,
-            confidence=0.0,
-            tool_calls=[],
-            missing_slots=["planner_output_invalid"],
-            clarify_message="No pude decidir el siguiente paso. Por favor formula la consulta de nuevo.",
-            response_mode=ResponseMode.text_only,
-        )
-        return {
-            **_timing(state, "plan_turn", started),
-            "router_decision": decision,
-            "errors": [str(exc)],
-        }
-
-
-def policy_gate(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    decision = state.get("router_decision")
-    if not isinstance(decision, RouterDecision):
-        return {
-            **_timing(state, "policy_gate", started),
-            "gate_result": GateResult(
-                accepted=False,
-                reject_code=GateRejectCode.schema_invalid,
-            ),
-            "errors": ["invalid_router_decision"],
-        }
-
-    tenant_id = str(state.get("tenant_id")) if state.get("tenant_id") else "default"
-    vertical = str((state.get("normalized_input") or {}).get("vertical", "generic"))
-    gate = run_policy_gate(
-        decision=decision,
-        tenant_id=tenant_id,
-        vertical=vertical,
-    )
-    return {
-        **_timing(state, "policy_gate", started),
-        "gate_result": gate,
-    }
-
-
-def clarify_response(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    raw_input = state.get("raw_input") or {}
-    decision = state.get("router_decision")
-    goal = decision.goal if decision else GoalType.clarify
-    message = (
-        decision.clarify_message
-        if decision and decision.clarify_message
-        else "Necesito más contexto para continuar."
-    )
-    envelope = AnswerEnvelope(
-        conversation_id=str(raw_input.get("conversationId") or raw_input.get("conversation_id") or state.get("conversation_id", "")),
-        text=message,
-        cards=[],
-        response_mode=ResponseMode.text_only,
-        evidence_ids=[],
-        goal=goal,
-        confidence=float(decision.confidence if decision else 0.0),
-        clarify_message=message,
-    )
-    return {
-        **_timing(state, "clarify_response", started),
-        "answer_envelope": envelope,
-    }
-
-
-async def execute_tools(state: AgentCoreState) -> dict[str, Any]:
-    started = time.perf_counter()
-    raw_input = state.get("raw_input") or {}
-    tenant_id = str(raw_input.get("tenant_id") or raw_input.get("clientId") or raw_input.get("client_id") or "default")
-    vertical = str((state.get("normalized_input") or {}).get("vertical") or "generic")
-    decision = state.get("router_decision")
-    if not decision:
-        return {"tool_results": [], **_timing(state, "execute_tools", started)}
-    calls = decision.tool_calls
-    if not calls:
-        return {"tool_results": [], **_timing(state, "execute_tools", started)}
-    results: list[ToolResult] = await tool_executor.execute_all(
-        tenant_id=tenant_id,
-        vertical=vertical,
-        calls=calls,
-    )
-    return {"tool_results": results, **_timing(state, "execute_tools", started)}
-
-```
-### `services/agent-core/app/planners/planner_service.py`
-
-```
-from __future__ import annotations
-
-from typing import Any, Dict
-
-from pydantic import ValidationError
-
-from app.core.config import settings
-from app.core.llm_client import llm_service
-from app.core.llm_contract_normalizer import normalize_router_decision
-from app.core.prompt_service import prompt_service
-from app.models.contracts import RouterDecision
-
-
-class PlannerService:
-    async def run(
-        self,
-        *,
-        raw_input: Dict[str, Any],
-        normalized_input: Dict[str, Any],
-        history: list[Dict[str, Any]],
-    ) -> RouterDecision:
-        tenant_id = str(raw_input.get("tenant_id") or raw_input.get("clientId") or "default").strip()
-        vertical = str(raw_input.get("vertical") or normalized_input.get("vertical") or "generic").strip()
-        channel = str(raw_input.get("channel") or "web_html").strip()
-
-        prompts = await prompt_service.resolve_prompts(
-            tenant_id=tenant_id,
-            vertical=vertical,
-            channel=channel,
-        )
-
-        payload = {
-            "query_text": raw_input.get("queryText") or raw_input.get("text") or "",
-            "history": history[-10:],
-            "normalized_input": normalized_input,
-            "context_snapshot": {
-                "conversation_summary": normalized_input.get("conversation_summary", ""),
-                "vertical": vertical,
-                "conversation_state": normalized_input.get("conversation_state", {}),
-            },
-            "tenant_id": tenant_id,
-            "channel": channel,
-            "contract": {
-                "goal": "answer|clarify|rag|realtor_search|realtor_refine|workflow",
-                "confidence": "float 0..1",
-                "tool_calls": "optional tool calls",
-                "missing_slots": "list",
-                "clarify_message": "required when goal=clarify",
-                "response_mode": "text_only|text_plus_cards",
-            },
-        }
-
-        raw = await llm_service.generate_json(
-            system_instruction=prompts.planner_system_prompt,
-            payload=payload,
-            temperature=0.1,
-            max_output_tokens=settings.llm_max_output_tokens,
-        )
-        normalized = normalize_router_decision(raw)
-
-        try:
-            return RouterDecision.model_validate(normalized)
-        except ValidationError as exc:
-            raise ValueError(f"planner_output_invalid:{exc}") from exc
-
-
-planner_service = PlannerService()
-```
-### `services/agent-core/app/synthesizers/synthesizer_service.py`
-
-```
-from __future__ import annotations
-
-import json
-from typing import Any
-
-from app.core.config import settings
-from app.core.llm_client import llm_service
-from app.core.llm_contract_normalizer import normalize_synthesizer_output
-from app.core.prompt_service import prompt_service
-from app.models.contracts import (
-    PropertyListing,
-    RAGChunk,
-    RAGResult,
-    RealtorSQLResult,
-    SynthesizerInput,
-    SynthesizerOutput,
-    ToolResult,
-    WorkflowResult,
-)
-
-
-def _truncate_text(value: Any, *, max_chars: int) -> str:
-    text = str(value or "").strip()
-    if max_chars <= 0 or len(text) <= max_chars:
-        return text
-    if max_chars <= 3:
-        return text[:max_chars]
-    return text[: max_chars - 3].rstrip() + "..."
-
-
-def _compact_value(value: Any, *, max_chars: int) -> Any:
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    if isinstance(value, str):
-        return _truncate_text(value, max_chars=max_chars)
-    if isinstance(value, (dict, list)):
-        try:
-            packed = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-        except Exception:
-            packed = str(value)
-        return _truncate_text(packed, max_chars=max_chars)
-    return _truncate_text(value, max_chars=max_chars)
-
-
-def _compact_workflow_output(output: dict[str, Any], *, max_items: int, max_chars: int) -> dict[str, Any]:
-    if not isinstance(output, dict) or not output:
-        return {}
-
-    compacted: dict[str, Any] = {}
-    for idx, (raw_key, raw_value) in enumerate(output.items()):
-        if idx >= max_items:
-            break
-        key = _truncate_text(raw_key, max_chars=max_chars) or f"item_{idx}"
-        compacted[key] = _compact_value(raw_value, max_chars=max_chars)
-    return compacted
-
-
-def _compact_context_snapshot(context_snapshot: dict[str, Any]) -> str:
-    max_chars = max(300, int(settings.synth_context_max_chars))
-    summary_limit = max(120, max_chars // 3)
-    state_limit = max(120, max_chars // 2)
-
-    compacted = {
-        "conversation_summary": _truncate_text(
-            context_snapshot.get("conversation_summary"),
-            max_chars=summary_limit,
-        ),
-        "vertical": _truncate_text(context_snapshot.get("vertical"), max_chars=64),
-        "last_user_turn": _truncate_text(
-            context_snapshot.get("last_user_turn"),
-            max_chars=summary_limit,
-        ),
-        "conversation_state": _compact_value(
-            context_snapshot.get("conversation_state"),
-            max_chars=state_limit,
-        ),
-    }
-
-    serialized = json.dumps(compacted, ensure_ascii=False, separators=(",", ":"))
-    return _truncate_text(serialized, max_chars=max_chars)
-
-
-def _compact_tool_results(tool_results: list[ToolResult]) -> list[ToolResult]:
-    string_max_chars = max(40, int(settings.synth_string_max_chars))
-    rag_chunk_limit = max(1, int(settings.synth_rag_chunk_limit))
-    rag_chunk_max_chars = max(80, int(settings.synth_rag_chunk_max_chars))
-    realtor_listing_limit = max(1, int(settings.synth_realtor_listing_limit))
-    realtor_features_limit = max(0, int(settings.synth_realtor_features_limit))
-    realtor_images_limit = max(0, int(settings.synth_realtor_images_per_listing))
-    workflow_output_items = max(1, int(settings.synth_workflow_output_items))
-
-    compacted_results: list[ToolResult] = []
-    for result in tool_results:
-        compacted = ToolResult(
-            tool_name=result.tool_name,
-            status=result.status,
-            error_code=result.error_code,
-            error=_truncate_text(result.error, max_chars=string_max_chars) or None,
-        )
-
-        if result.rag is not None:
-            rag_chunks: list[RAGChunk] = []
-            for chunk in result.rag.chunks[:rag_chunk_limit]:
-                rag_chunks.append(
-                    RAGChunk(
-                        chunk_id=_truncate_text(chunk.chunk_id, max_chars=string_max_chars),
-                        doc_id=_truncate_text(chunk.doc_id, max_chars=string_max_chars),
-                        content=_truncate_text(chunk.content, max_chars=rag_chunk_max_chars),
-                        score=float(chunk.score),
-                        source_url=_truncate_text(chunk.source_url, max_chars=string_max_chars * 3) or None,
-                    )
-                )
-            compacted.rag = RAGResult(
-                chunks=rag_chunks,
-                query_used=_truncate_text(result.rag.query_used, max_chars=string_max_chars),
-            )
-
-        if result.realtor is not None:
-            listings: list[PropertyListing] = []
-            for listing in result.realtor.listings[:realtor_listing_limit]:
-                listings.append(
-                    PropertyListing(
-                        listing_id=_truncate_text(listing.listing_id, max_chars=string_max_chars),
-                        title=_truncate_text(listing.title, max_chars=string_max_chars * 2),
-                        city=_truncate_text(listing.city, max_chars=string_max_chars),
-                        neighborhood=_truncate_text(listing.neighborhood, max_chars=string_max_chars) or None,
-                        price=int(listing.price),
-                        currency=_truncate_text(listing.currency, max_chars=12) or "USD",
-                        rooms=listing.rooms,
-                        area_m2=listing.area_m2,
-                        property_type=_truncate_text(listing.property_type, max_chars=string_max_chars) or "generic",
-                        features=[
-                            _truncate_text(feature, max_chars=string_max_chars)
-                            for feature in listing.features[:realtor_features_limit]
-                        ],
-                        image_urls=[
-                            _truncate_text(url, max_chars=string_max_chars * 3)
-                            for url in listing.image_urls[:realtor_images_limit]
-                        ],
-                        listing_url=_truncate_text(listing.listing_url, max_chars=string_max_chars * 3) or None,
-                    )
-                )
-            compacted.realtor = RealtorSQLResult(
-                listings=listings,
-                total_found=int(result.realtor.total_found),
-                sql_executed="",
-                slots_used=result.realtor.slots_used,
-            )
-
-        if result.workflow is not None:
-            compacted.workflow = WorkflowResult(
-                workflow_name=_truncate_text(result.workflow.workflow_name, max_chars=string_max_chars),
-                success=bool(result.workflow.success),
-                output=_compact_workflow_output(
-                    result.workflow.output,
-                    max_items=workflow_output_items,
-                    max_chars=string_max_chars,
-                ),
-            )
-
-        compacted_results.append(compacted)
-
-    return compacted_results
-
-
-class SynthesizerService:
-    async def run(
-        self,
-        *,
-        tenant_id: str,
-        raw_input: dict[str, Any],
-        tool_results: list[ToolResult],
-        response_mode: Any,
-        context_snapshot: dict[str, Any],
-    ) -> SynthesizerOutput:
-        channel = str(raw_input.get("channel") or "web_html").strip()
-        vertical = str(raw_input.get("vertical") or "generic").strip()
-        tenant = str(tenant_id or raw_input.get("tenant_id") or "default").strip()
-
-        prompts = await prompt_service.resolve_prompts(
-            tenant_id=tenant,
-            vertical=vertical,
-            channel=channel,
-        )
-
-        compacted_results = _compact_tool_results(tool_results)
-        synth_input = SynthesizerInput(
-            context_snapshot=_compact_context_snapshot(context_snapshot),
-            tool_results=compacted_results,
-            response_mode=response_mode,
-            tenant_tone=str(raw_input.get("tenant_tone") or "formal"),
-        )
-
-        payload = synth_input.model_dump(mode="json")
-        raw = await llm_service.generate_json(
-            system_instruction=prompts.synthesizer_system_prompt,
-            payload=payload,
-            temperature=0.2,
-            max_output_tokens=max(256, int(settings.synth_max_output_tokens)),
-        )
-        normalized = normalize_synthesizer_output(raw)
-        return SynthesizerOutput.model_validate(normalized)
-
-
-synthesizer_service = SynthesizerService()
-```
-### `services/agent-core/app/tools/executor.py`
-
-```
-from __future__ import annotations
-
-import json
-from typing import Any
-
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
-
-from app.core.config import settings
-from app.models.contracts import (
-    RealtorSearchSlots,
-    RAGQuery,
-    RAGResult,
-    RealtorSQLResult,
-    ToolCall,
-    ToolName,
-    ToolResult,
-)
-from app.runtime.runtime_registry import get_tool_registry_config
-from app.tools.canonical_property_contract import canonical_feature_keys
-from app.tools.rag_client import rag_client
-from app.tools.sql_translator import slots_to_sql
-from app.tools.workflow_executor import workflow_executor
-
-
-class ToolExecutor:
-    def __init__(self, database_url: str | None = None) -> None:
-        self.database_url = _to_asyncpg_url(database_url or settings.database_url)
-        self._engine = create_async_engine(self.database_url, pool_pre_ping=True)
-
-    async def execute(self, *, tenant_id: str, vertical: str, call: ToolCall) -> ToolResult:
-        try:
-            registry = get_tool_registry_config()
-        except Exception:
-            return ToolResult(
-                tool_name=call.tool_name,
-                status="error",
-                error_code="tool_registry_unavailable",
-                error="tool registry unavailable",
-            )
-
-        if call.tool_name not in registry.tool_specs:
-            return ToolResult(
-                tool_name=call.tool_name,
-                status="error",
-                error_code="tool_not_registered",
-                error="tool not registered in runtime registry",
-            )
-
-        vertical_key = vertical.lower().strip() if vertical else "generic"
-        vertical_config = registry.verticals.get(vertical_key) or registry.verticals.get("generic")
-        if vertical_config is None or call.tool_name not in vertical_config.enabled_tools:
-            return ToolResult(
-                tool_name=call.tool_name,
-                status="error",
-                error_code="tool_not_enabled_for_vertical",
-                error="tool not enabled for vertical",
-            )
-
-        if call.tool_name == ToolName.rag:
-            return await self._run_rag(tenant_id, call.rag)
-        if call.tool_name == ToolName.realtor_sql:
-            return await self._run_realtor_sql(tenant_id, call.realtor_slots)
-        if call.tool_name == ToolName.workflow:
-            return await self._run_workflow(tenant_id, call.workflow)
-        return ToolResult(
-            tool_name=call.tool_name,
-            status="error",
-            error_code="unsupported_tool",
-            error="Unsupported tool",
-        )
-
-    async def execute_all(self, tenant_id: str, vertical: str, calls: list[ToolCall]) -> list[ToolResult]:
-        results: list[ToolResult] = []
-        for call in calls:
-            results.append(await self.execute(tenant_id=tenant_id, vertical=vertical, call=call))
-        return results
-
-    async def _run_rag(self, tenant_id: str, payload: RAGQuery | None) -> ToolResult:
-        if not payload:
-            return ToolResult(
-                tool_name=ToolName.rag,
-                status="error",
-                error="missing_rag_query",
-                error_code="missing_payload",
-            )
-        try:
-            result = await rag_client.search(tenant_id=tenant_id, query=payload)
-            return ToolResult(tool_name=ToolName.rag, status="ok", rag=result)
-        except Exception as exc:
-            return ToolResult(
-                tool_name=ToolName.rag,
-                status="error",
-                error_code="rag_tool_failed",
-                error=str(exc),
-            )
-
-    async def _run_realtor_sql(self, tenant_id: str, payload: RealtorSearchSlots | None) -> ToolResult:
-        if not payload:
-            return ToolResult(
-                tool_name=ToolName.realtor_sql,
-                status="error",
-                error="missing_realtor_slots",
-                error_code="missing_payload",
-            )
-        try:
-            sql, params = slots_to_sql.compile(tenant_id=tenant_id, slots=payload.model_dump())
-            rows = []
-            total = 0
-            async with self._engine.connect() as connection:
-                rows_raw = (await connection.execute(text(sql), params)).mappings().all()
-                total = len(rows_raw)
-                for row in rows_raw:
-                    rows.append(
-                        self._normalize_row(
-                            dict(row),
-                            requested_property_type=payload.property_type,
-                        )
-                    )
-            result = RealtorSQLResult(
-                listings=rows,
-                total_found=total,
-                sql_executed=sql,
-                slots_used=payload,
-            )
-            return ToolResult(tool_name=ToolName.realtor_sql, status="ok", realtor=result)
-        except Exception as exc:
-            return ToolResult(
-                tool_name=ToolName.realtor_sql,
-                status="error",
-                error_code="realtor_sql_failed",
-                error=str(exc),
-            )
-
-    async def _run_workflow(self, tenant_id: str, payload: Any) -> ToolResult:
-        if payload is None:
-            return ToolResult(
-                tool_name=ToolName.workflow,
-                status="error",
-                error="missing_workflow_payload",
-                error_code="missing_payload",
-            )
-        try:
-            workflow_result = await workflow_executor.execute(tenant_id=tenant_id, workflow=payload)
-            return ToolResult(
-                tool_name=ToolName.workflow,
-                status="ok" if workflow_result.success else "error",
-                error_code=None if workflow_result.success else "workflow_failed",
-                workflow=workflow_result,
-            )
-        except Exception as exc:
-            return ToolResult(
-                tool_name=ToolName.workflow,
-                status="error",
-                error_code="workflow_execution_failed",
-                error=str(exc),
-            )
-
-    def _normalize_row(self, row: dict[str, Any], requested_property_type: str | None = None) -> dict[str, Any]:
-        feature_keys = canonical_feature_keys()
-        features_payload = _parse_json_object(row.get("features_json") or row.get("features"))
-        address = str(row.get("address_street") or "") or str(features_payload.get(feature_keys["address"]) or "")
-
-        listing_id = str(row.get("listing_id") or row.get("id") or "")
-        title = str(row.get("title") or "")
-        city = address
-        neighborhood = None
-        price = _coerce_int(row.get("price"))
-        currency = str(row.get("currency") or "USD")
-        rooms = _coerce_int(features_payload.get(feature_keys["bedrooms_clean"]))
-        area_m2 = _coerce_float(features_payload.get(feature_keys["sqm_clean"]))
-        property_type = str(
-            features_payload.get("property_type")
-            or requested_property_type
-            or "generic"
-        )
-        raw_features = features_payload.get(feature_keys["amenities"]) or []
-        raw_images = row.get("image_urls") or []
-        listing_url = row.get("listing_url")
-
-        return {
-            "listing_id": listing_id,
-            "title": title,
-            "city": city,
-            "neighborhood": neighborhood if neighborhood is not None else None,
-            "price": price,
-            "currency": currency,
-            "rooms": rooms,
-            "area_m2": area_m2,
-            "property_type": property_type,
-            "features": _parse_list(raw_features),
-            "image_urls": _parse_list(raw_images),
-            "listing_url": str(listing_url) if listing_url is not None else None,
-        }
-
-
-def _coerce_int(value: Any) -> int:
-    try:
-        if value is None:
-            return 0
-        if isinstance(value, bool):
-            return int(value)
-        return int(str(value).replace(",", "").strip())
-    except Exception:
-        return 0
-
-
-def _coerce_float(value: Any) -> float | None:
-    try:
-        if value is None:
-            return None
-        return float(str(value).replace(",", "").strip())
-    except Exception:
-        return None
-
-
-def _parse_list(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value if str(item).strip()]
-    if isinstance(value, str):
-```
-### `services/agent-core/app/tools/rag_client.py`
-
-```
-from __future__ import annotations
-
-import uuid
-from typing import Any
-
+from typing import Dict, Any, Optional
+from uuid import UUID
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
+from pydantic.alias_generators import to_camel
 import httpx
-
-from app.core.config import settings
-from app.models.contracts import RAGQuery, RAGResult, RAGChunk
+import os
 
 
-class RAGClient:
-    async def search(self, tenant_id: str, query: RAGQuery) -> RAGResult:
-        endpoint = settings.rag_retriever_url.rstrip("/") + settings.rag_retriever_search_path
-        payload = {
-            "query_text": query.query_text,
-            "client_id": tenant_id,
-            "filters": {"doc_type": query.filter_doc_type} if query.filter_doc_type else {},
-            "top_k": query.top_k,
-        }
+# Configuration
+INFERENCE_API_URL = os.getenv(
+    "AI_RUNTIME_API",
+    os.getenv(
+        "AGENT_CORE_API",
+        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+    ),
+)
+INFERENCE_API_PREFIX = os.getenv(
+    "AI_RUNTIME_API_PREFIX",
+    os.getenv(
+        "AGENT_CORE_API_PREFIX",
+        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+    ),
+)
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
-        async with httpx.AsyncClient(timeout=settings.rag_retriever_timeout_secs) as client:
-            response = await client.post(endpoint, json=payload)
-            response.raise_for_status()
-            data = response.json()
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("generic-bridge")
 
-        chunks: list[RAGChunk] = []
-        for row in data.get("results", []) or []:
-            chunk_id = str(row.get("content_id") or uuid.uuid4())
-            score = row.get("score", 0.0)
-            chunks.append(
-                RAGChunk(
-                    chunk_id=chunk_id,
-                    doc_id=str(row.get("content_id") or chunk_id),
-                    content=str(row.get("body_content") or row.get("content") or ""),
-                    score=float(score) if score is not None else 0.0,
-                    source_url=str((row.get("metadata") or {}).get("source_url") or "") or None,
-                )
-            )
-
-        return RAGResult(chunks=chunks, query_used=query.query_text)
-
-
-rag_client = RAGClient()
-```
-### `services/agent-core/app/runtime/policy_gate.py`
-
-```
-from __future__ import annotations
-
-from app.core.config import settings
-from app.models.contracts import GateRejectCode, GateResult, GoalType, RouterDecision, ToolName
-from app.runtime.runtime_registry import get_policy_gate_config
-
-
-def run_policy_gate(decision: RouterDecision, tenant_id: str | None, vertical: str) -> GateResult:
-    if settings.allowed_tenants and tenant_id and tenant_id not in settings.allowed_tenants:
-        return GateResult(accepted=False, reject_code=GateRejectCode.tenant_not_authorized)
-
-    try:
-        gate_policy = get_policy_gate_config()
-    except Exception:
-        return GateResult(accepted=False, reject_code=GateRejectCode.schema_invalid)
-
-    min_confidence = gate_policy.defaults.min_confidence
-    max_tool_calls = gate_policy.defaults.max_tool_calls
-    allow_side_effects = gate_policy.defaults.allow_side_effects
-
-    if decision.confidence < min_confidence:
-        return GateResult(accepted=False, reject_code=GateRejectCode.confidence_too_low)
-
-    if len(decision.tool_calls) > max_tool_calls:
-        return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
-
-    vertical_key = vertical.lower() if vertical else "generic"
-    policy = gate_policy.verticals.get(vertical_key) or gate_policy.verticals.get("generic")
-    if policy is None:
-        return GateResult(accepted=False, reject_code=GateRejectCode.schema_invalid)
-
-    if decision.goal not in policy.allowed_goals:
-        return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
-
-    for tool_call in decision.tool_calls:
-        if tool_call.tool_name not in policy.allowed_tools:
-            return GateResult(accepted=False, reject_code=GateRejectCode.tool_not_permitted)
-
-    required = gate_policy.required_tools_by_goal.get(decision.goal, set())
-    used = {call.tool_name for call in decision.tool_calls}
-    if required and not required.issubset(used):
-        return GateResult(accepted=False, reject_code=GateRejectCode.missing_required_slots)
-
-    if (
-        not allow_side_effects
-        and ToolName.workflow in used
-    ):
-        return GateResult(accepted=False, reject_code=GateRejectCode.side_effects_blocked)
-
-    if decision.goal == GoalType.clarify and decision.tool_calls:
-        return GateResult(accepted=False, reject_code=GateRejectCode.schema_invalid)
-
-    return GateResult(accepted=True)
-```
-### `services/agent-core/app/runtime/answer_guardrail.py`
-
-```
-from __future__ import annotations
-
-from app.models.contracts import (
-    GuardrailRejectCode,
-    GuardrailResult,
-    GoalType,
-    RAGChunk,
-    RealtorSQLResult,
-    SynthesizerOutput,
-    ToolResult,
+# FastAPI app
+app = FastAPI(
+    title="Generic Bridge",
+    description="Adapts generic chat requests to the active AI runtime",
+    version="1.0.0"
 )
 
 
-def _tool_result_ids(tool_results: list[ToolResult]) -> set[str]:
-    ids: set[str] = set()
-    for tr in tool_results:
-        if tr.rag:
-            for chunk in tr.rag.chunks:
-                if chunk.chunk_id:
-                    ids.add(chunk.chunk_id)
-        if tr.realtor:
-            for listing in tr.realtor.listings:
-                if listing.listing_id:
-                    ids.add(listing.listing_id)
-            if tr.realtor.sql_executed:
-                ids.add(tr.realtor.sql_executed)
-        if tr.workflow and tr.workflow.success and tr.workflow.output:
-            ids.add(tr.workflow.workflow_name)
-    return ids
+class GenericChatRequest(BaseModel):
+    """Generic chat request contract"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    query_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=4000,
+        validation_alias=AliasChoices("query_text", "queryText", "text"),
+    )
+    client_id: UUID = Field(
+        ...,
+        description="Tenant/client identifier",
+        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
+    )
+    business_domain: Optional[str] = Field(None, description="Optional business domain")
+    conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID")
+    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
-def _is_realtor_empty_result(tool_results: list[ToolResult]) -> bool:
-    realtor_seen = False
-    for tr in tool_results:
-        if tr.realtor is None:
-            continue
-        realtor_seen = True
-        if tr.status != "ok":
-            return False
-        if tr.realtor.listings:
-            return False
-    return realtor_seen
+class GenericChatResponse(BaseModel):
+    """Generic chat response contract"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    answer: str
+    conversation_id: UUID
+    lead_id: Optional[UUID] = None
+    scorecard_id: Optional[UUID] = None
+    scoring_status: Optional[str] = None
+    scoring_job_id: Optional[UUID] = None
+    scoring_eta: Optional[str] = None
+    score_total: Optional[float] = None
+    priority_label: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-def run_answer_guardrail(
-    *,
-    goal: GoalType,
-    synthesizer_output: SynthesizerOutput | None,
-    tool_results: list[ToolResult],
-) -> GuardrailResult:
-    if goal == GoalType.clarify:
-        return GuardrailResult(accepted=True)
-
-    if not synthesizer_output:
-        return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.schema_violation)
-
-    if not synthesizer_output.text.strip():
-        return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.claim_without_source)
-
-    valid_ids = _tool_result_ids(tool_results)
-    claimed_ids = [i for i in synthesizer_output.evidence_ids if i]
-    if claimed_ids and not all(item in valid_ids for item in claimed_ids):
-        return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.hallucinated_listing_id)
-
-    if (
-        tool_results
-        and not claimed_ids
-        and goal in {GoalType.rag, GoalType.realtor_search, GoalType.realtor_refine, GoalType.workflow}
-    ):
-        if goal in {GoalType.realtor_search, GoalType.realtor_refine} and _is_realtor_empty_result(tool_results):
-            return GuardrailResult(accepted=True)
-        return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.no_evidence_cited)
-
-    if tool_results:
-        if any(tr.status != "ok" and tr.error for tr in tool_results):
-            if not claimed_ids:
-                return GuardrailResult(accepted=False, reject_code=GuardrailRejectCode.claim_without_source)
-
-    return GuardrailResult(accepted=True)
-```
-### `services/agent-core/app/services/scoring_client.py`
-
-```
-from __future__ import annotations
-
-import uuid
-from dataclasses import dataclass
-
-import httpx
-
-from app.core.config import settings
-
-
-@dataclass(frozen=True)
-class ScoreJob:
-    id: str
+class HealthResponse(BaseModel):
+    """Health check response"""
     status: str
-    scheduled_for: str | None = None
+    service: str
+    inference_status: str
 
 
-class ScoringClient:
-    def __init__(self) -> None:
-        self.base_url = settings.scoring_core_api.rstrip("/")
-        self.prefix = settings.scoring_api_prefix.rstrip("/")
+class AsyncHTTPClient:
+    """Async HTTP client with retry logic"""
+    
+    def __init__(self):
+        self.client = None
+        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
+    
+    async def __aenter__(self):
+        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.aclose()
+    
+    async def post_with_retry(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any],
+        retries: int = MAX_RETRIES
+    ) -> httpx.Response:
+        """POST request with retry logic"""
+        url = f"{self.base_url}{endpoint}"
+        
+        for attempt in range(retries):
+            try:
+                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
+                response = await self.client.post(url, json=payload)
+                
+                if response.status_code < 500 or attempt == retries - 1:
+                    return response
+                
+                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                if attempt == retries - 1:
+                    raise
+                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(2 ** attempt)
+        
+        raise httpx.RequestError("Max retries exceeded")
 
-    async def enqueue(self, *, client_id: str, lead_id: str | None, conversation_id: str, channel: str) -> ScoreJob:
-        if not settings.scoring_enabled:
-            return ScoreJob(id=str(uuid.uuid4()), status="disabled")
-        if not lead_id:
-            raise RuntimeError("lead_id_required")
 
-        endpoint = f"{self.base_url}{self.prefix}/scoring/jobs/enqueue"
-        payload = {
-            "client_id": str(client_id),
-            "lead_id": str(lead_id),
-            "conversation_id": str(conversation_id),
-            "channel": str(channel),
+def _pick(payload: Dict[str, Any], *keys: str):
+    for key in keys:
+        if key in payload:
+            return payload[key]
+    return None
+
+
+@app.post("/chat", response_model=GenericChatResponse)
+async def chat_endpoint(request: GenericChatRequest):
+    """
+    Generic chat endpoint that forwards to the active AI runtime
+    
+    Required:
+    - query_text: User's question/message
+    - client_id: Tenant/client identifier
+    
+    Optional:
+    - business_domain: Additional granularity for model resolution
+    - conversation_id: Continue existing conversation
+    """
+    start_time = time.time()
+    
+    try:
+        request_payload = {
+            "queryText": request.query_text,
+            "clientId": str(request.client_id),
+            "bridge": "generic-bridge",
+            "businessDomain": request.business_domain,
+            "conversationId": str(request.conversation_id) if request.conversation_id else None,
+            "userMetadata": request.user_metadata,
+            "filters": request.filters
         }
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(endpoint, json=payload)
-            response.raise_for_status()
-            data = response.json()
-        return ScoreJob(
-            id=str(data.get("id") or uuid.uuid4()),
-            status=str(data.get("status") or "queued"),
-            scheduled_for=data.get("scheduled_for"),
+        
+        # Forward to the AI runtime
+        async with AsyncHTTPClient() as http_client:
+            response = await http_client.post_with_retry("/chat", request_payload)
+            
+            if response.status_code == 400:
+```
+### `services/bridges/property-bridge/main.py`
+
+```
+"""
+Property Bridge
+Adapts property-specific chat requests to the active AI runtime API
+Maintains compatibility with existing property integrations
+"""
+import asyncio
+import logging
+import time
+from typing import Dict, Any, Optional
+from uuid import UUID
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
+from pydantic.alias_generators import to_camel
+import httpx
+import os
+
+
+# Configuration
+INFERENCE_API_URL = os.getenv(
+    "AI_RUNTIME_API",
+    os.getenv(
+        "AGENT_CORE_API",
+        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+    ),
+)
+INFERENCE_API_PREFIX = os.getenv(
+    "AI_RUNTIME_API_PREFIX",
+    os.getenv(
+        "AGENT_CORE_API_PREFIX",
+        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+    ),
+)
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("property-bridge")
+
+# FastAPI app
+app = FastAPI(
+    title="Property Bridge",
+    description="Adapts property chat requests to the active AI runtime",
+    version="1.0.0"
+)
+
+
+class PropertyChatRequest(BaseModel):
+    """Property chat request (compatible with existing contract)"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore"
+    )
+    
+    query_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=4000,
+        validation_alias=AliasChoices("query_text", "queryText", "text"),
+    )
+    client_id: UUID = Field(
+        ...,
+        description="Tenant/client identifier",
+        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
+    )
+    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    conversation_id: Optional[UUID] = Field(None)
+    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class SourceDocument(BaseModel):
+    """Source document for backward compatibility"""
+    content_id: str
+    title: Optional[str] = None
+    body_content: str
+    score: float
+    metadata: Dict[str, Any]
+
+
+class LeadScoringResult(BaseModel):
+    """Legacy scoring result for backward compatibility"""
+    score_engagement: int = Field(0)
+    score_finance: int = Field(0)
+    score_timeline: int = Field(0)
+    score_match: int = Field(0)
+    score_info: int = Field(0)
+    reasoning: str = Field("")
+    
+    # Extracted fields
+    extracted_name: Optional[str] = None
+    extracted_email: Optional[str] = None
+    extracted_phone: Optional[str] = None
+    extracted_income: Optional[float] = None
+    extracted_debts: Optional[float] = None
+    extracted_currency_id: Optional[str] = None
+    extracted_contact_pref_id: Optional[str] = None
+
+
+class PropertyChatResponse(BaseModel):
+    """Property chat response (compatible with existing contract)"""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    answer: str
+    sources: list[SourceDocument] = Field(default_factory=list)
+    conversation_id: UUID
+    lead_scoring: Optional[LeadScoringResult] = None
+    scoring_status: Optional[str] = None
+    scoring_job_id: Optional[UUID] = None
+    scoring_eta: Optional[str] = None
+
+
+class AsyncHTTPClient:
+    """Async HTTP client for the active AI runtime"""
+    
+    def __init__(self):
+        self.client = None
+        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
+    
+    async def __aenter__(self):
+        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.aclose()
+    
+    async def post_with_retry(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any],
+        retries: int = MAX_RETRIES
+    ) -> httpx.Response:
+        """POST request with retry logic"""
+        url = f"{self.base_url}{endpoint}"
+        
+        for attempt in range(retries):
+            try:
+                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
+                response = await self.client.post(url, json=payload)
+                
+                if response.status_code < 500 or attempt == retries - 1:
+                    return response
+                
+                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
+                await asyncio.sleep(2 ** attempt)
+                
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                if attempt == retries - 1:
+                    raise
+                logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(2 ** attempt)
+        
+        raise httpx.RequestError("Max retries exceeded")
+    
+def map_v2_scorecard_to_legacy(scorecard: Dict[str, Any]) -> LeadScoringResult:
+    """
+    Map runtime scorecard to legacy scoring format
+    
+    This is a simplified mapping for backward compatibility.
+    In production, would need business logic to map criteria to legacy pillars.
+    """
+    if not scorecard:
+        return LeadScoringResult(
+            score_engagement=0,
+            score_finance=0,
+            score_timeline=0,
+            score_match=0,
+            score_info=0,
+            reasoning="No scoring available",
         )
-
-    async def latest_scorecard(self, *, client_id: str, lead_id: str) -> dict:
-        endpoint = f"{self.base_url}{self.prefix}/leads/{lead_id}/scorecards/latest?client_id={client_id}"
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(endpoint)
-            if response.status_code == 404:
-                return {}
-            response.raise_for_status()
-            return response.json()
-
-
-scoring_client = ScoringClient()
+    
+    # Extract scores from runtime score items
+    engagement_score = 0
+    finance_score = 0
+    timeline_score = 0
+    match_score = 0
 ```
 ### `services/web/chat-web-renderer/backend/app/core/inference_bridge.py`
 
@@ -3809,9 +2175,9 @@ logger = logging.getLogger("inference_bridge")
 
 class InferenceClient:
     """
-    El 'Cable' que conecta el Bridge con el Cerebro de IA (Inference Core).
+    El cable que conecta el renderer con el runtime conversacional activo.
     Se encarga de enviar el payload con metadatos y recibir la respuesta plana.
-    Opera contra el runtime activo del inference core.
+    Opera contra el runtime activo del asistente.
     """
 
     def __init__(self):
@@ -3819,12 +2185,18 @@ class InferenceClient:
         self.connect_timeout = float(os.getenv("INFERENCE_CONNECT_TIMEOUT", 5))
         self.default_client_id = os.getenv("DEFAULT_CLIENT_ID", "")
         inference_url = os.getenv(
-            "AGENT_CORE_API",
-            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+            "AI_RUNTIME_API",
+            os.getenv(
+                "AGENT_CORE_API",
+                os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+            ),
         )
         api_prefix = os.getenv(
-            "AGENT_CORE_API_PREFIX",
-            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+            "AI_RUNTIME_API_PREFIX",
+            os.getenv(
+                "AGENT_CORE_API_PREFIX",
+                os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+            ),
         )
         self.base_url = inference_url.rstrip("/") + api_prefix
         logger.info("🔌 InferenceClient conectado a %s (Timeout: %ss)", self.base_url, self.timeout)
@@ -3953,1459 +2325,734 @@ class InferenceClient:
         
         return normalized
 ```
-### `services/generic-bridge-v2/main.py`
+### `services/web/chat-web-renderer/backend/app/core/memory_reset.py`
 
 ```
-"""
-Generic Bridge V2
-Adapts generic chat requests to the active inference-core API
-"""
 import asyncio
 import logging
-import time
-from typing import Dict, Any, Optional
-from uuid import UUID
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, ConfigDict, AliasChoices
-from pydantic.alias_generators import to_camel
-import httpx
 import os
+from typing import Any, Dict
 
-
-# Configuration
-INFERENCE_API_URL = os.getenv(
-    "AGENT_CORE_API",
-    os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
-)
-INFERENCE_API_PREFIX = os.getenv(
-    "AGENT_CORE_API_PREFIX",
-    os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-)
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("generic-bridge-v2")
-
-# FastAPI app
-app = FastAPI(
-    title="Generic Bridge V2",
-    description="Adapts generic chat requests to the active inference core",
-    version="2.0.0"
-)
-
-
-class GenericChatRequest(BaseModel):
-    """Generic chat request contract"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="ignore",
-    )
-
-    query_text: str = Field(
-        ...,
-        min_length=1,
-        max_length=4000,
-        validation_alias=AliasChoices("query_text", "queryText", "text"),
-    )
-    client_id: UUID = Field(
-        ...,
-        description="Tenant/client identifier",
-        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
-    )
-    business_domain: Optional[str] = Field(None, description="Optional business domain")
-    conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID")
-    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-class GenericChatResponse(BaseModel):
-    """Generic chat response contract"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-    answer: str
-    conversation_id: UUID
-    lead_id: Optional[UUID] = None
-    scorecard_id: Optional[UUID] = None
-    scoring_status: Optional[str] = None
-    scoring_job_id: Optional[UUID] = None
-    scoring_eta: Optional[str] = None
-    score_total: Optional[float] = None
-    priority_label: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class HealthResponse(BaseModel):
-    """Health check response"""
-    status: str
-    service: str
-    inference_status: str
-
-
-class AsyncHTTPClient:
-    """Async HTTP client with retry logic"""
-    
-    def __init__(self):
-        self.client = None
-        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
-    
-    async def __aenter__(self):
-        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.aclose()
-    
-    async def post_with_retry(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-        retries: int = MAX_RETRIES
-    ) -> httpx.Response:
-        """POST request with retry logic"""
-        url = f"{self.base_url}{endpoint}"
-        
-        for attempt in range(retries):
-            try:
-                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
-                response = await self.client.post(url, json=payload)
-                
-                if response.status_code < 500 or attempt == retries - 1:
-                    return response
-                
-                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                if attempt == retries - 1:
-                    raise
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(2 ** attempt)
-        
-        raise httpx.RequestError("Max retries exceeded")
-
-
-def _pick(payload: Dict[str, Any], *keys: str):
-    for key in keys:
-        if key in payload:
-            return payload[key]
-    return None
-
-
-@app.post("/chat", response_model=GenericChatResponse)
-async def chat_endpoint(request: GenericChatRequest):
-    """
-    Generic chat endpoint that forwards to the active inference core
-    
-    Required:
-    - query_text: User's question/message
-    - client_id: Tenant/client identifier
-    
-    Optional:
-    - business_domain: Additional granularity for model resolution
-    - conversation_id: Continue existing conversation
-    """
-    start_time = time.time()
-    
-    try:
-        request_payload = {
-            "queryText": request.query_text,
-            "clientId": str(request.client_id),
-            "businessDomain": request.business_domain,
-            "conversationId": str(request.conversation_id) if request.conversation_id else None,
-            "userMetadata": request.user_metadata,
-            "filters": request.filters
-        }
-        
-        # Forward to inference core
-        async with AsyncHTTPClient() as http_client:
-            response = await http_client.post_with_retry("/chat", request_payload)
-            
-            if response.status_code == 400:
-                error_data = response.json()
-                raise HTTPException(status_code=400, detail=error_data.get("detail", "Bad request"))
-            
-            if response.status_code == 404:
-                error_data = response.json()
-                raise HTTPException(status_code=404, detail=error_data.get("detail", "Not found"))
-            
-            if response.status_code >= 500:
-                logger.error(f"Inference core error: {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=503,
-                    detail="Scoring service temporarily unavailable"
-                )
-            
-            if response.status_code != 200:
-                logger.error(f"Unexpected response: {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Bad gateway: {response.status_code}"
-                )
-            
-            # Parse core response
-            core_response = response.json()
-            
-            # Build generic response
-            generic_response = GenericChatResponse(
-                answer=core_response["answer"],
-                conversation_id=UUID(_pick(core_response, "conversationId", "conversation_id")),
-                metadata={
-                    "source": "agent-core",
-                    "processing_time_ms": int((time.time() - start_time) * 1000)
-                }
-            )
-
-            generic_response.scoring_status = _pick(core_response, "scoringStatus", "scoring_status")
-            generic_response.scoring_eta = _pick(core_response, "scoringEta", "scoring_eta")
-            scoring_job_id = _pick(core_response, "scoringJobId", "scoring_job_id")
-            if scoring_job_id:
-                try:
-                    generic_response.scoring_job_id = UUID(str(scoring_job_id))
-                except ValueError:
-                    logger.warning("Invalid scoring_job_id in core response: %s", scoring_job_id)
-            
-            # Add scoring data if available
-            if core_response.get("scorecard"):
-                scorecard = core_response["scorecard"]
-                scorecard_id = _pick(core_response, "scorecardId", "scorecard_id")
-```
-### `services/property-bridge-v2/main.py`
-
-```
-"""
-Property Bridge V2
-Adapts property-specific chat requests to the active inference-core API
-Maintains compatibility with existing property integrations
-"""
-import asyncio
-import logging
-import time
-from typing import Dict, Any, Optional
-from uuid import UUID
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, ConfigDict, AliasChoices
-from pydantic.alias_generators import to_camel
 import httpx
-import os
 
 
-# Configuration
-INFERENCE_API_URL = os.getenv(
-    "AGENT_CORE_API",
-    os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
-)
-INFERENCE_API_PREFIX = os.getenv(
-    "AGENT_CORE_API_PREFIX",
-    os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-)
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("property-bridge-v2")
-
-# FastAPI app
-app = FastAPI(
-    title="Property Bridge V2",
-    description="Adapts property chat requests to the active inference core",
-    version="2.0.0"
-)
+logger = logging.getLogger("memory_reset")
 
 
-class PropertyChatRequest(BaseModel):
-    """Property chat request (compatible with existing contract)"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="ignore"
-    )
-    
-    query_text: str = Field(
-        ...,
-        min_length=1,
-        max_length=4000,
-        validation_alias=AliasChoices("query_text", "queryText", "text"),
-    )
-    client_id: UUID = Field(
-        ...,
-        description="Tenant/client identifier",
-        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
-    )
-    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    conversation_id: Optional[UUID] = Field(None)
-    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+class RuntimeMemoryResetError(RuntimeError):
+    def __init__(self, *, failures: Dict[str, str], partial_results: Dict[str, Any]) -> None:
+        self.failures = failures
+        self.partial_results = partial_results
+        message = "; ".join(f"{service}: {error}" for service, error in failures.items())
+        super().__init__(message or "runtime_memory_reset_failed")
 
 
-class SourceDocument(BaseModel):
-    """Source document for backward compatibility"""
-    content_id: str
-    title: Optional[str] = None
-    body_content: str
-    score: float
-    metadata: Dict[str, Any]
-
-
-class LeadScoringResult(BaseModel):
-    """Legacy scoring result for backward compatibility"""
-    score_engagement: int = Field(0)
-    score_finance: int = Field(0)
-    score_timeline: int = Field(0)
-    score_match: int = Field(0)
-    score_info: int = Field(0)
-    reasoning: str = Field("")
-    
-    # Extracted fields
-    extracted_name: Optional[str] = None
-    extracted_email: Optional[str] = None
-    extracted_phone: Optional[str] = None
-    extracted_income: Optional[float] = None
-    extracted_debts: Optional[float] = None
-    extracted_currency_id: Optional[str] = None
-    extracted_contact_pref_id: Optional[str] = None
-
-
-class PropertyChatResponse(BaseModel):
-    """Property chat response (compatible with existing contract)"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-    answer: str
-    sources: list[SourceDocument] = Field(default_factory=list)
-    conversation_id: UUID
-    lead_scoring: Optional[LeadScoringResult] = None
-    scoring_status: Optional[str] = None
-    scoring_job_id: Optional[UUID] = None
-    scoring_eta: Optional[str] = None
-
-
-class AsyncHTTPClient:
-    """Async HTTP client for the active inference core"""
-    
+class MemoryResetClient:
     def __init__(self):
-        self.client = None
-        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
-    
-    async def __aenter__(self):
-        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.aclose()
-    
-    async def post_with_retry(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-        retries: int = MAX_RETRIES
-    ) -> httpx.Response:
-        """POST request with retry logic"""
-        url = f"{self.base_url}{endpoint}"
-        
-        for attempt in range(retries):
-            try:
-                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
-                response = await self.client.post(url, json=payload)
-                
-                if response.status_code < 500 or attempt == retries - 1:
-                    return response
-                
-                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
-                await asyncio.sleep(2 ** attempt)
-                
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                if attempt == retries - 1:
-                    raise
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(2 ** attempt)
-        
-        raise httpx.RequestError("Max retries exceeded")
-    
-def map_v2_scorecard_to_legacy(scorecard: Dict[str, Any]) -> LeadScoringResult:
-    """
-    Map v2 scorecard to legacy scoring format
-    
-    This is a simplified mapping for backward compatibility.
-    In production, would need business logic to map criteria to legacy pillars.
-    """
-    if not scorecard:
-        return LeadScoringResult(
-            score_engagement=0,
-            score_finance=0,
-            score_timeline=0,
-            score_match=0,
-            score_info=0,
-            reasoning="No scoring available",
-        )
-    
-    # Extract scores from v2 score items
-    engagement_score = 0
-    finance_score = 0
-    timeline_score = 0
-    match_score = 0
-    info_score = 0
-    
-    score_items = scorecard.get("score_items") or scorecard.get("scoreItems") or []
-    for item in score_items:
-        criterion = item.get("criterion_key", "")
-        score = item.get("score", 0)
-        
-        # Map v2 criteria to legacy pillars (simplified)
-        if "intent" in criterion or "urgency" in criterion:
-            engagement_score = int(score * 3)  # Scale to legacy range
-        elif "finance" in criterion or "budget" in criterion:
-            finance_score = int(score * 3)
-        elif "timeline" in criterion or "timeframe" in criterion:
-            timeline_score = int(score * 2)
-        elif "match" in criterion or "fit" in criterion:
-            match_score = int(score * 1.5)
-        elif "data" in criterion or "quality" in criterion:
-            info_score = int(score * 0.5)
-    
-    # Ensure scores are within legacy ranges
-    engagement_score = max(-20, min(30, engagement_score))
-    finance_score = max(-10, min(30, finance_score))
-    timeline_score = max(0, min(20, timeline_score))
-    match_score = max(0, min(15, match_score))
-    info_score = max(-3, min(5, info_score))
-    
-    return LeadScoringResult(
-        score_engagement=engagement_score,
-        score_finance=finance_score,
-        score_timeline=timeline_score,
-        score_match=match_score,
-        score_info=info_score,
-        reasoning=scorecard.get("reasoning", "Scoring calculated with v2 model"),
-        # Note: Extracted fields would come from score_items extracted_data
-    )
-
-
-@app.post("/chat", response_model=PropertyChatResponse)
-async def chat_endpoint(request: PropertyChatRequest):
-    """
-    Property chat endpoint with backward compatibility
-    
-    Forwards to the active inference core
-    Maps scorecards to legacy format for frontend compatibility
-    """
-    start_time = time.time()
-```
-### `services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py`
-
-```
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
-
-from app.models.chat_v2 import (
-    ChatV2Request,
-    ChatV2Response,
-    ScoringJobResponse,
-    ScoringOpsSummaryResponse,
-    ScorecardResponse,
-    ActiveModelResponse,
-    InternalMemoryResetRequest,
-    InternalMemoryResetResponse,
-)
-from app.services.scoring_orchestrator import ScoringOrchestrator
-from app.dependencies.database import get_db_session
-from app.services.cache_service import cache_service
-from app.core.config import settings
-import logging
-
-
-router = APIRouter()
-logger = logging.getLogger("inference-core-v2.api")
-
-
-def _assert_internal_token(request: Request):
-    expected = (settings.internal_api_token or "").strip()
-    if not expected:
-        return
-    provided = (request.headers.get("X-Internal-Token") or "").strip()
-    if provided != expected:
-        raise HTTPException(status_code=401, detail="Invalid internal token")
-
-
-@router.post("/chat", response_model=ChatV2Response)
-async def chat_v2_endpoint(
-    request: ChatV2Request,
-    db_session: AsyncSession = Depends(get_db_session)
-):
-    """
-    Principal endpoint para interactuar con el bot v2.
-    
-    Realiza búsqueda semántica, genera respuesta con LLM y scoring configurable.
-    
-    Requerido:
-    - client_id: Tenant para resolver vertical y modelo de scoring
-    
-    """
-    try:
-        # Initialize orchestrator
-        orchestrator = ScoringOrchestrator(db_session)
-        
-        # Process chat with scoring
-        response = await orchestrator.process_chat(request)
-        
-        return response
-        
-    except ValueError as e:
-        error = str(e)
-        logger.warning(f"Validation error in /api/v2/chat: {error}")
-        if error == "CLIENT_NOT_FOUND":
-            raise HTTPException(status_code=404, detail=error)
-        if error in ("TENANT_VERTICAL_NOT_CONFIGURED", "TENANT_SCORING_MODEL_NOT_CONFIGURED"):
-            raise HTTPException(status_code=422, detail=error)
-        if error.startswith("NO_ACTIVE_VERTICAL_SCORING_MODEL"):
-            raise HTTPException(status_code=404, detail=error)
-        if error.startswith("LLM_ENGINE_NOT_AVAILABLE"):
-            raise HTTPException(status_code=503, detail=error)
-        raise HTTPException(status_code=400, detail=error)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Unhandled error in /api/v2/chat")
-        raise HTTPException(status_code=500, detail="Internal inference error")
-
-
-@router.get("/leads/{lead_id}/scorecards/latest", response_model=ScorecardResponse)
-async def get_latest_scorecard(
-    lead_id: UUID,
-    db_session: AsyncSession = Depends(get_db_session)
-):
-    """Get the latest scorecard for a lead"""
-    try:
-        orchestrator = ScoringOrchestrator(db_session)
-        scorecard = await orchestrator.get_latest_scorecard_response(lead_id)
-        
-        if not scorecard:
-            raise HTTPException(status_code=404, detail="No scorecards found for this lead")
-        
-        return scorecard
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error getting latest scorecard for lead {lead_id}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/leads/{lead_id}/scorecards/{scorecard_id}", response_model=ScorecardResponse)
-async def get_scorecard(
-    lead_id: UUID,
-    scorecard_id: UUID,
-    db_session: AsyncSession = Depends(get_db_session)
-):
-    """Get specific scorecard for a lead"""
-    try:
-        orchestrator = ScoringOrchestrator(db_session)
-        scorecard = await orchestrator.get_scorecard_response(scorecard_id)
-        
-        if not scorecard:
-            raise HTTPException(status_code=404, detail="Scorecard not found")
-        
-        # Verify scorecard belongs to lead
-        if UUID(scorecard["lead_id"]) != lead_id:
-            raise HTTPException(status_code=404, detail="Scorecard not found for this lead")
-        
-        return scorecard
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error getting scorecard {scorecard_id} for lead {lead_id}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
-async def get_scoring_job(
-    job_id: UUID,
-    db_session: AsyncSession = Depends(get_db_session),
-):
-    """Get async scoring job status."""
-    try:
-        orchestrator = ScoringOrchestrator(db_session)
-        job = await orchestrator.get_scoring_job_response(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Scoring job not found")
-        return job
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Error getting scoring job %s", job_id)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/scoring/ops/summary", response_model=ScoringOpsSummaryResponse)
-async def get_scoring_ops_summary(
-    request: Request,
-    window_minutes: int = Query(60, ge=5, le=1440, description="Rolling window for rate/p95 metrics"),
-    db_session: AsyncSession = Depends(get_db_session),
-):
-    """Internal endpoint with scoring queue/SLO metrics."""
-    _assert_internal_token(request)
-    try:
-        orchestrator = ScoringOrchestrator(db_session)
-        return await orchestrator.get_scoring_ops_summary(window_minutes=window_minutes)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Error getting scoring ops summary")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/scoring/models/active", response_model=ActiveModelResponse)
-async def get_active_scoring_model(
-    client_id: UUID = Query(..., description="Tenant/client identifier"),
-    db_session: AsyncSession = Depends(get_db_session)
-):
-    """Get active scoring model configuration for tenant scope"""
-    try:
-        orchestrator = ScoringOrchestrator(db_session)
-        vertical_ctx = await orchestrator.resolve_vertical_for_client(client_id)
-        vertical_id = int(vertical_ctx["vertical_id"])
-        scoring_model_id = vertical_ctx.get("scoring_model_id")
-        model_data = await orchestrator.get_active_scoring_model(
-            client_id=client_id,
-            vertical_id=vertical_id,
-            scoring_model_id=scoring_model_id,
-        )
-        
-        if not model_data:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    "No active scoring model found for "
-                    f"vertical_id={vertical_id}, scoring_model_id={scoring_model_id}"
+        self.agent_core_reset_url = os.getenv(
+            "AI_RUNTIME_RESET_URL",
+            os.getenv(
+                "AGENT_CORE_RESET_URL",
+                os.getenv(
+                    "INFERENCE_RESET_URL",
+                    os.getenv(
+                        "INFERENCE_V2_RESET_URL",
+                        "http://ai-runtime:8000/api/v1/internal/memory/reset",
+                    ),
                 ),
-            )
-        
-        return ActiveModelResponse(
-            model_id=UUID(model_data["id"]),
-            model_version=model_data["version"],
-            prompt_version=model_data["prompt_version"],
-            criteria=model_data["criteria"]
+            ),
+        ).rstrip("/")
+        self.scoring_core_reset_url = self._resolve_scoring_reset_url()
+        self.timeout = float(os.getenv("INFERENCE_TIMEOUT", 60))
+        self.internal_token = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
+        self.version = "runtime"
+
+        logger.info(
+            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s version=%s)",
+            self.agent_core_reset_url,
+            self.scoring_core_reset_url,
+            self.version,
         )
-        
-    except ValueError as e:
-        error = str(e)
-        if error == "CLIENT_NOT_FOUND":
-            raise HTTPException(status_code=404, detail=error)
-        if error in ("TENANT_VERTICAL_NOT_CONFIGURED", "TENANT_SCORING_MODEL_NOT_CONFIGURED"):
-            raise HTTPException(status_code=422, detail=error)
-        raise HTTPException(status_code=400, detail=error)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Error getting active scoring model")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
+    @staticmethod
+    def _resolve_scoring_reset_url() -> str:
+        explicit_url = (os.getenv("SCORING_CORE_RESET_URL") or "").strip()
+        if explicit_url:
+            return explicit_url.rstrip("/")
 
-@router.post("/cache/invalidate")
-async def invalidate_cache(
-    client_id: UUID = None,
-):
-    """Invalidate cache entries (internal use)"""
-    try:
-        if client_id:
-            active_ok = await cache_service.invalidate_active_model(client_id=client_id)
-            prompts_ok = await cache_service.invalidate_client_prompts(client_id=client_id)
-            if active_ok or prompts_ok:
-                return {"status": "success", "message": "Cache invalidated"}
+        scoring_core_api = (os.getenv("SCORING_CORE_API") or "http://scoring-core:8000").strip().rstrip("/")
+        prefix = (
+            os.getenv("SCORING_API_PREFIX")
+            or os.getenv("SCORING_CORE_API_PREFIX")
+            or "/api/v1"
+        ).strip()
+        if not prefix.startswith("/"):
+            prefix = f"/{prefix}"
+        prefix = prefix.rstrip("/")
+        return f"{scoring_core_api}{prefix}/internal/memory/reset"
+
+    @staticmethod
+    def _format_error(exc: Exception) -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            response = exc.response
+            body = response.text.strip()
+            if len(body) > 250:
+                body = f"{body[:247]}..."
+            return f"HTTP {response.status_code} ({body})"
+        return str(exc) or exc.__class__.__name__
+
+    async def _post_reset(
+        self,
+        *,
+        client: httpx.AsyncClient,
+        url: str,
+        payload: Dict[str, Any],
+        headers: Dict[str, str],
+    ) -> Dict[str, Any]:
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def reset_inference_memory(self, client_id: str, reason: str | None = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"client_id": client_id}
+        if reason:
+            payload["reason"] = reason
+
+        headers: Dict[str, str] = {}
+        if self.internal_token:
+            headers["X-Internal-Token"] = self.internal_token
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await self._post_reset(
+                client=client,
+                url=self.agent_core_reset_url,
+                payload=payload,
+                headers=headers,
+            )
+
+    async def reset_runtime_memory(self, client_id: str, reason: str | None = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"client_id": client_id}
+        if reason:
+            payload["reason"] = reason
+
+        headers: Dict[str, str] = {}
+        if self.internal_token:
+            headers["X-Internal-Token"] = self.internal_token
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            agent_result, scoring_result = await asyncio.gather(
+                self._post_reset(
+                    client=client,
+                    url=self.agent_core_reset_url,
+                    payload=payload,
+                    headers=headers,
+                ),
+                self._post_reset(
+                    client=client,
+                    url=self.scoring_core_reset_url,
+                    payload=payload,
+                    headers=headers,
+                ),
+                return_exceptions=True,
+            )
+
+        results: Dict[str, Any] = {}
+        failures: Dict[str, str] = {}
+        if isinstance(agent_result, Exception):
+            failures["agent_core"] = self._format_error(agent_result)
+        else:
+            results["agent_core"] = agent_result
+
+        if isinstance(scoring_result, Exception):
+            failures["scoring_core"] = self._format_error(scoring_result)
+        else:
+            results["scoring_core"] = scoring_result
+
+        if failures:
+            raise RuntimeMemoryResetError(failures=failures, partial_results=results)
+
+        return results
 ```
-
-## ETL + Storage (R2/Staging)
-
-### `services/etl-docs/main.py`
+### `services/web/chat-web-renderer/backend/app/main.py`
 
 ```
-import logging
 import os
-import uuid
-from uuid import UUID
+import logging
+import time
+from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from redis import Redis
-from rq import Queue
-from rq.job import Job
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+import httpx
+from app.schemas.chat import InitRequest, InternalMemoryResetRequest
+from app.schemas.internal_chat import InternalChatRequest
+from app.schemas.ui import SDUIResponse
 
-from src.ETL_DOCS.worker_task import process_document_task
-from src.shared.file_manager import FileManager
-from src.shared.memory_reset import reset_client_memory
-from src.shared.vector_store import VectorStore
+app = FastAPI(title="Chat Web Renderer")
+logger = logging.getLogger("chat_web_renderer.main")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:8087,http://192.168.0.37:8087",
+    ).split(",")
+    if origin.strip()
+]
+allow_credentials = "*" not in cors_origins
 
-app = FastAPI(title="ETL Docs API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins or ["*"],
+    allow_credentials=allow_credentials,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-DOCS_QUEUE = os.getenv("DOCS_QUEUE_NAME", "docs")
+@app.get("/health")
+async def health_check():
+    return {"status": "operational", "service": "chat-web-renderer-api"}
 
-redis_conn = Redis.from_url(REDIS_URL)
-queue = Queue(DOCS_QUEUE, connection=redis_conn)
+
+@app.get("/health/dependencies")
+async def dependencies_health():
+    """
+    Lightweight dependency health for frontend status indicator.
+    """
+    timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
+    inference_base = os.getenv(
+        "AI_RUNTIME_API",
+        os.getenv(
+            "AGENT_CORE_API",
+            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+        ),
+    ).rstrip("/")
+    inference_prefix = os.getenv(
+        "AI_RUNTIME_API_PREFIX",
+        os.getenv(
+            "AGENT_CORE_API_PREFIX",
+            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+        ),
+    )
+    inference_url = f"{inference_base}{inference_prefix}/health"
+
+    result = {
+        "status": "operational",
+        "service": "chat-web-renderer-api",
+        "dependencies": {
+            "ai_runtime": {"ok": False, "url": inference_url},
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for name, url in (("ai_runtime", inference_url),):
+            try:
+                resp = await client.get(url)
+                result["dependencies"][name]["ok"] = resp.status_code == 200
+                if resp.status_code == 200:
+                    try:
+                        result["dependencies"][name]["detail"] = resp.json()
+                    except Exception:
+                        result["dependencies"][name]["detail"] = {"status_code": resp.status_code}
+                else:
+                    result["dependencies"][name]["error"] = f"HTTP {resp.status_code}"
+            except Exception as exc:
+                result["dependencies"][name]["error"] = str(exc)
+
+    all_ok = all(dep.get("ok") for dep in result["dependencies"].values())
+    result["status"] = "operational" if all_ok else "degraded"
+    return result
+
+from app.core.inference_bridge import InferenceClient
+from app.core.memory_reset import MemoryResetClient, RuntimeMemoryResetError
+from app.core.vertical_router import vertical_router
+from app.transformer.core import SDUITransformer
+from app.transformer.realtor_policy import RealtorRendererPolicy
+from app.transformer.generic_policy import GenericRendererPolicy
+from app.session.manager import SessionManager
+
+inference_client = InferenceClient()
+memory_reset_client = MemoryResetClient()
+transformer = SDUITransformer()
+session_manager = SessionManager()
+
+vertical_router.register_strategy("realtor", "web_html", RealtorRendererPolicy(channel="web_html"))
+vertical_router.register_strategy("generic", "web_html", GenericRendererPolicy(channel="web_html"))
+
+@app.post("/chat/init", response_model=SDUIResponse)
+async def chat_init(req: InitRequest):
+    client_id = str(req.client_id)
+    return await transformer.transform(
+        {"answer": "", "sources": []},
+        "init",
+        client_id,
+        brand_project=req.brand_project,
+        include_fallback_text=False,
+    )
+
+
+@app.post("/chat", response_model=SDUIResponse)
+async def chat_interaction(req: InternalChatRequest):
+    """
+    Canonical chat endpoint using InternalChatRequest contract.
+    This endpoint is explicitly limited to web_html for predictable SDUI output.
+    """
+    if req.channel != "web_html":
+        raise HTTPException(
+            status_code=422,
+            detail="/chat only supports channel='web_html'; use channel-specific endpoints for other channels",
+        )
+    
+    client_id = str(req.client_id)
+    channel = req.channel
+    channel_user_id = req.channel_user_id
+    metadata = dict(req.metadata or {})
+    trace_id = str(metadata.get("debug_trace_id") or "")
+    incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
+    request_started = time.perf_counter()
+
+    session_data = await session_manager.get_session_multichannel(
+        client_id=client_id,
+        channel=channel,
+        channel_user_id=channel_user_id,
+    )
+    
+    session_context = {
+        "client_id": client_id,
+        "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
+        "lead_id": session_data.get("lead_id"),
+        "brand_project": req.brand_project or session_data.get("brand_project"),
+        "channel": channel,
+        "channel_user_id": channel_user_id,
+    }
+    
+    if metadata:
+        session_context.update(metadata)
+
+    logger.info(
+        "CHAT_RENDERER_INBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
+        "session_conversation_id=%s resolved_conversation_id=%s frontend_runtime_conversation_id=%s "
+        "frontend_stored_conversation_id=%s frontend_had_stored_conversation_id=%s "
+        "frontend_runtime_channel_user_id=%s frontend_stored_channel_user_id=%s "
+        "frontend_had_stored_channel_user_id=%s frontend_had_frontend_state=%s frontend_had_window_state=%s "
+        "frontend_message_seq=%s frontend_page_load_id=%s landing_page_url=%s referrer_url=%s",
+        trace_id or "-",
+        client_id,
+        channel,
+        channel_user_id,
+        incoming_conversation_id or "-",
+        session_data.get("conversation_id") or "-",
+        session_context.get("conversation_id") or "-",
+        metadata.get("frontend_runtime_conversation_id") or "-",
+        metadata.get("frontend_stored_conversation_id") or "-",
+        metadata.get("frontend_had_stored_conversation_id"),
+        metadata.get("frontend_runtime_channel_user_id") or "-",
+        metadata.get("frontend_stored_channel_user_id") or "-",
+        metadata.get("frontend_had_stored_channel_user_id"),
+        metadata.get("frontend_had_frontend_state"),
+        metadata.get("frontend_had_window_state"),
+        metadata.get("frontend_message_seq"),
+        metadata.get("frontend_page_load_id") or "-",
+        metadata.get("landing_page_url") or "-",
+        metadata.get("referrer_url") or "-",
+    )
+```
+
+## Data Layer Compartida
+
+### `services/data/repositories/base.py`
+
+```
+"""Shared PostgreSQL repository helpers."""
+
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+
+from services.ai_runtime.runtime.settings import settings
+
+
+def _normalize_async_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql+asyncpg://"):
+        return database_url
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    return database_url
+
+
+def build_engine(database_url: str | None = None) -> AsyncEngine:
+    """Create the shared async engine for runtime repositories."""
+
+    normalized_url = _normalize_async_database_url(database_url or settings.database_url)
+    return create_async_engine(normalized_url, future=True, pool_pre_ping=True)
+```
+### `services/data/cache/session_store.py`
+
+```
+"""Session state store with tenant-prefixed keys."""
+
+from __future__ import annotations
+
+import json
+
+import redis.asyncio as redis
+
+from services.ai_runtime.runtime.settings import settings
+
+
+class SessionStore:
+    """Stores graph state using the canonical multitenant key pattern."""
+
+    def __init__(self, redis_url: str | None = None):
+        self.client = redis.from_url(redis_url or settings.redis_url, decode_responses=True)
+
+    @staticmethod
+    def build_key(client_id: str, session_id: str) -> str:
+        return f"{client_id}:session:{session_id}:state"
+
+    async def get_state(self, client_id: str, session_id: str) -> dict[str, object] | None:
+        raw = await self.client.get(self.build_key(client_id, session_id))
+        return json.loads(raw) if raw else None
+
+    async def set_state(self, client_id: str, session_id: str, payload: dict[str, object], ttl: int) -> None:
+        await self.client.set(self.build_key(client_id, session_id), json.dumps(payload, default=str), ex=ttl)
+
+    async def delete_by_client(self, client_id: str) -> int:
+        pattern = f"{client_id}:session:*:state"
+        keys = [key async for key in self.client.scan_iter(match=pattern)]
+        if not keys:
+            return 0
+        deleted = await self.client.delete(*keys)
+        return int(deleted or 0)
+```
+### `services/ai_runtime/config/tenant_loader.py`
+
+```
+"""Tenant configuration loading helpers for the AI service."""
+
+from __future__ import annotations
+
+from services.ai_runtime.domain.contracts import TenantConfig
+from services.data.cache.tenant_cache import TenantCache
+from services.data.repositories.agent_repository import AgentRepository
+from services.data.repositories.tenant_repository import TenantRepository
+
+
+class TenantLoader:
+    """Loads and caches tenant config plus active agents for the full session lifecycle."""
+
+    def __init__(
+        self,
+        *,
+        tenant_repository: TenantRepository,
+        agent_repository: AgentRepository,
+        tenant_cache: TenantCache,
+    ):
+        self.tenant_repository = tenant_repository
+        self.agent_repository = agent_repository
+        self.tenant_cache = tenant_cache
+
+    async def load(self, client_id: str) -> TenantConfig:
+        cached = await self.tenant_cache.get_config(client_id)
+        if cached:
+            return TenantConfig.model_validate(cached)
+
+        tenant_config = await self.tenant_repository.load_tenant_config(client_id)
+        if not tenant_config:
+            raise ValueError(f"Unknown client_id: {client_id}")
+
+        ttl = tenant_config.redis_ttl_seconds
+        await self.tenant_cache.set_config(client_id, tenant_config.model_dump(mode="json"), ttl)
+
+        agents = await self.agent_repository.load_active_agents(client_id)
+        await self.tenant_cache.set_agents(
+            client_id,
+            [agent.model_dump(mode="json") for agent in agents],
+            ttl,
+        )
+        return tenant_config
+
+```
+### `services/ai_runtime/config/prompt_composer.py`
+
+```
+"""Runtime prompt composition helpers for the AI service."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from services.ai_runtime.domain.contracts import TenantConfig, Vertical
+from services.ai_runtime.graph._shared.prompts.clarification_prompt import build_prompt as clarification_prompt
+from services.ai_runtime.graph._shared.prompts.intent_detector_prompt import build_prompt as intent_detector_prompt
+from services.ai_runtime.graph._shared.prompts.lazy_condition_evaluator_prompt import (
+    build_prompt as lazy_condition_prompt,
+)
+from services.ai_runtime.graph._shared.prompts.lead_data_collector_prompt import build_prompt as lead_data_collector_prompt
+from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
+from services.ai_runtime.graph._shared.prompts.vertical.healthcare.plan_prompt import PROMPT as HEALTHCARE_PLAN_PROMPT
+from services.ai_runtime.graph._shared.prompts.vertical.healthcare.synthesis_prompt import (
+    PROMPT as HEALTHCARE_SYNTHESIS_PROMPT,
+)
+from services.ai_runtime.graph._shared.prompts.vertical.legal.plan_prompt import PROMPT as LEGAL_PLAN_PROMPT
+from services.ai_runtime.graph._shared.prompts.vertical.legal.synthesis_prompt import PROMPT as LEGAL_SYNTHESIS_PROMPT
+from services.ai_runtime.graph._shared.prompts.vertical.realtor.plan_prompt import PROMPT as REALTOR_PLAN_PROMPT
+from services.ai_runtime.graph._shared.prompts.vertical.realtor.synthesis_prompt import PROMPT as REALTOR_SYNTHESIS_PROMPT
+from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
+    build_prompt as appointment_collector_prompt,
+)
+from services.ai_runtime.graph.realtor.prompts.comparison_synthesizer_prompt import (
+    build_prompt as comparison_synthesizer_prompt,
+)
+from services.ai_runtime.graph.realtor.prompts.recommendation_prompt import build_prompt as recommendation_prompt
+from services.ai_runtime.graph.realtor.prompts.text_to_sql_prompt import build_prompt as text_to_sql_prompt
+
+
+VERTICAL_PROMPTS: dict[Vertical, dict[str, str]] = {
+    "realtor": {
+        "plan_prompt": REALTOR_PLAN_PROMPT,
+        "synthesis_prompt": REALTOR_SYNTHESIS_PROMPT,
+    },
+    "healthcare": {
+        "plan_prompt": HEALTHCARE_PLAN_PROMPT,
+        "synthesis_prompt": HEALTHCARE_SYNTHESIS_PROMPT,
+    },
+    "legal": {
+        "plan_prompt": LEGAL_PLAN_PROMPT,
+        "synthesis_prompt": LEGAL_SYNTHESIS_PROMPT,
+    },
+}
+
+
+def load_tone_prompt(tenant_config: TenantConfig) -> str:
+    return tenant_config.tone_prompt.strip()
+
+
+def load_vertical_prompt(vertical: Vertical, node_type: str) -> str:
+    try:
+        return VERTICAL_PROMPTS[vertical][node_type]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported prompt node_type={node_type!r} for vertical={vertical!r}") from exc
+
+
+def _render_context(context: dict[str, Any]) -> str:
+    return json.dumps(context, ensure_ascii=True, indent=2, default=str)
+
+
+def compose(node_type: str, tenant_config: TenantConfig, vertical: Vertical, context: dict[str, Any]) -> str:
+    """Compose tone + base prompt + runtime context as the canonical prompt payload."""
+
+    tone = load_tone_prompt(tenant_config)
+    if node_type in {"plan_prompt", "synthesis_prompt"}:
+        base = load_vertical_prompt(vertical, node_type)
+    elif node_type == "reference_classifier":
+        base = reference_classifier_prompt()
+    elif node_type == "intent_detector":
+        base = intent_detector_prompt()
+    elif node_type == "lazy_condition_evaluator":
+        base = lazy_condition_prompt()
+    elif node_type == "clarification":
+        base = clarification_prompt()
+    elif node_type == "lead_data_collector":
+        base = lead_data_collector_prompt()
+    elif node_type == "text_to_sql":
+        base = text_to_sql_prompt()
+    elif node_type == "comparison_synthesizer":
+        base = comparison_synthesizer_prompt()
+    elif node_type == "recommendation":
+        base = recommendation_prompt()
+    elif node_type == "appointment_data_collector":
+        base = appointment_collector_prompt()
+    else:
+        raise ValueError(f"Unsupported prompt node_type={node_type!r}")
+    return "\n\n".join(part for part in [tone, base, _render_context(context)] if part)
+
+```
+
+## Scoring Boundary
+
+### `services/scoring-core/README.md`
+
+```
+# scoring-core
+
+Servicio objetivo para scoring asincrono, separado del runtime conversacional (`ai-runtime`).
+
+Responsabilidades:
+
+- jobs de scoring
+- worker de scoring
+- scorecards
+- prompts y modelos de scoring existentes
+
+No incluye:
+
+- decision conversacional
+- planner
+- synthesizer de chat
+
+Referencia canonica:
+
+- `docs/SCORING_CORE_BOUNDARY.md`
+- `docs/Manuales/SCORING_V2_SCHEMA.md`
+```
+### `services/scoring-core/main.py`
+
+```
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.scoring import router as scoring_router
+from app.core.config import settings
+from app.dependencies.database import close_database, init_database
+from app.services.cache_service import cache_service
+
+
+logging.basicConfig(
+    level=settings.log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("scoring-core.main")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting scoring-core")
+    try:
+        await init_database()
+        logger.info("Database initialized")
+    except Exception:
+        logger.exception("Database initialization failed")
+
+    try:
+        await cache_service.connect()
+    except Exception:
+        logger.exception("Cache initialization failed")
+
+    yield
+
+    logger.info("Shutting down scoring-core")
+    await cache_service.disconnect()
+    await close_database()
+
+
+app = FastAPI(
+    title="Scoring Core",
+    description="Async scoring service decoupled from ai-runtime",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 
 
 @app.get("/")
-def root():
-    return {"status": "ETL Docs API Running"}
+async def root():
+    return {
+        "service": "scoring-core",
+        "version": "1.0.0",
+        "status": "running",
+        "docs": f"{settings.api_prefix}/docs",
+    }
 
 
-@app.post("/documents/upload", status_code=202)
-async def upload_document(
-    file: UploadFile = File(...),
-    client_id: str = Form(...),
-    content_id: str | None = Form(None),
-    access_level: str = Form("private"),
-    category: str = Form("knowledge_base"),
-):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only application/pdf is accepted")
-
-    try:
-        client_uuid = UUID(client_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid client_id UUID") from exc
-
-    generated_content_id = content_id or f"doc_{uuid.uuid4()}"
-
-    if FileManager.check_file_exists(client_uuid, file.filename):
-        raise HTTPException(status_code=409, detail=f"File '{file.filename}' already exists")
-
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-
-    file_path = FileManager.save_upload(file_bytes, file.filename, client_uuid)
-
-    vector_store = VectorStore()
-    vector_store.register_document_in_db(
-        client_id=client_uuid,
-        filename=file.filename,
-        storage_path=file_path,
-        content_id=generated_content_id,
-        access_level=access_level,
-        category=category,
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=False,
+        log_level=settings.log_level.lower(),
     )
-
-    job = queue.enqueue(
-        process_document_task,
-        file_path,
-        client_uuid,
-        generated_content_id,
-        file.filename,
-        access_level,
-        category,
-        job_id=f"job_{generated_content_id}",
-    )
-
-    return {
-        "status": "QUEUED",
-        "job_id": job.id,
-        "content_id": generated_content_id,
-        "filename": file.filename,
-        "queue_position": max(queue.count, 1),
-    }
-
-
-@app.get("/documents/list/{client_id}")
-def list_documents(client_id: str):
-    try:
-        client_uuid = UUID(client_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid client_id UUID") from exc
-
-    vector_store = VectorStore()
-    docs = vector_store.list_documents(client_uuid)
-    return {
-        "status": "success",
-        "client_id": client_id,
-        "count": len(docs),
-        "documents": docs,
-    }
-
-
-@app.get("/documents/jobs/{job_id}")
-def get_job_status(job_id: str):
-    try:
-        job = Job.fetch(job_id, connection=redis_conn)
-    except Exception:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    return {
-        "job_id": job.id,
-        "status": job.get_status(refresh=True),
-        "result": job.result if job.is_finished else None,
-    }
-
-
-@app.delete("/documents/{client_id}/{content_id}")
-def delete_document(client_id: str, content_id: str):
-    try:
-        client_uuid = UUID(client_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid client_id UUID") from exc
-
-    vector_store = VectorStore()
-    filename = vector_store.delete_document(client_uuid, content_id)
-    if filename:
-        FileManager.delete_document(client_uuid, filename)
-    reset_client_memory(str(client_uuid), reason="document_deleted")
-
-    return {"status": "success", "content_id": content_id}
-
-
-@app.delete("/documents/client/{client_id}")
-def delete_client_documents(client_id: str):
-    try:
-        client_uuid = UUID(client_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid client_id UUID") from exc
-
-    vector_store = VectorStore()
-    vector_store.delete_client(client_uuid)
-    FileManager.delete_client_folder(client_uuid)
-    reset_client_memory(str(client_uuid), reason="client_knowledge_purged")
-    return {"status": "success", "client_id": client_id}
 ```
-### `services/etl-docs/src/shared/file_manager.py`
+### `services/scoring-core/worker.py`
 
 ```
-
-import os
-import shutil
+import asyncio
 import logging
-from pathlib import Path
-from uuid import UUID
 
-# Configuración básica de logging
-logger = logging.getLogger(__name__)
-
-# Definir la raíz del almacenamiento. 
-# En producción Docker, /app/data/storage está montado al disco grande.
-STORAGE_ROOT = Path(os.getenv("PATH_STORAGE", "/app/data/storage"))
-
-class FileManager:
-    """
-    Gestor centralizado de archivos físicos en disco.
-    Asegura que todos los archivos se guarden bajo la estructura:
-    /app/data/storage/documents/{client_id}/{filename}
-    """
-
-    @staticmethod
-    def _get_client_dir(client_id: UUID) -> Path:
-        return STORAGE_ROOT / "documents" / str(client_id)
-
-    @classmethod
-    def check_file_exists(cls, client_id: UUID, filename: str) -> bool:
-        """Verifica si un archivo ya existe en el directorio del cliente."""
-        file_path = cls._get_client_dir(client_id) / filename
-        return file_path.exists()
-
-    @classmethod
-    def save_upload(cls, file_bytes: bytes, filename: str, client_id: UUID) -> str:
-        """
-        Guarda un archivo subido en el directorio del cliente.
-        Retorna la ruta absoluta del archivo guardado.
-        """
-        client_dir = cls._get_client_dir(client_id)
-        
-        # 1. Asegurar que existe el directorio
-        try:
-            client_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.error(f"Error creando directorio {client_dir}: {e}")
-            raise IOError(f"No se pudo crear directorio para cliente {client_id}")
-
-        # 2. Ruta final
-        file_path = client_dir / filename
-        
-        # 3. Escribir bytes
-        try:
-            with open(file_path, "wb") as f:
-                f.write(file_bytes)
-            logger.info(f"Archivo guardado: {file_path}")
-            return str(file_path)
-        except Exception as e:
-            logger.error(f"Error escribiendo archivo {file_path}: {e}")
-            raise IOError(f"Fallo al escribir archivo en disco")
-
-    @classmethod
-    def delete_document(cls, client_id: UUID, filename: str) -> bool:
-        """
-        Borra un archivo específico de un cliente.
-        """
-        file_path = cls._get_client_dir(client_id) / filename
-        if file_path.exists():
-            try:
-                os.remove(file_path)
-                logger.info(f"Archivo eliminado: {file_path}")
-                return True
-            except OSError as e:
-                logger.error(f"Error borrando archivo {file_path}: {e}")
-                return False
-        else:
-            logger.warning(f"Intento de borrar archivo inexistente: {file_path}")
-            return False
-
-    @classmethod
-    def delete_client_folder(cls, client_id: UUID) -> bool:
-        """
-        Elimina recursivamente todo el directorio de un cliente.
-        Usar con precaución (Baja de Cliente).
-        """
-        client_dir = cls._get_client_dir(client_id)
-        if client_dir.exists():
-            try:
-                shutil.rmtree(client_dir)
-                logger.info(f"Directorio de cliente eliminado completamente: {client_dir}")
-                return True
-            except OSError as e:
-                logger.error(f"Error borrando directorio cliente {client_dir}: {e}")
-                return False
-        return True # Si no existe, "ya estaba borrado"
-
-    @classmethod
-    def list_files(cls, client_id: UUID) -> list[str]:
-        """Listar archivos de un cliente"""
-        client_dir = cls._get_client_dir(client_id)
-        if not client_dir.exists():
-            return []
-        return [f.name for f in client_dir.iterdir() if f.is_file()]
-```
-### `services/etl-docs/src/shared/vector_store.py`
-
-```
-
-import os
-import json
-import logging
-import hashlib
-from typing import Optional, List, Dict, Any
-import hashlib
-from typing import Optional, List, Dict, Any
-import uuid
-from uuid import UUID
-
-import psycopg2
-from psycopg2.extras import Json
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
-
-from src.shared.schemas import CanonicalDocument
-
-# Cargar configuración
-load_dotenv()
-logger = logging.getLogger(__name__)
-
-# Configurar Google GenAI Client (nuevo SDK)
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-client = genai.Client(api_key=GOOGLE_API_KEY)
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
-
-# Configurar DB
-DB_HOST = os.getenv("DB_HOST", "192.168.0.37")
-DB_NAME = os.getenv("DB_NAME", "agentic") # Usamos la variable de entorno, default agentic
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
-
-class VectorStore:
-    def __init__(self):
-        self.conn = None
-        self._connect()
-
-    def _connect(self):
-        """Establece conexión con la base de datos"""
-        try:
-            self.conn = psycopg2.connect(
-                host=DB_HOST,
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASS
-            )
-            # Habilitar autocommit para operaciones simples
-            self.conn.autocommit = True
-        except Exception as e:
-            logger.error(f"Error conectando a DB Semantic: {e}")
-            raise
-
-    def get_embedding(self, text: str) -> List[float]:
-        """Genera embedding usando Google Gemini (SDK moderno)"""
-        try:
-            result = client.models.embed_content(
-                model=EMBEDDING_MODEL,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT"
-                )
-            )
-            return result.embeddings[0].values
-        except Exception as e:
-            logger.error(f"Error generando embedding con Google AI: {e}")
-            raise
-
-    def calculate_hash(self, content: str) -> str:
-        """Calcula SHA-256 del contenido de texto"""
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()
-
-    def register_document_in_db(self, client_id: UUID, filename: str, storage_path: str, content_id: str, access_level: str = 'shared', category: str = 'General'):
-        """Crea el registro inicial en ai_knowledge_documents como PENDING."""
-        if not self.conn or self.conn.closed: self._connect()
-        with self.conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO ai_knowledge_documents 
-                (client_id, filename, storage_path, sync_status, content_hash, access_level, category, created_at)
-                VALUES (%s, %s, %s, 'PENDING', %s, %s, %s, NOW())
-            """, (str(client_id), filename, storage_path, content_id, access_level, category))
-
-    def update_sync_status(self, client_id: UUID, content_id: str, status: str, error_message: str = None):
-        """Actualiza el estado de sincronización y el hash final."""
-        if not self.conn or self.conn.closed: self._connect()
-        with self.conn.cursor() as cur:
-            cur.execute("""
-                UPDATE ai_knowledge_documents 
-                SET sync_status = %s, 
-                    error_message = %s,
-                    last_synced_at = NOW()
-                WHERE client_id = %s AND content_hash = %s
-            """, (status, error_message, str(client_id), content_id))
-
-    def list_documents(self, client_id: UUID) -> List[Dict[str, Any]]:
-        """Lista todos los documentos registrados para un cliente."""
-        if not self.conn or self.conn.closed: self._connect()
-        from psycopg2.extras import RealDictCursor
-        with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT id, filename, sync_status, last_synced_at, created_at, content_hash as content_id, error_message, access_level, category
-                FROM ai_knowledge_documents 
-                WHERE client_id = %s
-                ORDER BY created_at DESC
-            """, (str(client_id),))
-            return cur.fetchall()
-
-    def upsert_document(self, doc: CanonicalDocument) -> bool:
-        """
-        Inserta o actualiza un documento en la tabla semantic_items.
-        Lógica:
-        1. Verifica hash existente para este content_id y client_id.
-        2. Si el hash es igual -> SKIP (Idempotencia).
-        3. Si cambió o es nuevo -> Generar Embedding -> UPSERT.
-        """
-        if not self.conn or self.conn.closed:
-            self._connect()
-
-        try:
-            with self.conn.cursor() as cur:
-                # 1. Verificar existencia y hash
-                cur.execute("""
-                    SELECT id, hash FROM ai_vectors 
-                    WHERE client_id = %s AND content_id = %s
-                """, (str(doc.metadata.client_id), doc.content_id))
-                
-                row = cur.fetchone()
-                existing_id = row[0] if row else None
-                existing_hash = row[1] if row else None
-                # Calcular hash actual
-                current_hash = self.calculate_hash(doc.body_content)
-                
-                # LOGIC CHECK: ¿Necesitamos actualizar?
-                if existing_hash == current_hash:
-                    logger.info(f"SKIP Upsert: El documento {doc.content_id} no ha cambiado.")
-                    return True # Exitoso (porque ya estaba bien)
-
-                logger.info(f"Procesando Upsert para {doc.content_id}...")
-                
-                # 2. Generar Embedding (Solo si es nuevo o cambió)
-                embedding_vector = self.get_embedding(doc.body_content)
-
-                # Asegurar que metadata sea JSON válido
-                # Convertir modelo Pydantic a dict compatible con JSON (UUIDs a string)
-                if hasattr(doc.metadata, "model_dump"):
-                    meta_dict = doc.metadata.model_dump(mode='json')
-                else:
-                    meta_dict = doc.metadata
-                meta_json = Json(meta_dict)
-
-                # 3. UPSERT Manual (Evitar ON CONFLICT si falta índice compuesto)
-                if existing_id:
-                    # UPDATE Exitsente
-                    sql = """
-                        UPDATE ai_vectors 
-                        SET body_content = %s,
-                            title = %s,
-                            metadata = %s,
-                            hash = %s,
-                            embedding = %s,
-                            updated_at = NOW()
-                        WHERE id = %s;
-                    """
-                    cur.execute(sql, (
-                        doc.body_content,
-                        doc.title,
-                        meta_json,
-                        current_hash,
-                        embedding_vector,
-                        existing_id
-                    ))
-                    logger.info(f"Update realizado para: {doc.content_id}")
-                else:
-                    # INSERT Nuevo
-                    try:
-                        sql = """
-                            INSERT INTO ai_vectors 
-                            (id, content_id, client_id, source, title, body_content, metadata, hash, embedding, updated_at, created_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW());
-                        """
-                        new_id = str(uuid.uuid4())
-                        cur.execute(sql, (
-                            new_id,
-                            doc.content_id,
-                            str(doc.metadata.client_id),
-                            doc.source,
-                            doc.title,
-                            doc.body_content,
-                            meta_json,
-                            current_hash,
-                            embedding_vector
-                        ))
-                        logger.info(f"Insert realizado para: {doc.content_id} (ID: {new_id})")
-                    except psycopg2.errors.UniqueViolation as e:
-                        # Si falla por hash key, significa que OTRO documento tiene exactamente el mismo contenido
-                        # Esto es la validación DB de idempotencia. 
-                        logger.warning(f"Hash duplicado detectado en DB para {doc.content_id}. El contenido ya existe bajo otro ID. {e}")
-                        # En este modelo de negocio, decidimos: ¿Permitimos duplicados de contenido con diferente ID?
-                        # Si la tabla tiene UNIQUE(hash), NO se permite.
-                        # Retornamos True asumiendo que "ya está preservado el conocimiento".
-                        self.conn.rollback() # Resetear transacción fallida
-                        return True
-
-                return True
-
-        except Exception as e:
-            logger.error(f"Error en BD durante upsert: {e}")
-            self.conn.rollback() # Rollback manual si falla algo en un bloque no-autocommit implícito
-            raise
-
-    def delete_document(self, client_id: UUID, content_id: str) -> Optional[str]:
-        """Borra un documento de ambas tablas y retorna el nombre del archivo para limpieza física."""
-        if not self.conn or self.conn.closed:
-            self._connect()
-        
-        filename = None
-        with self.conn.cursor() as cur:
-            # 0. Obtener el nombre del archivo antes de borrar el registro
-            cur.execute("""
-```
-### `services/etl-docs/src/shared/memory_reset.py`
-
-```
-import logging
-import os
-from typing import Optional
-
-import requests
+from app.core.config import settings
+from app.dependencies.database import close_database, init_database
+from app.services.cache_service import cache_service
+from app.services.scoring_worker import ScoringWorker
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("scoring-core.worker-main")
 
 
-def reset_client_memory(client_id: str, reason: Optional[str] = None) -> bool:
-    """
-    Best-effort call to reset downstream chat memory after knowledge mutations.
-    Does not raise to avoid breaking ETL lifecycle operations.
-    """
-    reset_url = (os.getenv("MEMORY_RESET_URL") or "").strip().rstrip("/")
-    if not reset_url:
-        logger.info("MEMORY_RESET_URL not configured; skipping memory reset for client %s", client_id)
-        return False
-
-    payload = {"client_id": client_id}
-    if reason:
-        payload["reason"] = reason
-
-    headers = {}
-    token = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
-    if token:
-        headers["X-Internal-Token"] = token
-
-    timeout = float(os.getenv("MEMORY_RESET_TIMEOUT", "8"))
+async def _run() -> None:
+    await init_database()
+    await cache_service.connect()
+    concurrency = max(1, int(settings.scoring_worker_concurrency or 1))
+    logger.info("Starting scoring worker pool with concurrency=%s", concurrency)
+    workers = [ScoringWorker() for _ in range(concurrency)]
+    tasks = [asyncio.create_task(worker.run_forever()) for worker in workers]
     try:
-        response = requests.post(reset_url, json=payload, headers=headers, timeout=timeout)
-        response.raise_for_status()
-        logger.info("Memory reset triggered for client %s", client_id)
-        return True
-    except Exception as exc:
-        logger.warning("Memory reset failed for client %s: %s", client_id, exc)
-        return False
-```
-### `services/etl-docs/src/ETL_DOCS/processor.py`
+        await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await cache_service.disconnect()
+        await close_database()
 
-```
 
-import logging
-import os
-import io
-import hashlib
-from uuid import UUID
-from typing import Optional, Dict, Any
-
-import pypdf
-from pdf2image import convert_from_path
-import pytesseract
-from PIL import Image
-
-from src.shared.schemas import CanonicalDocument, SourceType, IngestStatus
-from src.shared.vector_store import VectorStore
-from src.shared.file_manager import FileManager
-from src.shared.memory_reset import reset_client_memory
-
-logger = logging.getLogger(__name__)
-
-class DocumentProcessor:
-    """
-    Orquestador del ETL de Documentos.
-    Responsabilidades:
-    1. Recibir path de archivo físico.
-    2. Extraer texto (pypdf o OCR fallback).
-    3. Construir CanonicalDocument.
-    4. Delegar persistencia a VectorStore.
-    """
-
-    def __init__(self):
-        self.vector_store = VectorStore()
-        
-    def _extract_text_from_pdf(self, file_path: str) -> str:
-        """
-        Intenta extracción rápida con pypdf. 
-        Si retorna poco texto, asume imagen escaneada y usa OCR.
-        """
-        text = ""
-        try:
-            # 1. Intento Rápido (Texto seleccionable)
-            reader = pypdf.PdfReader(file_path)
-            for page in reader.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    text += extracted + "\n"
-            
-            # Limpieza básica
-            text = text.strip()
-
-            # 2. Check de Calidad / OCR Fallback
-            # Si hay muy poco texto (< 50 chars) para un PDF, probablemente sea imagen
-            if len(text) < 50:
-                logger.info(f"Texto insuficiente detectado ({len(text)} chars). Iniciando OCR para {file_path}...")
-                text = self._ocr_pdf(file_path)
-            
-            return text
-
-        except Exception as e:
-            logger.error(f"Error parseando PDF {file_path}: {e}")
-            raise ValueError(f"No se pudo leer el PDF: {e}")
-
-    def _ocr_pdf(self, file_path: str) -> str:
-        """Usa pdf2image + pytesseract para documentos escaneados"""
-        text = ""
-        try:
-            # Convertir PDF a imágenes (una por página)
-            images = convert_from_path(file_path)
-            for i, image in enumerate(images):
-                # Tesseract OCR
-                page_text = pytesseract.image_to_string(image, lang='spa') # Prioridad Español
-                text += page_text + "\n"
-                logger.debug(f"OCR Página {i+1} completado")
-            return text.strip()
-        except Exception as e:
-            logger.error(f"Fallo crítico en OCR: {e}")
-            raise
-
-    def process_document(self, 
-                         file_path: str, 
-                         client_id: UUID, 
-                         content_id: str,
-                         original_filename: str,
-                         source: SourceType = SourceType.PDF_UPLOAD,
-                         access_level: str = "private",
-                         category: str = "knowledge_base") -> Dict[str, Any]:
-        """
-        Flujo principal de procesamiento con fragmentación por páginas.
-        """
-        logger.info(f"Iniciando procesamiento ETL para: {original_filename} ({content_id})")
-
-        try:
-            # 1. Extracción de Texto por páginas
-            logger.info(f"Pasando a extracción de texto para {file_path}")
-            reader = pypdf.PdfReader(file_path)
-            pages_text = []
-            for i, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text and len(text.strip()) > 10:
-                    pages_text.append({
-                        "text": text.strip(),
-                        "page_number": i + 1
-                    })
-            
-            logger.info(f"Texto extraído: {len(pages_text)} páginas con contenido.")
-
-            # OCR Fallback si no hay texto extraído
-            if not pages_text:
-                logger.info(f"No se detectó texto seleccionable. Iniciando OCR para {file_path}...")
-                full_ocr_text = self._ocr_pdf(file_path)
-                pages_text.append({"text": full_ocr_text, "page_number": 1})
-
-            if not pages_text:
-                raise ValueError("El documento está vacío o no se pudo extraer texto legible.")
-
-            # 2. Limpieza de fragmentos previos
-            logger.info(f"Limpiando fragmentos previos para {content_id}")
-            with self.vector_store.conn.cursor() as cur:
-                cur.execute("DELETE FROM ai_vectors WHERE client_id = %s AND (content_id = %s OR content_id LIKE %s)", 
-                            (str(client_id), content_id, f"{content_id}_part_%"))
-
-            # 3. Procesamiento y Carga de Fragmentos
-            total_chars = 0
-            from src.shared.schemas import CanonicalMetadata
-            
-            for item in pages_text:
-                chunk_id = f"{content_id}_part_{item['page_number']}"
-                logger.info(f"Procesando fragmento: {chunk_id}")
-                chunk_hash = self.vector_store.calculate_hash(item['text'])
-                
-                # Construir metadata con información del modelo de embeddings
-                meta = CanonicalMetadata(
-                    client_id=client_id,
-                    category=category,
-                    access_level=access_level,
-                    url=None,
-                    source_timestamp=None,
-                    # Metadata extra para tracking de versiones
-                    embedding_model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
-                    embedding_dimension=3072
-                )
-                
-                doc = CanonicalDocument(
-                    content_id=chunk_id,
-                    source=source,
-                    title=f"{original_filename} (Pág. {item['page_number']})",
-                    body_content=item['text'],
-                    hash=chunk_hash,
-                    metadata=meta
-                )
-                
-                self.vector_store.upsert_document(doc)
-                total_chars += len(item['text'])
-
-            # 4. Actualizar Registro Maestro
-            logger.info(f"Actualizando estado a SYNCED para {content_id}")
-            self.vector_store.update_sync_status(client_id, content_id, "SYNCED")
-            reset_client_memory(str(client_id), reason="document_synced")
-
-            logger.info(f"ETL Exitoso: {len(pages_text)} fragmentos creados para {content_id}")
-            
-            return {
-                "status": IngestStatus.SYNCED,
-                "content_id": content_id,
-                "chunks_processed": len(pages_text),
-                "total_chars": total_chars
-            }
-
-        except Exception as e:
-            logger.error(f"ETL Fallido para {content_id}: {e}")
-            try:
-                self.vector_store.update_sync_status(client_id, content_id, "FAILED", str(e))
-            except:
-                pass
-            return {
-                "status": IngestStatus.FAILED,
-                "error": str(e)
-            }
-```
-### `services/etl-docs/src/ETL_DOCS/worker_task.py`
-
+if __name__ == "__main__":
+    logging.basicConfig(level=settings.log_level)
+    asyncio.run(_run())
 ```
 
-import logging
-from uuid import UUID
-from src.ETL_DOCS.processor import DocumentProcessor
-
-# Configuración de log dedicada al Worker
-logger = logging.getLogger("worker")
-
-def process_document_task(file_path: str, client_id: UUID, content_id: str, original_filename: str, access_level: str = "private", category: str = "knowledge_base"):
-    """
-    Tarea ejecutable por RQ Worker.
-    Es un wrapper simple alrededor del Processor, pero esencial para que RQ pueda
-    serializar la llamada (pickle).
-    """
-    logger.info(f"👷 [WORKER] Iniciando tarea para: {content_id} (Access Level: {access_level}, Category: {category})")
-    try:
-        # Instanciar procesador fresco para cada tarea (Thread-safe)
-        processor = DocumentProcessor()
-        
-        result = processor.process_document(
-            file_path=file_path,
-            client_id=client_id,
-            content_id=content_id,
-            original_filename=original_filename,
-            access_level=access_level,
-            category=category
-        )
-        
-        logger.info(f"✅ [WORKER] Tarea completada: {result}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"❌ [WORKER] Tarea fallida para {content_id}: {e}")
-        # Re-lanzar para que RQ marque el job como Failed
-        raise e
-```
-
-## Pruebas y Diagnóstico
+## Pruebas y Sandboxes
 
 ```text
-
+tests/README.md
+tests/sandbox/README.md
+tests/sandbox/__pycache__/simulate_chat_dentist.cpython-312.pyc
+tests/sandbox/__pycache__/simulate_chat_flow.cpython-312.pyc
+tests/sandbox/__pycache__/simulate_chat_realtor.cpython-312.pyc
+tests/sandbox/__pycache__/simulate_multichat_dentist.cpython-312.pyc
+tests/sandbox/__pycache__/simulate_multichat_realtor.cpython-312.pyc
+tests/sandbox/__pycache__/test_gemini_latency_realtor_contract.cpython-312.pyc
+tests/sandbox/dentist/simulate_chat_dentist.py
+tests/sandbox/dentist/simulate_multichat_dentist.py
+tests/sandbox/realtor/realtor_v3_regression_battery.py
+tests/sandbox/realtor/simulate_chat_realtor.py
+tests/sandbox/realtor/simulate_multichat_realtor.py
+tests/sandbox/realtor/test_gemini_latency_realtor_contract.py
+tests/sandbox/simulate_chat_dentist.py
+tests/sandbox/simulate_chat_realtor.py
+tests/sandbox/simulate_multichat_dentist.py
+tests/sandbox/simulate_multichat_realtor.py
+tests/scripts/check_no_hardcoded_realtor_copy.sh
+tests/system/__pycache__/test_active_chat_scoring_e2e.cpython-312.pyc
+tests/system/__pycache__/test_chat_e2e.cpython-312.pyc
+tests/system/test_active_chat_scoring_e2e.py
+tests/system/test_chat_e2e.py
 ```
-### `tests/README.md`
 
-```
-# Repository-Level Tests
-
-Cross-service and stack-wide checks live here.
-
-## Layout
-- `tests/system/`: end-to-end tests across multiple services.
-- `tests/smoke-stack/`: full-stack smoke scripts.
-- `tests/sandbox/realtor/`: manual simulators/benchmarks for realtor v2.
-- `tests/sandbox/dentist/`: manual simulators/benchmarks for dentist v2.
-- `tests/sandbox/*.py`: legacy wrappers kept for backward compatibility.
-- `tests/fixtures-shared/`: reusable fixtures for multiple services.
-- `tests/scripts/`: helper runners/utilities.
-
-## Notes
-- Service-local tests must remain inside each service.
-- Root-level tests are only for cross-service/system/sandbox use cases.
-```
-
-## Deuda Técnica Detectable (heurística)
+## Legacy y Zonas de Referencia
 
 ```text
-services/inference-stack-v2/inference-core-v3 (legacy archivado, fuera de ruta principal)
-services/etl-processor (deprecated placeholder)
-services/legacy-ETL_DOCS (legacy duplicate path)
-services/web/datasyncsa (sitio estático fuera de SUID)
-services/web/tests (UI de pruebas manuales)
-services/web/admin-console/docs + themes (assets plantilla)
+services/agent-core -> legacy, fuera del runtime principal
+services/inference-stack-v2 -> legacy, no autoridad actual
+services/etl-processor -> deprecado
+services/ai-agents -> exploracion no operativa
 ```

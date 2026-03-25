@@ -1,0 +1,26 @@
+"""Environment-backed settings for the AI runtime."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class AISettings:
+    app_name: str = os.getenv("AI_RUNTIME_APP_NAME", "datasyncsa-ai-runtime")
+    api_prefix: str = os.getenv("AI_RUNTIME_API_PREFIX", "/api/v1")
+    redis_url: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    database_url: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/postgres")
+    session_ttl_seconds: int = int(os.getenv("AI_SESSION_TTL_SECONDS", "3600"))
+    request_timeout_seconds: int = int(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "30"))
+    mail_provider: str = os.getenv("AI_MAIL_PROVIDER", "placeholder")
+    llm_provider: str = os.getenv("AI_LLM_PROVIDER", "auto")
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    llm_timeout_seconds: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
+    turn_trace_enabled: bool = os.getenv("AI_TURN_TRACE_ENABLED", "true").lower() == "true"
+    turn_trace_dir: str = os.getenv("AI_TURN_TRACE_DIR", "/app/log/turn-traces")
+
+
+settings = AISettings()

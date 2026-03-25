@@ -20,12 +20,15 @@ class RuntimeMemoryResetError(RuntimeError):
 class MemoryResetClient:
     def __init__(self):
         self.agent_core_reset_url = os.getenv(
-            "AGENT_CORE_RESET_URL",
+            "AI_RUNTIME_RESET_URL",
             os.getenv(
-                "INFERENCE_RESET_URL",
+                "AGENT_CORE_RESET_URL",
                 os.getenv(
-                    "INFERENCE_V2_RESET_URL",
-                    "http://agent-core:8000/api/v1/internal/memory/reset",
+                    "INFERENCE_RESET_URL",
+                    os.getenv(
+                        "INFERENCE_V2_RESET_URL",
+                        "http://ai-runtime:8000/api/v1/internal/memory/reset",
+                    ),
                 ),
             ),
         ).rstrip("/")
@@ -35,7 +38,7 @@ class MemoryResetClient:
         self.version = "runtime"
 
         logger.info(
-            "MemoryResetClient configured (agent_core=%s scoring_core=%s version=%s)",
+            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s version=%s)",
             self.agent_core_reset_url,
             self.scoring_core_reset_url,
             self.version,

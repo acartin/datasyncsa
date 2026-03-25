@@ -43,30 +43,31 @@ async def dependencies_health():
     """
     timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
     inference_base = os.getenv(
-        "AGENT_CORE_API",
-        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://agent-core:8000")),
+        "AI_RUNTIME_API",
+        os.getenv(
+            "AGENT_CORE_API",
+            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
+        ),
     ).rstrip("/")
     inference_prefix = os.getenv(
-        "AGENT_CORE_API_PREFIX",
-        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+        "AI_RUNTIME_API_PREFIX",
+        os.getenv(
+            "AGENT_CORE_API_PREFIX",
+            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
+        ),
     )
     inference_url = f"{inference_base}{inference_prefix}/health"
-    retriever_url = os.getenv("RAG_RETRIEVER_V2_URL", "http://semantic-adapter-v2:8000").rstrip("/") + "/api/v2/health"
 
     result = {
         "status": "operational",
         "service": "chat-web-renderer-api",
         "dependencies": {
-            "inference_core": {"ok": False, "url": inference_url},
-            "semantic_adapter_v2": {"ok": False, "url": retriever_url},
+            "ai_runtime": {"ok": False, "url": inference_url},
         },
     }
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        for name, url in (
-            ("inference_core", inference_url),
-            ("semantic_adapter_v2", retriever_url),
-        ):
+        for name, url in (("ai_runtime", inference_url),):
             try:
                 resp = await client.get(url)
                 result["dependencies"][name]["ok"] = resp.status_code == 200
@@ -329,7 +330,7 @@ def _assert_internal_token(request: Request):
 async def internal_memory_reset(payload: InternalMemoryResetRequest, request: Request):
     """
     Internal endpoint: resets chat memory for a client.
-    Clears bridge session (Redis) and runtime memory in agent-core + scoring-core.
+    Clears bridge session (Redis) and runtime memory in ai + scoring-core.
     """
     _assert_internal_token(request)
 

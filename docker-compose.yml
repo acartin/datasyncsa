@@ -57,12 +57,12 @@ services:
   # ---------------------------------------------------------------------------
   # BACKEND SERVICES
   # ---------------------------------------------------------------------------
-  # Inference Core V2
-  inference-core-v2:
+  # AI Runtime (LangGraph multitenant assistant)
+  ai-runtime:
     build:
-      context: ./services/inference-stack-v2/inference-core-v2
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-inference-v2
+      context: .
+      dockerfile: ./services/ai_runtime/Dockerfile
+    container_name: ${ENV_PREFIX}-backend-ai-runtime
     restart: always
     command:
       - uvicorn
@@ -72,9 +72,9 @@ services:
       - --port
       - "8000"
       - --workers
-      - ${INFERENCE_WEB_CONCURRENCY:-3}
+      - ${AI_RUNTIME_WEB_CONCURRENCY:-1}
     ports:
-      - "${INFERENCE_V2_PORT}:8000"
+      - "${AI_RUNTIME_PORT:-8096}:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - TZ=${TZ:-UTC}
@@ -83,109 +83,14 @@ services:
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
-      - CHAT_HISTORY_CONTEXT_MAX_CHARS=${CHAT_HISTORY_CONTEXT_MAX_CHARS:-1800}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
-      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
-      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # Agent Core (LangGraph conversational runtime)
-  agent-core:
-    build:
-      context: ./services/agent-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-agent-core
-    restart: always
-    command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --workers
-      - ${AGENT_CORE_WEB_CONCURRENCY:-1}
-    ports:
-      - "${AGENT_CORE_PORT:-8096}:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - CHAT_LLM_MAX_OUTPUT_TOKENS=${CHAT_LLM_MAX_OUTPUT_TOKENS:-320}
-      - RAG_RETRIEVER_V2_URL=http://semantic-adapter-v2:8000
-      - RAG_RETRIEVER_V2_SEARCH_PATH=/api/v2/search
-      - RAG_RETRIEVER_V2_TIMEOUT_SECS=${RAG_RETRIEVER_V2_TIMEOUT_SECS:-10}
-      - SCORING_BG_ENABLED=${SCORING_BG_ENABLED:-true}
-      - AGENT_CORE_API=http://agent-core:8000
-      - SCORING_CORE_API=http://scoring-core:8000
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-      - SCORING_CORE_URL=http://scoring-core:8000
-      - SCORING_CORE_API_PREFIX=${SCORING_CORE_API_PREFIX:-/api/v1}
-      - SCORING_CORE_TIMEOUT_SECS=${SCORING_CORE_TIMEOUT_SECS:-8}
-      - LLM_TRACE_ROOT=/app/log
-      - LLM_TRACE_ENABLED=true
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - PYTHONPATH=/app
     volumes:
       - ./schemas:/app/schemas:ro
       - ./log:/app/log
     depends_on:
       - postgres
       - redis
-      - semantic-adapter-v2
-      - scoring-core
-    networks:
-      - internal_network
-
-  # Inference Core V2 async scoring worker (persistent jobs)
-  inference-core-v2-worker:
-    build:
-      context: ./services/inference-stack-v2/inference-core-v2
-      dockerfile: Dockerfile
-    profiles: ["legacy"]
-    container_name: ${ENV_PREFIX}-backend-inference-v2-worker
-    restart: always
-    command: ["python", "worker.py"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_IDLE_DELAY_SECS=${SCORING_IDLE_DELAY_SECS}
-      - SCORING_IDLE_CLOSE_SECS=${SCORING_IDLE_CLOSE_SECS:-15.0}
-      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
-      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
-      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
-      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - redis
-      - inference-core-v2
     networks:
       - internal_network
 
@@ -278,30 +183,6 @@ services:
     networks:
       - internal_network
 
-  # Semantic Adapter V2 (isolated runtime for v2 rollout)
-  semantic-adapter-v2:
-    build:
-      context: ./services/inference-stack-v2/semantic-adapter-v2
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-semantic-v2
-    restart: always
-    ports:
-      - "${SEMANTIC_V2_PORT}:8000"
-    env_file:
-      - .env
-    environment:
-      - TZ=${TZ:-UTC}
-      - INFERENCE_CORE_URL=http://inference-core-v2:8000
-      - DATABASE_URL=${DATABASE_URL}
-      - TABLE_VECTORS=${TABLE_VECTORS}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-      - inference-core-v2
-    networks:
-      - internal_network
-
   # ETL Docs API
   etl-docs:
     build:
@@ -387,7 +268,7 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
-      - INFERENCE_CORE_URL=http://inference-core-v2:8000
+      - AI_RUNTIME_API=http://ai-runtime:8000
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
       - ./schemas:/app/schemas:ro
@@ -437,13 +318,10 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_PASSWORD=${DB_PASS}
       - REDIS_URL=redis://redis:6379/0
-      - AGENT_CORE_API=http://agent-core:8000
-      - INFERENCE_API_URL=http://agent-core:8000
-      - AGENT_CORE_API_PREFIX=/api/v1
-      - INFERENCE_API_PREFIX=/api/v1
-      - AGENT_CORE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
+      - AI_RUNTIME_RESET_URL=http://ai-runtime:8000/api/v1/internal/memory/reset
       - SCORING_CORE_RESET_URL=http://scoring-core:8000/api/v1/internal/memory/reset
-      - INFERENCE_RESET_URL=http://agent-core:8000/api/v1/internal/memory/reset
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
     volumes:
@@ -451,55 +329,51 @@ services:
     depends_on:
       - postgres
       - redis
-      - agent-core
+      - ai-runtime
     networks:
       - internal_network
 
-  # Generic Bridge V2
-  generic-bridge-v2:
+  # Generic Bridge
+  generic-bridge:
     build:
-      context: ./services/generic-bridge-v2
+      context: ./services/bridges/generic-bridge
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-generic-bridge-v2
+    container_name: ${ENV_PREFIX}-web-generic-bridge
     restart: unless-stopped
     ports:
-      - "${GENERIC_BRIDGE_V2_PORT}:8000"
+      - "${GENERIC_BRIDGE_PORT:-8093}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - AGENT_CORE_API=http://agent-core:8000
-      - INFERENCE_API_URL=http://agent-core:8000
-      - AGENT_CORE_API_PREFIX=/api/v1
-      - INFERENCE_API_PREFIX=/api/v1
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - agent-core
+      - ai-runtime
     networks:
       - internal_network
 
-  # Property Bridge V2
-  property-bridge-v2:
+  # Property Bridge
+  property-bridge:
     build:
-      context: ./services/property-bridge-v2
+      context: ./services/bridges/property-bridge
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-property-bridge-v2
+    container_name: ${ENV_PREFIX}-web-property-bridge
     restart: unless-stopped
     ports:
-      - "${PROPERTY_BRIDGE_V2_PORT}:8000"
+      - "${PROPERTY_BRIDGE_PORT:-8094}:8000"
     environment:
       - TZ=${TZ:-UTC}
-      - AGENT_CORE_API=http://agent-core:8000
-      - INFERENCE_API_URL=http://agent-core:8000
-      - AGENT_CORE_API_PREFIX=/api/v1
-      - INFERENCE_API_PREFIX=/api/v1
+      - AI_RUNTIME_API=http://ai-runtime:8000
+      - AI_RUNTIME_API_PREFIX=/api/v1
       - REQUEST_TIMEOUT=30
       - MAX_RETRIES=3
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - agent-core
+      - ai-runtime
     networks:
       - internal_network
 

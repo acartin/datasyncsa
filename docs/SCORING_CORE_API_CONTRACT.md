@@ -4,7 +4,7 @@ Contrato de borde para el servicio `scoring-core`.
 
 ## Objetivo
 
-Mantener scoring como dominio independiente de `agent-core`, conservando la BD y logica actual.
+Mantener scoring como dominio independiente de `ai-runtime`, conservando la BD y logica actual.
 
 ## Endpoints canonicos
 
@@ -98,9 +98,9 @@ Response:
   - `GET /scoring/models/active`
   - `GET /leads/{lead_id}/scorecards/{scorecard_id}`
 
-## Reglas de borde con agent-core
+## Reglas de borde con ai-runtime
 
-- `agent-core` no resuelve `scoring_model_id` ni `prompt_id`.
-- `agent-core` no calcula scorecards.
-- `agent-core` solo dispara el enqueue con identidad minima del caso.
+- `ai-runtime` no resuelve `scoring_model_id` ni `prompt_id`.
+- `ai-runtime` no calcula scorecards.
+- `ai-runtime` solo dispara el enqueue con identidad minima del caso.
 - `scoring-core` es duenio de jobs, worker, scorecards y modelos/prompts de scoring.

@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2620" height="1808" viewBox="0 0 2620 1808">
+<defs>
+<marker id="arrow-direct" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M0,0 L10,4 L0,8 z" fill="#334155" />
+</marker>
+<marker id="arrow-conditional" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M0,0 L10,4 L0,8 z" fill="#2563eb" />
+</marker>
+<marker id="arrow-router" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M0,0 L10,4 L0,8 z" fill="#b45309" />
+</marker>
+</defs>
+<rect width="100%" height="100%" fill="#f8fafc" />
+<text x="40" y="28" font-size="20" font-family="Arial, sans-serif" font-weight="700" fill="#0f172a">ai-runtime realtor graph</text>
+<text x="40" y="46" font-size="11" font-family="Arial, sans-serif" fill="#475569">solid = direct | amber = router handoff | dashed blue = router output</text>
+<path d="M1310.0,108.0 C1310.0,148.0 1310.0,160.0 1310.0,200.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1020.0,558.0 C1020.0,598.0 1310.0,1660.0 1310.0,1700.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1420.0,1429.0 C1465.0,1374.0 2425.0,1213.0 2470.0,1158.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1600.0,558.0 C1600.0,598.0 1455.0,610.0 1455.0,650.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M730.0,1158.0 C730.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M440.0,1158.0 C440.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1565.0,829.0 C1610.0,774.0 1410.0,763.0 1455.0,708.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M2180.0,1158.0 C2180.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M2470.0,1158.0 C2470.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1020.0,1158.0 C1020.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1600.0,1158.0 C1600.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1890.0,1158.0 C1890.0,1198.0 1600.0,1210.0 1600.0,1250.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1455.0,708.0 C1455.0,748.0 1310.0,1660.0 1310.0,1700.0" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#arrow-direct)" />
+<path d="M1310.0,258.0 C1310.0,298.0 1310.0,310.0 1310.0,350.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1310.0,408.0 C1310.0,448.0 1020.0,460.0 1020.0,500.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1165.0" y="448.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">ask_clarification</text>
+<path d="M1310.0,408.0 C1310.0,448.0 1600.0,460.0 1600.0,500.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1455.0" y="448.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">collect_lead_data</text>
+<path d="M1310.0,408.0 C1310.0,448.0 1310.0,460.0 1310.0,500.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1310.0" y="448.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">classify_intent</text>
+<path d="M1310.0,558.0 C1310.0,598.0 1165.0,610.0 1165.0,650.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1165.0,708.0 C1165.0,748.0 1165.0,760.0 1165.0,800.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1165.0" y="748.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">route_next_intent</text>
+<path d="M1165.0,708.0 C1165.0,748.0 1455.0,760.0 1455.0,800.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1310.0" y="748.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">lead_advisor</text>
+<path d="M1165.0,858.0 C1165.0,898.0 1310.0,910.0 1310.0,950.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1310.0,1008.0 C1310.0,1048.0 150.0,1060.0 150.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="730.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">search</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 440.0,1060.0 440.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="875.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">financial_calc</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 730.0,1060.0 730.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1020.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">compare_properties</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 1020.0,1060.0 1020.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1165.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">mutate_comparison_set</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 1310.0,1060.0 1310.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1310.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">collect_appointment_data</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 1600.0,1060.0 1600.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1455.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">rag_agencia</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 1890.0,1060.0 1890.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1600.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">rag_documents</text>
+<path d="M1420.0,979.0 C1465.0,924.0 1555.0,613.0 1600.0,558.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1510.0" y="546.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">collect_lead_data</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 2180.0,1060.0 2180.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1745.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">llm_recommend</text>
+<path d="M1310.0,1008.0 C1310.0,1048.0 2470.0,1060.0 2470.0,1100.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1890.0" y="1048.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">mensajear</text>
+<path d="M1420.0,979.0 C1465.0,924.0 1410.0,913.0 1455.0,858.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1437.5" y="846.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">lead_advisor</text>
+<path d="M150.0,1158.0 C150.0,1198.0 1020.0,1210.0 1020.0,1250.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1130.0,1279.0 C1175.0,1224.0 105.0,1213.0 150.0,1158.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="640.0" y="1146.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">search</text>
+<path d="M1130.0,1279.0 C1175.0,1224.0 1410.0,913.0 1455.0,858.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1292.5" y="846.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">lead_advisor</text>
+<path d="M1130.0,1279.0 C1256.0,1279.0 1364.0,1279.0 1490.0,1279.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1310.0" y="1269.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">check_queue</text>
+<path d="M1020.0,1308.0 C1020.0,1348.0 1020.0,1360.0 1020.0,1400.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1020.0" y="1348.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">render_cards</text>
+<path d="M1020.0,1458.0 C1020.0,1498.0 1310.0,1510.0 1310.0,1550.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1420.0,1579.0 C1465.0,1524.0 1555.0,1363.0 1600.0,1308.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1510.0" y="1296.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">check_queue</text>
+<path d="M1310.0,1158.0 C1310.0,1198.0 1310.0,1210.0 1310.0,1250.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1310.0,1308.0 C1310.0,1348.0 1310.0,1360.0 1310.0,1400.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1310.0" y="1348.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">assign_agent</text>
+<path d="M1420.0,1279.0 C1465.0,1224.0 1410.0,763.0 1455.0,708.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1437.5" y="696.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">synthesize</text>
+<path d="M1600.0,1308.0 C1600.0,1348.0 1600.0,1360.0 1600.0,1400.0" fill="none" stroke="#b45309" stroke-width="2.2" marker-end="url(#arrow-router)" />
+<path d="M1710.0,1429.0 C1755.0,1374.0 1120.0,913.0 1165.0,858.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1437.5" y="846.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">route_next_intent</text>
+<path d="M1710.0,1429.0 C1755.0,1374.0 1410.0,913.0 1455.0,858.0" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-conditional)" />
+<text x="1582.5" y="846.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle" fill="#1d4ed8" stroke="#f8fafc" stroke-width="3" paint-order="stroke">lead_advisor</text>
+<rect x="1200.0" y="50.0" width="220" height="58" rx="14" ry="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2" />
+<text x="1310.0" y="81.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">START</tspan>
+</text>
+<rect x="1200.0" y="200.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1310.0" y="231.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">resolve_references</tspan>
+</text>
+<polygon points="1310.0,350.0 1420.0,379.0 1310.0,408.0 1200.0,379.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1310.0" y="372.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="12">after_resolve</tspan>
+<tspan x="1310.0" dy="14" font-size="12">references</tspan>
+</text>
+<rect x="910.0" y="500.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1020.0" y="531.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1020.0" dy="0" font-size="13">ask_clarification</tspan>
+</text>
+<rect x="1200.0" y="500.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1310.0" y="531.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">classify_intent</tspan>
+</text>
+<polygon points="1165.0,650.0 1275.0,679.0 1165.0,708.0 1055.0,679.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1165.0" y="672.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1165.0" dy="0" font-size="12">after_classify</tspan>
+<tspan x="1165.0" dy="14" font-size="12">intent</tspan>
+</text>
+<rect x="1055.0" y="800.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1165.0" y="831.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1165.0" dy="0" font-size="13">route_next_intent</tspan>
+</text>
+<polygon points="1310.0,950.0 1420.0,979.0 1310.0,1008.0 1200.0,979.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1310.0" y="972.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="12">after_route_next</tspan>
+<tspan x="1310.0" dy="14" font-size="12">intent</tspan>
+</text>
+<rect x="40.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="150.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="150.0" dy="0" font-size="13">search</tspan>
+</text>
+<polygon points="1020.0,1250.0 1130.0,1279.0 1020.0,1308.0 910.0,1279.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1020.0" y="1279.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1020.0" dy="0" font-size="12">after_search</tspan>
+</text>
+<rect x="910.0" y="1400.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1020.0" y="1431.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1020.0" dy="0" font-size="13">render_cards</tspan>
+</text>
+<polygon points="1310.0,1550.0 1420.0,1579.0 1310.0,1608.0 1200.0,1579.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1310.0" y="1579.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="12">after_render_cards</tspan>
+</text>
+<rect x="330.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="440.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="440.0" dy="0" font-size="13">financial_calc</tspan>
+</text>
+<rect x="620.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="730.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="730.0" dy="0" font-size="13">compare_properties</tspan>
+</text>
+<rect x="910.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1020.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1020.0" dy="0" font-size="13">mutate_comparison_set</tspan>
+</text>
+<rect x="1200.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1310.0" y="1123.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">collect_appointment</tspan>
+<tspan x="1310.0" dy="15" font-size="13">data</tspan>
+</text>
+<polygon points="1310.0,1250.0 1420.0,1279.0 1310.0,1308.0 1200.0,1279.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1310.0" y="1272.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="12">after_collect</tspan>
+<tspan x="1310.0" dy="14" font-size="12">appointment_data</tspan>
+</text>
+<rect x="1200.0" y="1400.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1310.0" y="1431.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">assign_agent</tspan>
+</text>
+<rect x="1490.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1600.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1600.0" dy="0" font-size="13">rag_agencia</tspan>
+</text>
+<rect x="1780.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1890.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1890.0" dy="0" font-size="13">rag_documents</tspan>
+</text>
+<rect x="1490.0" y="500.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1600.0" y="531.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1600.0" dy="0" font-size="13">collect_lead_data</tspan>
+</text>
+<rect x="2070.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="2180.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="2180.0" dy="0" font-size="13">llm_recommend</tspan>
+</text>
+<rect x="2360.0" y="1100.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="2470.0" y="1131.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="2470.0" dy="0" font-size="13">mensajear</tspan>
+</text>
+<rect x="1490.0" y="1250.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1600.0" y="1281.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1600.0" dy="0" font-size="13">check_queue</tspan>
+</text>
+<polygon points="1600.0,1400.0 1710.0,1429.0 1600.0,1458.0 1490.0,1429.0" fill="#fff7ed" stroke="#b45309" stroke-width="2" />
+<text x="1600.0" y="1429.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1600.0" dy="0" font-size="12">after_check_queue</tspan>
+</text>
+<rect x="1345.0" y="800.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1455.0" y="831.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1455.0" dy="0" font-size="13">lead_advisor</tspan>
+</text>
+<rect x="1345.0" y="650.0" width="220" height="58" rx="14" ry="14" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<text x="1455.0" y="681.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1455.0" dy="0" font-size="13">synthesize</tspan>
+</text>
+<rect x="1200.0" y="1700.0" width="220" height="58" rx="14" ry="14" fill="#fee2e2" stroke="#dc2626" stroke-width="2" />
+<text x="1310.0" y="1731.0" font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+<tspan x="1310.0" dy="0" font-size="13">END</tspan>
+</text>
+</svg>

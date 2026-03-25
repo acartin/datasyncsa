@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ------------------------------------------------------------
-# Regeneración de contexto en un paso (solo .agent):
-# - .agent/BRAIN_MAP.md
-# - .agent/AI_CONTEXT_PACK.md
-# ------------------------------------------------------------
-
 if ! command -v rg >/dev/null 2>&1; then
   echo "Error: 'rg' (ripgrep) es requerido." >&2
   exit 1
 fi
 
-MAX_LINES_PER_FILE="${MAX_LINES_PER_FILE:-220}"
+MAX_LINES_PER_FILE="${MAX_LINES_PER_FILE:-180}"
 MAX_FILE_SIZE_KB="${MAX_FILE_SIZE_KB:-256}"
 
 OUT_DIR=".agent"
@@ -25,66 +19,6 @@ repo_root="$(pwd)"
 now_utc="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")"
 commit="$(git rev-parse --short HEAD 2>/dev/null || echo "N/A")"
-
-cat > "$BRAIN_FILE" <<EOF
-# BRAIN_MAP
-
-- Generated UTC: \`$now_utc\`
-- Repo root: \`$repo_root\`
-- Git branch: \`$branch\`
-- Git commit: \`$commit\`
-
-## 1. MAPA DE INTENCIONES (DIRECTORIO)
-
-| Carpeta | Responsabilidad Técnica | Importancia (1-5) |
-|---|---|---:|
-| \`docker-compose.yml\` | Orquestación de servicios (DB, Redis, APIs, bridges, UI, ETL). | 5 |
-| \`services/agent-core\` | Autoridad conversacional LangGraph (planner, gate, tools, synthesizer, persistencia). | 5 |
-| \`services/scoring-core\` | Dominio de scoring asíncrono desacoplado del runtime conversacional. | 5 |
-| \`services/web/chat-web-renderer\` | Canal web y renderer SDUI del chat. | 5 |
-| \`services/generic-bridge-v2\` | Wrapper de integración genérica hacia \`agent-core\`. | 4 |
-| \`services/property-bridge-v2\` | Wrapper del vertical realtor hacia \`agent-core\`. | 4 |
-| \`services/inference-stack-v2/semantic-adapter-v2\` | Recuperación semántica v2 (RAG retriever). | 5 |
-| \`services/inference-stack-v2/inference-core-v2\` | Compatibilidad legacy de scoring/APIs históricas (no autoridad principal de chat). | 3 |
-| \`services/web/admin-console\` | BFF FastAPI + renderer SDUI para consola operativa multi-tenant. | 5 |
-| \`services/etl-docs\` | Ingesta documental, colas RQ y vectorización. | 5 |
-| \`schemas\` | Contratos canónicos compartidos entre servicios. | 4 |
-| \`tests\` | Pruebas de integración y sistema cross-service. | 4 |
-| \`volumes/r2_storage\` | Storage documental montado (Cloudflare R2 vía rclone). | 5 |
-| \`volumes/staging\` | Buffer de staging para pipelines ETL. | 4 |
-| \`services/inference-stack-v2/inference-core-v3\` | Código legado archivado; fuera del camino operativo principal. | 1 |
-| \`services/etl-processor\` | Servicio deprecado (no usar para features nuevas). | 1 |
-| \`services/legacy-ETL_DOCS\` | Código ETL legacy/deprecado. | 1 |
-
-## 2. ARQUITECTURA CORE (SDUI/SUID)
-
-- Backend soberano: frontend renderiza contratos SDUI, no decide negocio.
-- Multi-tenant estricto: toda consulta operativa debe tener scope por \`client_id\`.
-- Contratos UI validados con Pydantic y consistentes con renderer.
-
-## 3. ENTRY POINTS PRINCIPALES
-
-- \`services/agent-core/main.py\`
-- \`services/scoring-core/main.py\`
-- \`services/web/admin-console/backend/app/main.py\`
-- \`services/web/chat-web-renderer/backend/app/main.py\`
-- \`services/inference-stack-v2/semantic-adapter-v2/main.py\`
-- \`services/inference-stack-v2/inference-core-v2/main.py\`
-- \`services/etl-docs/main.py\`
-
-## Referencia Canónica
-
-- Índice arquitectónico: \`docs/AGENT_CORE_INDEX.md\`
-- Arquitectura runtime: \`docs/AGENT_CORE_ARCHITECTURE.md\`
-- Frontera de scoring: \`docs/SCORING_CORE_BOUNDARY.md\`
-
-## 4. ENTIDADES CRÍTICAS (DB)
-
-- Tenancy/seguridad: \`lead_clients\`, \`auth_users\`, \`auth_roles\`, \`auth_client_user\`
-- Leads/conversación: \`lead_leads\`, \`lead_conversations\`, \`lead_statuses\`, \`lead_sources\`
-- Scoring v2: \`lead_scorecards\`, \`lead_score_items\`, \`lead_scoring_models\`, \`lead_scoring_criteria\`, \`lead_scoring_bands\`, \`lead_scoring_prompts\`
-- RAG/documentos: \`ai_knowledge_documents\`, \`ai_vectors\`
-EOF
 
 tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
@@ -127,135 +61,208 @@ append_file_excerpt() {
   append '```'
 }
 
+append_range_excerpt() {
+  local file="$1"
+  local start="$2"
+  local end="$3"
+
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  append "### \`$file:$start-$end\`"
+  append ""
+  append '```'
+  sed -n "${start},${end}p" "$file" >> "$tmp_file"
+  append '```'
+}
+
+compose_services() {
+  if command -v docker >/dev/null 2>&1; then
+    if docker compose config --services >/dev/null 2>&1; then
+      docker compose config --services
+      return 0
+    fi
+  fi
+
+  awk '
+    /^services:/ { in_services=1; next }
+    /^networks:/ { in_services=0 }
+    /^volumes:/ { in_services=0 }
+    in_services && $0 ~ /^  [a-zA-Z0-9._-]+:$/ {
+      gsub(":", "", $1)
+      print $1
+    }
+  ' docker-compose.yml
+}
+
+active_entrypoints() {
+  rg -n --no-heading 'FastAPI\(|app\.include_router|if __name__ == "__main__"|uvicorn\.run\(' \
+    services/ai_runtime \
+    services/bridges \
+    services/scoring-core \
+    services/web/chat-web-renderer/backend \
+    services/web/admin-console/backend \
+    services/etl-docs \
+    -g '*.py' \
+    | sed 's|^\./||'
+}
+
+active_routes() {
+  rg -n --no-heading '^@router\.(get|post|put|patch|delete)\(|^@app\.(get|post|put|patch|delete)\(' \
+    services/ai_runtime \
+    services/bridges \
+    services/scoring-core \
+    services/web/chat-web-renderer/backend \
+    services/web/admin-console/backend \
+    services/etl-docs \
+    -g '*.py' \
+    | sed 's|^\./||'
+}
+
+cat > "$BRAIN_FILE" <<EOF
+# BRAIN_MAP
+
+- Generated UTC: \`$now_utc\`
+- Repo root: \`$repo_root\`
+- Git branch: \`$branch\`
+- Git commit: \`$commit\`
+
+## 1. MAPA DE INTENCIONES (STACK ACTUAL)
+
+| Carpeta | Responsabilidad Tecnica | Importancia (1-5) |
+|---|---|---:|
+| \`docker-compose.yml\` | Orquestacion oficial del stack local. | 5 |
+| \`services/ai_runtime\` | Runtime conversacional LangGraph multitenant; autoridad principal de chat. | 5 |
+| \`services/bridges/generic-bridge\` | Adapter fino para verticales no realtor hacia \`ai-runtime\`. | 4 |
+| \`services/bridges/property-bridge\` | Adapter fino del vertical realtor hacia \`ai-runtime\`. | 4 |
+| \`services/scoring-core\` | Dominio separado de scoring asincrono con API y worker propios. | 5 |
+| \`services/web/chat-web-renderer\` | Canal web y renderer SDUI que consume \`ai-runtime\`. | 5 |
+| \`services/web/admin-console\` | Consola operativa multi-tenant. | 4 |
+| \`services/etl-docs\` | ETL documental, vectorizacion y reseteo de memoria best-effort. | 4 |
+| \`services/data\` | Repositorios y caches compartidos del runtime conversacional. | 5 |
+| \`schemas\` | Contratos compartidos entre servicios. | 4 |
+| \`tests\` | Pruebas cross-service, smoke y sandboxes. | 4 |
+
+## 2. ZONAS NO AUTORITATIVAS
+
+| Carpeta | Estado |
+|---|---|
+| \`services/agent-core\` | Legacy; no es el cerebro activo del compose actual. |
+| \`services/inference-stack-v2\` | Legacy archivado o compatibilidad historica. |
+| \`services/etl-processor\` | Deprecado. |
+| \`services/ai-agents\` | Exploracion; no participa en el runtime operativo. |
+
+## 3. ARQUITECTURA CORE
+
+- \`ai-runtime\` resuelve tenant, vertical, bridge y estado de sesion.
+- \`property-bridge\` solo aplica a vertical \`realtor\`.
+- \`generic-bridge\` aplica a \`healthcare\` y \`legal\`.
+- \`scoring-core\` permanece separado y no debe absorber decisiones conversacionales.
+- \`chat-web-renderer\` es consumidor/canal, no autoridad de negocio.
+- Toda operacion conversacional debe mantener scope por \`client_id\`.
+
+## 4. SERVICIOS DOCKER ACTIVOS
+
+\`\`\`text
+$(compose_services)
+\`\`\`
+
+## 5. ENTRY POINTS PRINCIPALES
+
+- \`services/ai_runtime/main.py\`
+- \`services/scoring-core/main.py\`
+- \`services/bridges/generic-bridge/main.py\`
+- \`services/bridges/property-bridge/main.py\`
+- \`services/web/chat-web-renderer/backend/app/main.py\`
+- \`services/web/admin-console/backend/app/main.py\`
+- \`services/etl-docs/main.py\`
+
+## 6. REFERENCIAS CANONICAS
+
+- \`services/ai_runtime/ARCHITECTURE.md\`
+- \`.agent/RULES.md\`
+- \`.agent/PY_EXECUTION_MAP.md\`
+
+## 7. ENTIDADES Y CAPAS CRITICAS
+
+- Tenancy/runtime: \`client_id\`, \`tenant_config\`, \`session_id\`, \`conversation_id\`
+- Estado conversacional: \`services/ai_runtime/domain/state.py\`
+- Datos compartidos: \`services/data/cache/**\`, \`services/data/repositories/**\`
+- Scoring: \`lead_scorecards\`, \`lead_score_items\`, \`lead_scoring_models\`, \`lead_scoring_prompts\`
+- RAG: FAQ por tenant y documentos por tenant en Postgres/pgvector
+EOF
+
 append "# AI Context Pack"
 append ""
 append "- Generated UTC: \`$now_utc\`"
 append "- Repo root: \`$repo_root\`"
 append "- Git branch: \`$branch\`"
 append "- Git commit: \`$commit\`"
-append "- Policy: High-signal only; assets/binarios excluidos."
+append "- Policy: high-signal only; enfocado en stack actual."
 
 append_section "Contexto Maestro"
-append "- Fuente principal: \`$BRAIN_FILE\`"
 append_file_excerpt "$BRAIN_FILE"
 
-append_section "Infraestructura y Entradas"
-append_file_excerpt "docker-compose.yml"
-append_file_excerpt ".env.example"
-append_file_excerpt "rclone-mount.service"
-append_file_excerpt "docs/AGENT_CORE_INDEX.md"
-append_file_excerpt "docs/AGENT_CORE_ARCHITECTURE.md"
-append_file_excerpt "docs/SCORING_CORE_BOUNDARY.md"
-append_file_excerpt "docs/OLD/SERVER_PROVISIONING.md"
+append_section "Compose y Variables"
+append "### Servicios activos del compose"
+append ""
+append_codeblock text "$(compose_services)"
+append_range_excerpt "docker-compose.yml" 1 220
+append_range_excerpt "docker-compose.yml" 300 390
+append_range_excerpt ".env.example" 50 120
 
-append_section "Topología Técnica (directorios clave)"
+append_section "Topologia Relevante"
 append_codeblock text \
-"$(find services tests schemas docs -maxdepth 3 -type d 2>/dev/null | sort | sed 's|^\./||')"
+"$(find services/ai_runtime services/bridges services/scoring-core services/data services/web/chat-web-renderer services/web/admin-console services/etl-docs schemas tests -maxdepth 3 -type d 2>/dev/null | sort | sed 's|^\./||')"
 
 append_section "Entry Points Detectados"
-append_codeblock text \
-"$(rg -n --no-heading 'FastAPI\(|app\.include_router|if __name__ == \"__main__\"|uvicorn\.run\(' \
-  services \
-  -g '*.py' \
-  | sed 's|^\./||' \
-  | sed -n '1,400p')"
+append_codeblock text "$(active_entrypoints)"
 
 append_section "Rutas API Detectadas"
+append_codeblock text "$(active_routes)"
+
+append_section "AI Runtime"
+append_file_excerpt "services/ai_runtime/ARCHITECTURE.md"
+append_file_excerpt "services/ai_runtime/main.py"
+append_file_excerpt "services/ai_runtime/api.py"
+append_file_excerpt "services/ai_runtime/runtime/settings.py"
+append_file_excerpt "services/ai_runtime/runtime/bootstrap.py"
+append_file_excerpt "services/ai_runtime/runtime/service.py"
+append_file_excerpt "services/ai_runtime/domain/state.py"
+append_file_excerpt "services/ai_runtime/graph/registry.py"
+append_file_excerpt "services/ai_runtime/graph/generic/graph.py"
+append_file_excerpt "services/ai_runtime/graph/realtor/graph.py"
+
+append_section "Bridges y Canal Web"
+append_file_excerpt "services/bridges/generic-bridge/main.py"
+append_file_excerpt "services/bridges/property-bridge/main.py"
+append_file_excerpt "services/web/chat-web-renderer/backend/app/core/inference_bridge.py"
+append_file_excerpt "services/web/chat-web-renderer/backend/app/core/memory_reset.py"
+append_file_excerpt "services/web/chat-web-renderer/backend/app/main.py"
+
+append_section "Data Layer Compartida"
+append_file_excerpt "services/data/repositories/base.py"
+append_file_excerpt "services/data/cache/session_store.py"
+append_file_excerpt "services/ai_runtime/config/tenant_loader.py"
+append_file_excerpt "services/ai_runtime/config/prompt_composer.py"
+
+append_section "Scoring Boundary"
+append_file_excerpt "services/scoring-core/README.md"
+append_file_excerpt "services/scoring-core/main.py"
+append_file_excerpt "services/scoring-core/worker.py"
+
+append_section "Pruebas y Sandboxes"
 append_codeblock text \
-"$(rg -n --no-heading '^@router\.(get|post|put|patch|delete)\(' \
-  services \
-  -g '*.py' \
-  | sed 's|^\./||' \
-  | sed -n '1,1000p')"
+"$(find tests -maxdepth 3 -type f 2>/dev/null | sort | sed 's|^\./||' | sed -n '1,400p')"
 
-append_section "Contratos/Modelos Críticos"
-append_codeblock text \
-"$(rg -n --no-heading '^class [A-Za-z_][A-Za-z0-9_]*\((BaseModel|SQLAlchemyBaseUserTableUUID|Base)\)|^(async[[:space:]]+def|def)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*\(' \
-  services/agent-core/app/models \
-  services/scoring-core/app/models \
-  services/web/admin-console/backend/app/contracts \
-  services/web/chat-web-renderer/backend/app/schemas \
-  services/inference-stack-v2/inference-core-v2/app/models \
-  services/etl-docs/src/shared \
-  -g '*.py' 2>/dev/null \
-  | sed 's|^\./||' \
-  | sed -n '1,1200p')"
-
-append_section "Tablas/SQL Referenciadas (DB Map)"
-append_codeblock text \
-"$(rg -n --no-heading -o 'lead_[a-zA-Z0-9_]+|auth_[a-zA-Z0-9_]+|ai_[a-zA-Z0-9_]+' \
-  services \
-  -g '*.py' \
-  | sed 's|^\./||' \
-  | awk -F: '{print $1 " -> " $NF}' \
-  | sort -u \
-  | sed -n '1,2000p')"
-
-append_section "Motor SUID/SDUI (archivos núcleo)"
-for f in \
-  services/web/admin-console/backend/app/contracts/ui_schema.py \
-  services/web/admin-console/backend/app/modules/shared/sdui.py \
-  services/web/admin-console/frontend/renderer/main.js \
-  services/web/admin-console/frontend/renderer/engine/registry.js \
-  services/web/chat-web-renderer/backend/app/schemas/ui.py \
-  services/web/chat-web-renderer/backend/app/transformer/core.py \
-  services/web/chat-web-renderer/frontend/core/renderer.js \
-  services/web/chat-web-renderer/backend/app/main.py \
-  services/web/admin-console/backend/app/main.py
-do
-  append_file_excerpt "$f"
-done
-
-append_section "Inyección IA / Orquestadores"
-for f in \
-  services/agent-core/app/graph/workflow.py \
-  services/agent-core/app/graph/nodes.py \
-  services/agent-core/app/planners/planner_service.py \
-  services/agent-core/app/synthesizers/synthesizer_service.py \
-  services/agent-core/app/tools/executor.py \
-  services/agent-core/app/tools/rag_client.py \
-  services/agent-core/app/runtime/policy_gate.py \
-  services/agent-core/app/runtime/answer_guardrail.py \
-  services/agent-core/app/services/scoring_client.py \
-  services/web/chat-web-renderer/backend/app/core/inference_bridge.py \
-  services/generic-bridge-v2/main.py \
-  services/property-bridge-v2/main.py \
-  services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py
-do
-  append_file_excerpt "$f"
-done
-
-append_section "ETL + Storage (R2/Staging)"
-for f in \
-  services/etl-docs/main.py \
-  services/etl-docs/src/shared/file_manager.py \
-  services/etl-docs/src/shared/vector_store.py \
-  services/etl-docs/src/shared/memory_reset.py \
-  services/etl-docs/src/ETL_DOCS/processor.py \
-  services/etl-docs/src/ETL_DOCS/worker_task.py
-do
-  append_file_excerpt "$f"
-done
-
-append_section "Pruebas y Diagnóstico"
-append_codeblock text \
-"$(find tests services -type f 2>/dev/null \
-  | rg 'tests/.+\\.(py|md)$' \
-  | sed 's|^\./||' \
-  | sort \
-  | sed -n '1,1200p')"
-append_file_excerpt "tests/README.md"
-append_file_excerpt "tests/sandbox/simulate_chat_flow.py"
-
-append_section "Deuda Técnica Detectable (heurística)"
+append_section "Legacy y Zonas de Referencia"
 append_codeblock text \
 "$(printf '%s\n' \
-  'services/inference-stack-v2/inference-core-v3 (legacy archivado, fuera de ruta principal)' \
-  'services/etl-processor (deprecated placeholder)' \
-  'services/legacy-ETL_DOCS (legacy duplicate path)' \
-  'services/web/datasyncsa (sitio estático fuera de SUID)' \
-  'services/web/tests (UI de pruebas manuales)' \
-  'services/web/admin-console/docs + themes (assets plantilla)')"
+  'services/agent-core -> legacy, fuera del runtime principal' \
+  'services/inference-stack-v2 -> legacy, no autoridad actual' \
+  'services/etl-processor -> deprecado' \
+  'services/ai-agents -> exploracion no operativa')"
 
 mv "$tmp_file" "$OUT_FILE"
 

@@ -1,6 +1,6 @@
 # scoring-core
 
-Servicio objetivo para scoring asincrono, separado de `agent-core`.
+Servicio objetivo para scoring asincrono, separado del runtime conversacional (`ai-runtime`).
 
 Responsabilidades:
 

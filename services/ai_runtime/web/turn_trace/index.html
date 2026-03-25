@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Runtime Turn Trace</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>AI Runtime Turn Trace</h1>
+          <p>Inspeccion manual de sesiones, turnos, nodos, routers y llamadas LLM.</p>
+        </div>
+        <div class="controls">
+          <label>
+            <span>Client ID</span>
+            <input id="clientId" type="text" placeholder="tenant-demo" />
+          </label>
+          <label>
+            <span>Internal Token</span>
+            <input id="internalToken" type="password" placeholder="Opcional" />
+          </label>
+          <button id="loadSessions">Cargar sesiones</button>
+        </div>
+      </header>
+
+      <section id="statusBanner" class="status-banner">
+        Cargando configuracion de la consola...
+      </section>
+
+      <section class="quick-clients">
+        <div class="panel-header quick-clients-header">
+          <h2>Clients Detectados</h2>
+          <span id="clientsMeta" class="meta"></span>
+        </div>
+        <div id="clientsList" class="client-chips"></div>
+      </section>
+
+      <main class="layout">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Sesiones</h2>
+            <div class="panel-actions">
+              <span id="sessionsMeta" class="meta"></span>
+              <button id="deleteSession" class="button-danger" type="button" disabled>Borrar sesion</button>
+            </div>
+          </div>
+          <div id="sessionsList" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Turnos</h2>
+            <span id="turnsMeta" class="meta"></span>
+          </div>
+          <div id="turnsList" class="list"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Detalle</h2>
+            <div class="panel-actions">
+              <span id="detailMeta" class="meta"></span>
+              <button id="expandDetail" type="button" disabled>Ver grande</button>
+            </div>
+          </div>
+          <div id="turnSummary" class="summary-card empty">Selecciona un turno para ver la traza.</div>
+          <div class="detail-layout">
+            <div id="eventsList" class="events"></div>
+            <pre id="eventDetail" class="event-detail">Sin evento seleccionado.</pre>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="detailModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <div class="modal-header">
+          <div>
+            <h2 id="detailModalTitle">Detalle ampliado</h2>
+            <p id="detailModalMeta" class="meta"></p>
+          </div>
+          <button id="closeDetailModal" type="button">Cerrar</button>
+        </div>
+        <pre id="detailModalContent" class="event-detail event-detail-modal">Sin evento seleccionado.</pre>
+      </div>
+    </div>
+
+    <script src="assets/app.js" defer></script>
+  </body>
+</html>
