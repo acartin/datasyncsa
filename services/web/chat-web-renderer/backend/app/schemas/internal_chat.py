@@ -32,6 +32,10 @@ class InternalChatRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("conversation_id", "conversationId", "conversation_id")
     )
+    session_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("session_id", "sessionId", "session_id")
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         validation_alias=AliasChoices("metadata", "Metadata")

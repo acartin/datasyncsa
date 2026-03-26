@@ -17,6 +17,23 @@ class PropertyRepository:
 
     def __init__(self, engine: AsyncEngine):
         self.engine = engine
+        self._property_type_cache: list[str] | None = None
+
+    async def load_property_types(self) -> list[str]:
+        if self._property_type_cache is not None:
+            return list(self._property_type_cache)
+        query = text(
+            """
+            SELECT name
+            FROM lead_property_types
+            WHERE name IS NOT NULL
+            ORDER BY id
+            """
+        )
+        async with self.engine.begin() as connection:
+            rows = (await connection.execute(query)).scalars().all()
+        self._property_type_cache = [str(item) for item in rows if item]
+        return list(self._property_type_cache)
 
     @staticmethod
     def _normalize_search_sql(sql: str) -> str:
@@ -49,6 +66,67 @@ class PropertyRepository:
             return int(float(value))
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _expand_property_id_variants(property_ids: Sequence[str]) -> list[str]:
+        variants: list[str] = []
+        seen: set[str] = set()
+        for raw_value in property_ids:
+            raw = str(raw_value or "").strip()
+            if not raw:
+                continue
+            for candidate in (raw, re.sub(r"^[A-Za-z\\s_-]+", "", raw), re.sub(r"[^0-9]", "", raw)):
+                normalized = str(candidate or "").strip()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                variants.append(normalized)
+        return variants
+
+    @staticmethod
+    def _normalize_property_key_variants(property_ids: Sequence[str]) -> list[str]:
+        variants: list[str] = []
+        seen: set[str] = set()
+        for raw_value in property_ids:
+            raw = str(raw_value or "").strip()
+            if not raw:
+                continue
+            normalized = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            variants.append(normalized)
+        return variants
+
+    @staticmethod
+    async def _fetch_property_assets(
+        connection,
+        property_ids: Sequence[str],
+    ) -> dict[str, dict[str, object]]:
+        ids = [str(item).strip() for item in property_ids if str(item).strip()]
+        if not ids:
+            return {}
+        query = text(
+            """
+            SELECT property_id::text AS property_id, original_url
+            FROM lead_property_images
+            WHERE property_id::text IN :property_ids
+            ORDER BY property_id, sort_order NULLS LAST
+            """
+        ).bindparams(bindparam("property_ids", expanding=True))
+        rows = (await connection.execute(query, {"property_ids": ids})).mappings().all()
+        assets: dict[str, dict[str, object]] = {}
+        for row in rows:
+            property_id = str(row.get("property_id") or "").strip()
+            original_url = str(row.get("original_url") or "").strip()
+            if not property_id or not original_url:
+                continue
+            entry = assets.setdefault(property_id, {"primary_image_url": None, "image_urls": []})
+            image_urls = entry["image_urls"]
+            if not image_urls:
+                entry["primary_image_url"] = original_url
+            image_urls.append(original_url)
+        return assets
 
     @classmethod
     def _to_canonical_property(cls, row: dict[str, object]) -> Property:
@@ -113,6 +191,7 @@ class PropertyRepository:
             "meta": {
                 "source_system": "lead_properties",
                 "source_property_ref": row.get("external_prop_id"),
+                "public_url": row.get("public_url"),
                 "ingested_at": row.get("created_at"),
                 "updated_at": row.get("updated_at"),
             },
@@ -141,6 +220,13 @@ class PropertyRepository:
                         COALESCE(CAST(p.features AS text), '')
                     )
                 ) AS searchable_text,
+                LOWER(
+                    CONCAT_WS(
+                        ' ',
+                        COALESCE(p.title, ''),
+                        COALESCE(CAST(p.features AS text), '')
+                    )
+                ) AS location_search_text,
                 COALESCE(
                     NULLIF(
                         regexp_replace(
@@ -203,7 +289,23 @@ class PropertyRepository:
         merged_params = {"client_id": client_id, **params}
         async with self.engine.begin() as connection:
             rows = (await connection.execute(text(compiled_sql), merged_params)).mappings().all()
-        return [self._to_canonical_property(dict(row)) for row in rows]
+            row_payloads = [dict(row) for row in rows]
+            assets_by_property_id = await self._fetch_property_assets(
+                connection,
+                [str(row.get("id")) for row in row_payloads if row.get("id") is not None],
+            )
+        enriched_rows: list[dict[str, object]] = []
+        for row in row_payloads:
+            row_id = str(row.get("id") or "").strip()
+            assets = assets_by_property_id.get(row_id, {})
+            enriched_rows.append(
+                {
+                    **row,
+                    "primary_image_url": row.get("primary_image_url") or assets.get("primary_image_url"),
+                    "image_urls": row.get("image_urls") or assets.get("image_urls") or [],
+                }
+            )
+        return [self._to_canonical_property(row) for row in enriched_rows]
 
     async def load_properties_by_ids(
         self,
@@ -213,21 +315,61 @@ class PropertyRepository:
     ) -> list[Property]:
         if not property_ids:
             return []
+        id_variants = self._expand_property_id_variants(property_ids)
+        canonical_variants = self._normalize_property_key_variants([*property_ids, *id_variants])
+        if not id_variants and not canonical_variants:
+            return []
         query = (
             text(
                 """
-                SELECT *
-                FROM lead_properties
-                WHERE client_id = :client_id
-                  AND property_id_internal IN :property_ids
+                SELECT p.*
+                FROM lead_properties p
+                WHERE p.client_id = :client_id
+                  AND (
+                    p.external_prop_id::text IN :property_ids_external
+                    OR p.id::text IN :property_ids_internal
+                    OR UPPER(
+                        regexp_replace(
+                            COALESCE(p.features->>'property_id_internal', ''),
+                            '[^A-Za-z0-9]',
+                            '',
+                            'g'
+                        )
+                    ) IN :property_ids_canonical
+                  )
                 """
-            ).bindparams(bindparam("property_ids", expanding=True))
+            ).bindparams(
+                bindparam("property_ids_external", expanding=True),
+                bindparam("property_ids_internal", expanding=True),
+                bindparam("property_ids_canonical", expanding=True),
+            )
         )
         async with self.engine.begin() as connection:
             rows = (
                 await connection.execute(
                     query,
-                    {"client_id": client_id, "property_ids": list(property_ids)},
+                    {
+                        "client_id": client_id,
+                        "property_ids_external": id_variants,
+                        "property_ids_internal": id_variants,
+                        "property_ids_canonical": canonical_variants,
+                    },
                 )
             ).mappings().all()
-        return [self._to_canonical_property(dict(row)) for row in rows]
+            row_payloads = [dict(row) for row in rows]
+            assets_by_property_id = await self._fetch_property_assets(
+                connection,
+                [str(row.get("id")) for row in row_payloads if row.get("id") is not None],
+            )
+        enriched_rows: list[dict[str, object]] = []
+        for row in row_payloads:
+            row_id = str(row.get("id") or "").strip()
+            assets = assets_by_property_id.get(row_id, {})
+            enriched_rows.append(
+                {
+                    **row,
+                    "primary_image_url": row.get("primary_image_url") or assets.get("primary_image_url"),
+                    "image_urls": row.get("image_urls") or assets.get("image_urls") or [],
+                }
+            )
+        return [self._to_canonical_property(row) for row in enriched_rows]

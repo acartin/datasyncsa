@@ -20,6 +20,8 @@ def _relax_filters(filters: SearchFilters) -> SearchFilters:
         return filters.model_copy(update={"precio_max": filters.precio_max * 1.1})
     if filters.precio_min:
         return filters.model_copy(update={"precio_min": filters.precio_min * 0.9})
+    if filters.garage:
+        return filters.model_copy(update={"garage": None})
     if filters.banos:
         return filters.model_copy(update={"banos": None})
     if filters.habitaciones:
@@ -33,16 +35,19 @@ def _build_fallback_search_sql(graph_state: RealtorGraphState, filters: SearchFi
 
     if filters.provincia:
         params["provincia_like"] = f"%{filters.provincia.strip().lower()}%"
-        clauses.append("AND searchable_text LIKE :provincia_like")
+        clauses.append("AND location_search_text LIKE :provincia_like")
     if filters.ubicacion:
         params["ubicacion_like"] = f"%{filters.ubicacion.strip().lower()}%"
-        clauses.append("AND searchable_text LIKE :ubicacion_like")
+        clauses.append("AND location_search_text LIKE :ubicacion_like")
     if filters.habitaciones is not None:
         params["bedrooms"] = filters.habitaciones
         clauses.append("AND bedrooms_clean >= :bedrooms")
     if filters.banos is not None:
         params["bathrooms"] = filters.banos
         clauses.append("AND bathrooms_clean >= :bathrooms")
+    if filters.garage is not None:
+        params["garage"] = filters.garage
+        clauses.append("AND garage_clean >= :garage")
     if filters.precio_max is not None:
         params["price_max"] = filters.precio_max
         clauses.append("AND price <= :price_max")
@@ -53,8 +58,8 @@ def _build_fallback_search_sql(graph_state: RealtorGraphState, filters: SearchFi
         params["currency"] = filters.currency.strip().upper()
         clauses.append("AND currency = :currency")
     if filters.tipo:
-        params["tipo_like"] = f"%{filters.tipo.strip().lower()}%"
-        clauses.append("AND LOWER(property_type_name) LIKE :tipo_like")
+        params["tipo_name"] = filters.tipo.strip().lower()
+        clauses.append("AND LOWER(property_type_name) = :tipo_name")
     if filters.operacion:
         params["operacion_like"] = f"%{filters.operacion.strip().lower()}%"
         clauses.append("AND searchable_text LIKE :operacion_like")
@@ -120,9 +125,6 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
         "search_attempts": graph_state.search_attempts + (1 if not results else 0),
         "turn_outputs": [*graph_state.turn_outputs, output],
     }
-    if 0 < len(results) < 4:
-        updates["render_mode"] = "text"
-        updates |= complete_active_intent(graph_state, output)
-    elif not results and updates["search_attempts"] >= 3:
+    if not results and updates["search_attempts"] >= 3:
         updates |= complete_active_intent(graph_state, output)
     return updates

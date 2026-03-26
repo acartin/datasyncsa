@@ -52,3 +52,19 @@ class InternalMemoryResetRequest(BaseModel):
 
     client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"))
     reason: Optional[str] = None
+
+
+class SessionResetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    client_id: UUID = Field(validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"))
+    channel_user_id: str = Field(validation_alias=AliasChoices("channel_user_id", "channelUserId"))
+    session_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("session_id", "sessionId"),
+    )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("conversation_id", "conversationId"),
+    )
+    reason: Optional[str] = None

@@ -1,0 +1,654 @@
+{
+  "country_code": "CR",
+  "country_name": "Costa Rica",
+  "source": {
+    "provinces": "https://www.ministeriodesalud.go.cr/fhir/CodeSystem-provincias-cs.json",
+    "cantons": "https://www.ministeriodesalud.go.cr/fhir/CodeSystem-cantones-cs.json"
+  },
+  "primary_division_label": "provincia",
+  "secondary_division_label": "canton",
+  "regions": [
+    {
+      "code": "1",
+      "name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "2",
+      "name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "3",
+      "name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "4",
+      "name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "5",
+      "name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "6",
+      "name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "7",
+      "name": "Limon",
+      "aliases": []
+    }
+  ],
+  "localities": [
+    {
+      "code": "101",
+      "name": "San José",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "102",
+      "name": "Escazú",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "103",
+      "name": "Desamparados",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "104",
+      "name": "Puriscal",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "105",
+      "name": "Tarrazú",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "106",
+      "name": "Aserrí",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "107",
+      "name": "Mora",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "108",
+      "name": "Goicoechea",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "109",
+      "name": "Santa Ana",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "110",
+      "name": "Alajuelita",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "111",
+      "name": "Vázquez de Coronado",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": [
+        "Coronado"
+      ]
+    },
+    {
+      "code": "112",
+      "name": "Acosta",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "113",
+      "name": "Tibás",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "114",
+      "name": "Moravia",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "115",
+      "name": "Montes de Oca",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "116",
+      "name": "Turrubares",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "117",
+      "name": "Dota",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "118",
+      "name": "Curridabat",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": []
+    },
+    {
+      "code": "119",
+      "name": "Pérez Zeledón",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": [
+        "Perez Zeledon",
+        "Pérez Zeledón"
+      ]
+    },
+    {
+      "code": "120",
+      "name": "León Cortés Castro",
+      "province_code": "1",
+      "province_name": "San José",
+      "aliases": [
+        "Leon Cortes",
+        "León Cortés"
+      ]
+    },
+    {
+      "code": "201",
+      "name": "Alajuela",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "202",
+      "name": "San Ramón",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "203",
+      "name": "Grecia",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "204",
+      "name": "San Mateo",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "205",
+      "name": "Atenas",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "206",
+      "name": "Naranjo",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "207",
+      "name": "Palmares",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "208",
+      "name": "Poás",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "209",
+      "name": "Orotina",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "210",
+      "name": "San Carlos",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "211",
+      "name": "Zarcero",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "212",
+      "name": "Sarchí",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "213",
+      "name": "Upala",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "214",
+      "name": "Los Chiles",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "215",
+      "name": "Guatuso",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "216",
+      "name": "Río Cuarto",
+      "province_code": "2",
+      "province_name": "Alajuela",
+      "aliases": []
+    },
+    {
+      "code": "301",
+      "name": "Cartago",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "302",
+      "name": "Paraíso",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "303",
+      "name": "La Unión",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": [
+        "La Union"
+      ]
+    },
+    {
+      "code": "304",
+      "name": "Jiménez",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "305",
+      "name": "Turrialba",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "306",
+      "name": "Alvarado",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "307",
+      "name": "Oreamuno",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "308",
+      "name": "El Guarco",
+      "province_code": "3",
+      "province_name": "Cartago",
+      "aliases": []
+    },
+    {
+      "code": "401",
+      "name": "Heredia",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "402",
+      "name": "Barva",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "403",
+      "name": "Santo Domingo",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "404",
+      "name": "Santa Bárbara",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "405",
+      "name": "San Rafael",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "406",
+      "name": "San Isidro",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "407",
+      "name": "Belén",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "408",
+      "name": "Flores",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "409",
+      "name": "San Pablo",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "410",
+      "name": "Sarapiquí",
+      "province_code": "4",
+      "province_name": "Heredia",
+      "aliases": []
+    },
+    {
+      "code": "501",
+      "name": "Liberia",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "502",
+      "name": "Nicoya",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "503",
+      "name": "Santa Cruz",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "504",
+      "name": "Bagaces",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "505",
+      "name": "Carrillo",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "506",
+      "name": "Cañas",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "507",
+      "name": "Abangares",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "508",
+      "name": "Tilarán",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "509",
+      "name": "Nandayure",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "510",
+      "name": "La Cruz",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": []
+    },
+    {
+      "code": "511",
+      "name": "Hojancha",
+      "province_code": "5",
+      "province_name": "Guanacaste",
+      "aliases": [
+        "Hojancha"
+      ]
+    },
+    {
+      "code": "601",
+      "name": "Puntarenas",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "602",
+      "name": "Esparza",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "603",
+      "name": "Buenos Aires",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "604",
+      "name": "Montes de Oro",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "605",
+      "name": "Osa",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "606",
+      "name": "Quepos",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "607",
+      "name": "Golfito",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "608",
+      "name": "Coto Brus",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "609",
+      "name": "Parrita",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "610",
+      "name": "Corredores",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "611",
+      "name": "Garabito",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": []
+    },
+    {
+      "code": "612",
+      "name": "Monteverde",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": [
+        "Monteverde"
+      ]
+    },
+    {
+      "code": "613",
+      "name": "Puerto Jiménez",
+      "province_code": "6",
+      "province_name": "Puntarenas",
+      "aliases": [
+        "Puerto Jimenez",
+        "Puerto Jiménez"
+      ]
+    },
+    {
+      "code": "701",
+      "name": "Limón",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    },
+    {
+      "code": "702",
+      "name": "Pococí",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    },
+    {
+      "code": "703",
+      "name": "Siquirres",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    },
+    {
+      "code": "704",
+      "name": "Talamanca",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    },
+    {
+      "code": "705",
+      "name": "Matina",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    },
+    {
+      "code": "706",
+      "name": "Guácimo",
+      "province_code": "7",
+      "province_name": "Limon",
+      "aliases": []
+    }
+  ]
+}

@@ -14,6 +14,8 @@ from services.ai_runtime.domain.contracts import (
     ChatResponse,
     InternalMemoryResetRequest,
     InternalMemoryResetResponse,
+    InternalSessionResetRequest,
+    InternalSessionResetResponse,
 )
 from services.ai_runtime.runtime.bootstrap import runtime
 
@@ -57,6 +59,15 @@ async def internal_memory_reset(
 ) -> InternalMemoryResetResponse:
     _assert_internal_token(request)
     return await runtime.reset_client_memory(payload.client_id)
+
+
+@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+async def internal_session_reset(
+    payload: InternalSessionResetRequest,
+    request: Request,
+) -> InternalSessionResetResponse:
+    _assert_internal_token(request)
+    return await runtime.reset_session_memory(payload.client_id, payload.session_id)
 
 
 @router.get("/debug/turn-trace")

@@ -142,6 +142,7 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
     turn_outputs = state.get("turn_outputs", [])
     summary = {
         "current_turn": state.get("current_turn"),
+        "turn_analysis": _safe_serialize(state.get("turn_analysis")),
         "pending_clarification": state.get("pending_clarification"),
         "clarification_attempts": state.get("clarification_attempts"),
         "resolved_references": _safe_serialize(state.get("resolved_references", [])),
@@ -155,6 +156,12 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
             "should_ask": _item_get(state.get("lead_advisor"), "should_ask"),
             "field_to_ask": _item_get(state.get("lead_advisor"), "field_to_ask"),
             "lead_completo": _item_get(state.get("lead_advisor"), "lead_completo"),
+            "lead_extracted": _safe_serialize(_item_get(state.get("lead_advisor"), "lead_extracted", {})),
+        },
+        "memory": {
+            "entity_count": len(_item_get(state.get("memory"), "entities", []) or []),
+            "entities_tail": _safe_serialize((_item_get(state.get("memory"), "entities", []) or [])[-6:]),
+            "last_lookup": _safe_serialize(_item_get(state.get("memory"), "last_lookup", {})),
         },
         "cita": {
             "tipo": _item_get(state.get("cita"), "tipo"),
@@ -482,7 +489,7 @@ class TracingLLMPort:
         self.inner = inner
         self.trace_store = trace_store
 
-    async def _record_call(self, method_name: str, prompt: str, awaitable: Awaitable[Any]) -> Any:
+    async def _record_call(self, method_name: str, prompt: Any, awaitable: Awaitable[Any]) -> Any:
         self.trace_store.append_event(
             "llm_start",
             method_name,
@@ -510,37 +517,44 @@ class TracingLLMPort:
             method_name,
             {
                 "duration_ms": duration_ms,
+                "prompt_cache": _safe_serialize(getattr(prompt, "cache_metadata", None)),
                 "result": _safe_serialize(result),
             },
         )
         return result
 
-    async def classify_reference(self, prompt: str):
+    async def classify_reference(self, prompt: Any):
         return await self._record_call("classify_reference", prompt, self.inner.classify_reference(prompt))
 
-    async def detect_intents(self, prompt: str):
+    async def analyze_turn(self, prompt: Any):
+        return await self._record_call("analyze_turn", prompt, self.inner.analyze_turn(prompt))
+
+    async def detect_intents(self, prompt: Any):
         return await self._record_call("detect_intents", prompt, self.inner.detect_intents(prompt))
 
-    async def evaluate_lazy_condition(self, prompt: str):
+    async def evaluate_lazy_condition(self, prompt: Any):
         return await self._record_call("evaluate_lazy_condition", prompt, self.inner.evaluate_lazy_condition(prompt))
 
-    async def extract_search_filters(self, prompt: str):
+    async def extract_search_filters(self, prompt: Any):
         return await self._record_call("extract_search_filters", prompt, self.inner.extract_search_filters(prompt))
 
-    async def synthesize_response(self, prompt: str):
+    async def extract_memory_entities(self, prompt: Any):
+        return await self._record_call("extract_memory_entities", prompt, self.inner.extract_memory_entities(prompt))
+
+    async def synthesize_response(self, prompt: Any):
         return await self._record_call("synthesize_response", prompt, self.inner.synthesize_response(prompt))
 
-    async def redact_recommendation(self, prompt: str):
+    async def redact_recommendation(self, prompt: Any):
         return await self._record_call("redact_recommendation", prompt, self.inner.redact_recommendation(prompt))
 
-    async def translate_text_to_sql(self, prompt: str):
+    async def translate_text_to_sql(self, prompt: Any):
         return await self._record_call("translate_text_to_sql", prompt, self.inner.translate_text_to_sql(prompt))
 
-    async def extract_lead_fields(self, prompt: str):
+    async def extract_lead_fields(self, prompt: Any):
         return await self._record_call("extract_lead_fields", prompt, self.inner.extract_lead_fields(prompt))
 
-    async def extract_appointment_fields(self, prompt: str):
+    async def extract_appointment_fields(self, prompt: Any):
         return await self._record_call("extract_appointment_fields", prompt, self.inner.extract_appointment_fields(prompt))
 
-    async def score_turn(self, prompt: str):
+    async def score_turn(self, prompt: Any):
         return await self._record_call("score_turn", prompt, self.inner.score_turn(prompt))

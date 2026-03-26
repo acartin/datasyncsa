@@ -44,14 +44,7 @@
         </div>
 
         <!-- Messages Area -->
-        <div id="chat-messages">
-            <div class="message-wrapper bot">
-                <div class="sender-name">Hommie AI</div>
-                <div class="message-bubble">
-                    Hola! 👋 Soy Hommie, tu asistente experto. ¿En qué zona estás buscando tu próxima propiedad?
-                </div>
-            </div>
-        </div>
+        <div id="chat-messages"></div>
 
         <!-- Input Area -->
         <div class="widget-input-area">
@@ -94,7 +87,6 @@
         const statusIndicator = document.querySelector('.status-indicator');
         const statusDot = document.querySelector('.status-indicator .dot');
         const statusLabel = document.querySelector('.status-indicator span:last-child');
-        const INITIAL_BOT_GREETING = 'Hola! 👋 Soy Hommie, tu asistente experto. ¿En qué zona estás buscando tu próxima propiedad?';
 
         // Extraction of Context from URL (FB Ads, QR Codes, etc.)
         const urlParams = new URLSearchParams(window.location.search);
@@ -105,7 +97,8 @@
         const ATTRIBUTION_FIRST_TOUCH_KEY = 'chat_web_renderer_attribution_first_touch';
         const ATTRIBUTION_LAST_TOUCH_KEY = 'chat_web_renderer_attribution_last_touch';
         const CHANNEL_USER_ID_KEY = `chat_web_renderer_channel_user_${clientId}`;
-        const CONVERSATION_SESSION_KEY = `chat_web_renderer_conversation_${clientId}`;
+        const RUNTIME_SESSION_KEY = `chat_web_renderer_runtime_session_${clientId}`;
+        const CONVERSATION_ID_KEY = `chat_web_renderer_conversation_${clientId}`;
         const ATTRIBUTION_KEYS = [
             'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
             'gclid', 'fbclid', 'ttclid', 'msclkid', 'li_fat_id', 'gbraid', 'wbraid'
@@ -262,34 +255,45 @@
             newChannelUserId();
         writeStorage(CHANNEL_USER_ID_KEY, channelUserId);
 
+        let runtimeSessionId =
+            readStorage(RUNTIME_SESSION_KEY) ||
+            persistedFrontendState.runtimeSessionId ||
+            '';
+
         let conversationId =
-            readStorage(CONVERSATION_SESSION_KEY) ||
+            readStorage(CONVERSATION_ID_KEY) ||
             persistedFrontendState.conversationId ||
             '';
-        writeWindowState({
-            [FRONTEND_SESSION_STATE_KEY]: {
+        let bootstrapInFlight = false;
+
+        const persistFrontendSessionState = () => {
+            writeWindowState({
+                [FRONTEND_SESSION_STATE_KEY]: {
+                    clientId,
+                    channelUserId,
+                    runtimeSessionId,
+                    conversationId
+                }
+            });
+            writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
                 clientId,
                 channelUserId,
+                runtimeSessionId,
                 conversationId
-            }
-        });
-        writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
-            clientId,
-            channelUserId,
-            conversationId
-        }));
+            }));
+        };
 
-        const renderInitialGreeting = () => {
+        persistFrontendSessionState();
+
+        const clearVisibleConversation = () => {
             if (!messagesContainer) return;
             messagesContainer.innerHTML = '';
-            renderer.renderResponse({
-                components: [{ type: 'chat', text: INITIAL_BOT_GREETING, sender: 'bot' }]
-            });
         };
 
         const buildFrontendDebugMetadata = () => {
             const currentWindowState = readWindowState();
-            const storedConversationId = readStorage(CONVERSATION_SESSION_KEY) || '';
+            const storedRuntimeSessionId = readStorage(RUNTIME_SESSION_KEY) || '';
+            const storedConversationId = readStorage(CONVERSATION_ID_KEY) || '';
             const storedChannelUserId = readStorage(CHANNEL_USER_ID_KEY) || '';
             const frontendStateRaw = readStorage(FRONTEND_SESSION_STATE_KEY);
             const frontendState = safeParseJSON(frontendStateRaw) || {};
@@ -303,12 +307,16 @@
                 debug_trace_id: traceId,
                 frontend_page_load_id: PAGE_LOAD_ID,
                 frontend_message_seq: frontendMessageSeq,
+                frontend_runtime_session_id: runtimeSessionId || null,
                 frontend_runtime_conversation_id: conversationId || null,
                 frontend_runtime_channel_user_id: channelUserId || null,
+                frontend_stored_runtime_session_id: storedRuntimeSessionId || null,
                 frontend_stored_conversation_id: storedConversationId || null,
                 frontend_stored_channel_user_id: storedChannelUserId || null,
+                frontend_frontend_state_runtime_session_id: frontendState.runtimeSessionId || null,
                 frontend_frontend_state_conversation_id: frontendState.conversationId || null,
                 frontend_frontend_state_channel_user_id: frontendState.channelUserId || null,
+                frontend_had_stored_runtime_session_id: Boolean(storedRuntimeSessionId),
                 frontend_had_stored_conversation_id: Boolean(storedConversationId),
                 frontend_had_stored_channel_user_id: Boolean(storedChannelUserId),
                 frontend_had_frontend_state: Boolean(frontendStateRaw),
@@ -318,20 +326,162 @@
             };
         };
 
-        const resetConversationState = () => {
+        const sendChatPayload = async (text, { renderUserMessage = true, metadata = {} } = {}) => {
+            if (renderUserMessage) {
+                renderer.renderResponse({
+                    components: [{ type: 'chat', text, sender: 'user' }]
+                });
+            }
+
+            renderer.showTyping();
+
+            const frontendDebug = buildFrontendDebugMetadata();
+            console.debug('[chat-web-renderer] outbound', {
+                traceId: frontendDebug.debug_trace_id,
+                channelUserId,
+                runtimeSessionId: runtimeSessionId || null,
+                runtimeConversationId: conversationId || null,
+                storedConversationId: frontendDebug.frontend_stored_conversation_id,
+                messageSeq: frontendDebug.frontend_message_seq,
+                renderUserMessage
+            });
+
+            const payload = {
+                message_text: text,
+                client_id: clientId,
+                channel: 'web_html',
+                channel_user_id: channelUserId,
+                auth_user_id: channelUserId,
+                brand_project: brandProject,
+                metadata: {
+                    source_property_ref: propertyId,
+                    landing_page_url: window.location.href,
+                    referrer_url: document.referrer || null,
+                    ...runtimeAttribution,
+                    ...frontendDebug,
+                    ...metadata
+                }
+            };
+            if (runtimeSessionId) {
+                payload.session_id = runtimeSessionId;
+            }
+            if (conversationId) {
+                payload.conversation_id = conversationId;
+            }
+
+            const controller = new AbortController();
+            const timeoutMs = 25000;
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    let detail = '';
+                    try {
+                        const errBody = await response.json();
+                        detail = errBody?.detail || '';
+                    } catch (_e) {
+                        detail = '';
+                    }
+                    throw new Error(detail || `Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.debug('[chat-web-renderer] inbound', {
+                    traceId: frontendDebug.debug_trace_id,
+                    nextRuntimeSessionId: data?.session_id || data?.meta?.session_id || null,
+                    nextConversationId: data?.meta?.conversation_id || data?.conversation_id || null
+                });
+
+                applyBranding(data.branding);
+
+                const nextRuntimeSessionId = data?.session_id || data?.meta?.session_id;
+                const nextConversationId = data?.meta?.conversation_id || data?.conversation_id;
+                if (nextRuntimeSessionId) {
+                    runtimeSessionId = nextRuntimeSessionId;
+                    writeStorage(RUNTIME_SESSION_KEY, runtimeSessionId);
+                }
+                if (nextConversationId) {
+                    conversationId = nextConversationId;
+                    writeStorage(CONVERSATION_ID_KEY, conversationId);
+                }
+                persistFrontendSessionState();
+
+                renderer.hideTyping();
+                renderer.renderResponse(data);
+                return data;
+            } catch (err) {
+                clearTimeout(timeoutId);
+                renderer.hideTyping();
+                throw err;
+            }
+        };
+
+        const resetConversationState = async (reason = 'new_chat') => {
+            const previousChannelUserId = channelUserId;
+            const previousRuntimeSessionId = runtimeSessionId;
+            const previousConversationId = conversationId;
+
+            runtimeSessionId = '';
             conversationId = '';
-            clearStorage(CONVERSATION_SESSION_KEY);
+            clearStorage(RUNTIME_SESSION_KEY);
+            clearStorage(CONVERSATION_ID_KEY);
+            clearStorage(FRONTEND_SESSION_STATE_KEY);
+
+            if (previousChannelUserId) {
+                try {
+                    await fetch('/api/chat/session/reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            client_id: clientId,
+                            channel_user_id: previousChannelUserId,
+                            session_id: previousRuntimeSessionId || null,
+                            conversation_id: previousConversationId || null,
+                            reason
+                        })
+                    });
+                } catch (err) {
+                    console.warn('Session reset warning:', err);
+                }
+            }
+
             channelUserId = newChannelUserId();
             writeStorage(CHANNEL_USER_ID_KEY, channelUserId);
-            writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
-                clientId,
-                channelUserId,
-                conversationId
-            }));
+            persistFrontendSessionState();
             renderer.hideTyping();
-            renderInitialGreeting();
+            clearVisibleConversation();
             input.value = '';
             input.focus();
+        };
+
+        const bootstrapConversation = async (reason = 'page_load') => {
+            if (bootstrapInFlight) return;
+            bootstrapInFlight = true;
+            try {
+                await resetConversationState(reason);
+                await sendChatPayload('hola', {
+                    renderUserMessage: false,
+                    metadata: {
+                        frontend_bootstrap: true,
+                        frontend_bootstrap_reason: reason
+                    }
+                });
+            } catch (err) {
+                renderer.hideTyping();
+                console.error('Bootstrap error:', err);
+                const msg = (err?.message || '').trim();
+                pushSystemMessage(msg || 'No pude iniciar el chat en este momento. Intenta de nuevo en unos segundos.');
+            } finally {
+                bootstrapInFlight = false;
+            }
         };
 
         const pushSystemMessage = (text) => {
@@ -354,12 +504,16 @@
                 if (!res.ok) throw new Error(`health status ${res.status}`);
                 const data = await res.json();
                 const deps = data?.dependencies || {};
-                const infOk = !!deps?.inference_core_v2?.ok;
-                const semOk = !!deps?.semantic_adapter_v2?.ok;
+                const runtimeOk = !!(
+                    deps?.ai_runtime?.ok ||
+                    deps?.inference_core_v2?.ok
+                );
+                const optionalDeps = Object.entries(deps).filter(([name]) => name !== 'ai_runtime' && name !== 'inference_core_v2');
+                const optionalFailures = optionalDeps.filter(([, payload]) => payload && payload.ok === false);
 
-                if (infOk && semOk) {
+                if (runtimeOk && optionalFailures.length === 0) {
                     setRuntimeStatus('status-ok', 'En línea');
-                } else if (infOk || semOk) {
+                } else if (runtimeOk) {
                     setRuntimeStatus('status-degraded', 'Degradado', JSON.stringify(deps));
                 } else {
                     setRuntimeStatus('status-down', 'Sin conexión', JSON.stringify(deps));
@@ -384,8 +538,8 @@
         };
 
         if (newChatButton) {
-            newChatButton.addEventListener('click', () => {
-                resetConversationState();
+            newChatButton.addEventListener('click', async () => {
+                await bootstrapConversation('new_chat');
             });
         }
 
@@ -585,24 +739,11 @@
 
 
 
-        // Initialize Branding on Load
-
-        // Initialize Branding on Load
         (async () => {
             try {
-                // Hacemos una petición silenciosa solo para branding
-                const res = await fetch('/api/chat/init', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        client_id: clientId,
-                        brand_project: brandProject
-                    })
-                });
-                const data = await res.json();
-                applyBranding(data.branding);
+                await bootstrapConversation('page_load');
             } catch (e) {
-                console.warn("Branding init error:", e);
+                console.warn("Chat bootstrap error:", e);
             }
         })();
 
@@ -629,97 +770,18 @@
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (bootstrapInFlight) {
+                return;
+            }
             const text = input.value;
+            if (!text || !text.trim()) {
+                return;
+            }
             input.value = '';
 
-            // User Message
-            renderer.renderResponse({
-                components: [{ type: 'chat', text: text, sender: 'user' }]
-            });
-
             try {
-                renderer.showTyping();
-
-                const frontendDebug = buildFrontendDebugMetadata();
-                console.debug('[chat-web-renderer] outbound', {
-                    traceId: frontendDebug.debug_trace_id,
-                    channelUserId,
-                    runtimeConversationId: conversationId || null,
-                    storedConversationId: frontendDebug.frontend_stored_conversation_id,
-                    messageSeq: frontendDebug.frontend_message_seq
-                });
-                const payload = {
-                    message_text: text,
-                    client_id: clientId,
-                    channel: 'web_html',
-                    channel_user_id: channelUserId,
-                    brand_project: brandProject,
-                    metadata: {
-                        source_property_ref: propertyId,
-                        landing_page_url: window.location.href,
-                        referrer_url: document.referrer || null,
-                        ...runtimeAttribution,
-                        ...frontendDebug
-                    }
-                };
-                if (conversationId) {
-                    payload.conversation_id = conversationId;
-                }
-
-                const controller = new AbortController();
-                const timeoutMs = 25000;
-                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    let detail = '';
-                    try {
-                        const errBody = await response.json();
-                        detail = errBody?.detail || '';
-                    } catch (_e) {
-                        detail = '';
-                    }
-                    throw new Error(detail || `Server error: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.debug('[chat-web-renderer] inbound', {
-                    traceId: frontendDebug.debug_trace_id,
-                    nextConversationId: data?.session_id || data?.conversation_id || null
-                });
-
-                // Apply Dynamic Branding
-                applyBranding(data.branding);
-
-                const nextConversationId = data?.session_id || data?.conversation_id;
-                if (nextConversationId) {
-                    conversationId = nextConversationId;
-                    writeStorage(CONVERSATION_SESSION_KEY, conversationId);
-                    writeWindowState({
-                        [FRONTEND_SESSION_STATE_KEY]: {
-                            clientId,
-                            channelUserId,
-                            conversationId
-                        }
-                    });
-                    writeStorage(FRONTEND_SESSION_STATE_KEY, JSON.stringify({
-                        clientId,
-                        channelUserId,
-                        conversationId
-                    }));
-                }
-
-                renderer.hideTyping();
-                renderer.renderResponse(data);
+                await sendChatPayload(text);
             } catch (err) {
-                renderer.hideTyping();
                 console.error("Error bridge:", err);
                 if (err?.name === 'AbortError') {
                     pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");

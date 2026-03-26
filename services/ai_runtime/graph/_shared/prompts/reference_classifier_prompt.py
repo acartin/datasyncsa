@@ -65,6 +65,12 @@ Output: {"kind":"NONE","confidence":0.97,"ordinal_index":null,"attribute_key":nu
 Usuario: "Quiero ver opciones con dos banos y cochera."
 Output: {"kind":"NONE","confidence":0.97,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null}
 
+Usuario: "en Heredia"
+Output: {"kind":"NONE","confidence":0.95,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null}
+
+Usuario: "con 2 banos"
+Output: {"kind":"NONE","confidence":0.95,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null}
+
 Reglas:
 - Sin preamble.
 - Sin markdown.
