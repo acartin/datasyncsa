@@ -8,6 +8,7 @@ class ExternalChatRequest(BaseModel):
     channel_user_id: str = Field(..., min_length=1, description="Identificador conversacional único del canal externo")
     message_text: str = Field(min_length=1, max_length=4000)
     auth_user_id: Optional[str] = Field(None, description="Identificador de autenticación interna (opcional para trazabilidad)")
+    session_id: Optional[str] = None
     conversation_id: Optional[UUID] = None
     metadata: Optional[Dict[str, Any]] = None
 

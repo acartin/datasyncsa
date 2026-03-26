@@ -49,6 +49,9 @@ class InferenceClient:
         user_metadata = {
             "lead_id": session.get("lead_id"),
             "brand_project": session.get("brand_project"),
+            "channel": session.get("channel"),
+            "channel_user_id": session.get("channel_user_id"),
+            "user_id": session.get("auth_user_id") or session.get("channel_user_id"),
             "utm_source": session.get("utm_source"),
             "utm_medium": session.get("utm_medium"),
             "utm_campaign": session.get("utm_campaign"),
@@ -70,6 +73,8 @@ class InferenceClient:
         payload = {
             "queryText": user_query,
             "clientId": session.get("client_id", self.default_client_id),
+            "userId": session.get("auth_user_id") or session.get("channel_user_id"),
+            "sessionId": session.get("session_id"),
             "conversationId": session.get("conversation_id"),
             "userMetadata": user_metadata if user_metadata else None
         }
@@ -79,9 +84,10 @@ class InferenceClient:
             timeout = httpx.Timeout(timeout=self.timeout, connect=self.connect_timeout)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 logger.info(
-                    "📤 Enviando mensaje al Core: trace_id=%s client_id=%s conversation_id=%s channel=%s channel_user_id=%s text=%s",
+                    "📤 Enviando mensaje al Core: trace_id=%s client_id=%s session_id=%s conversation_id=%s channel=%s channel_user_id=%s text=%s",
                     trace_id,
                     session.get("client_id"),
+                    session.get("session_id"),
                     session.get("conversation_id"),
                     session.get("channel"),
                     session.get("channel_user_id"),
@@ -92,8 +98,9 @@ class InferenceClient:
                 
                 data = response.json()
                 logger.info(
-                    "📥 Respuesta recibida del Core: trace_id=%s conversation_id=%s answer_chars=%s components=%s",
+                    "📥 Respuesta recibida del Core: trace_id=%s session_id=%s conversation_id=%s answer_chars=%s components=%s",
                     trace_id,
+                    data.get("sessionId", data.get("session_id")),
                     data.get("conversationId", data.get("conversation_id")),
                     len((data.get("answer") or "").strip()),
                     len(data.get("components") or []),
@@ -125,6 +132,7 @@ class InferenceClient:
             "sources": data.get("sources", []),
             "components": data.get("components", []),
             "intent": data.get("intent"),
+            "session_id": str(data.get("sessionId", data.get("session_id", ""))),
             "conversation_id": str(data.get("conversationId", data.get("conversation_id", ""))),
         }
         

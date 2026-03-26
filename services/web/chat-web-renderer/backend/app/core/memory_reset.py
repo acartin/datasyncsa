@@ -100,6 +100,37 @@ class MemoryResetClient:
                 headers=headers,
             )
 
+    async def reset_runtime_session(
+        self,
+        *,
+        client_id: str,
+        session_id: str,
+        reason: str | None = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "client_id": client_id,
+            "session_id": session_id,
+        }
+        if reason:
+            payload["reason"] = reason
+
+        headers: Dict[str, str] = {}
+        if self.internal_token:
+            headers["X-Internal-Token"] = self.internal_token
+
+        session_reset_url = self.agent_core_reset_url.replace(
+            "/internal/memory/reset",
+            "/internal/session/reset",
+        )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await self._post_reset(
+                client=client,
+                url=session_reset_url,
+                payload=payload,
+                headers=headers,
+            )
+
     async def reset_runtime_memory(self, client_id: str, reason: str | None = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"client_id": client_id}
         if reason:

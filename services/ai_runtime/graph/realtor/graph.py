@@ -8,28 +8,36 @@ from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes import (
+    analyze_turn,
     ask_clarification,
+    capture_memory_entities,
     check_queue,
-    classify_intent,
     collect_lead_data,
     lead_advisor,
-    resolve_references,
+    memory_lookup,
     route_next_intent,
     synthesize,
 )
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
-from services.ai_runtime.graph._shared.routers.common import after_check_queue, after_classify_intent, after_resolve_references
+from services.ai_runtime.graph._shared.routers.common import (
+    after_analyze_turn,
+    after_capture_memory,
+    after_check_queue,
+    after_memory_lookup,
+)
 from services.ai_runtime.graph._shared.tools.mensajear import mensajear
 from services.ai_runtime.graph.realtor.nodes.assign_agent_node import assign_agent
 from services.ai_runtime.graph.realtor.nodes.collect_appointment_data_node import collect_appointment_data
 from services.ai_runtime.graph.realtor.nodes.compare_properties_node import compare_properties
-from services.ai_runtime.graph.realtor.nodes.extract_search_filters_node import extract_search_filters
+from services.ai_runtime.graph.realtor.nodes.describe_result_set_node import describe_result_set
+from services.ai_runtime.graph.realtor.nodes.focus_property_node import focus_property
 from services.ai_runtime.graph.realtor.nodes.llm_recommend_node import llm_recommend
 from services.ai_runtime.graph.realtor.nodes.mutate_comparison_set_node import mutate_comparison_set
 from services.ai_runtime.graph.realtor.nodes.rag_agencia_node import rag_agencia
 from services.ai_runtime.graph.realtor.nodes.rag_documents_node import rag_documents
 from services.ai_runtime.graph.realtor.nodes.render_cards_node import render_cards
 from services.ai_runtime.graph.realtor.nodes.search_node import search
+from services.ai_runtime.graph.realtor.nodes.show_result_cards_node import show_result_cards
 from services.ai_runtime.graph.realtor.routers.routes import (
     after_collect_appointment_data,
     after_render_cards,
@@ -63,11 +71,14 @@ def _mail_node(deps: GraphDependencies):
 
 def build_realtor_graph(deps: GraphDependencies):
     workflow = StateGraph(dict)
-    workflow.add_node("resolve_references", build_traced_node("resolve_references", resolve_references, deps))
+    workflow.add_node("analyze_turn", build_traced_node("analyze_turn", analyze_turn, deps))
     workflow.add_node("ask_clarification", build_traced_node("ask_clarification", ask_clarification, deps))
-    workflow.add_node("classify_intent", build_traced_node("classify_intent", classify_intent, deps))
+    workflow.add_node("capture_memory_entities", build_traced_node("capture_memory_entities", capture_memory_entities, deps))
+    workflow.add_node("memory_lookup", build_traced_node("memory_lookup", memory_lookup, deps))
     workflow.add_node("route_next_intent", build_traced_node("route_next_intent", route_next_intent, deps))
-    workflow.add_node("extract_search_filters", build_traced_node("extract_search_filters", extract_search_filters, deps))
+    workflow.add_node("describe_result_set", build_traced_node("describe_result_set", describe_result_set, deps))
+    workflow.add_node("show_result_cards", build_traced_node("show_result_cards", show_result_cards, deps))
+    workflow.add_node("focus_property", build_traced_node("focus_property", focus_property, deps))
     workflow.add_node("search", build_traced_node("search", search, deps))
     workflow.add_node("render_cards", build_traced_node("render_cards", render_cards, deps))
     workflow.add_node("financial_calc", build_traced_node("financial_calc", financial_calc, deps))
@@ -84,28 +95,44 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
     workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
-    workflow.add_edge(START, "resolve_references")
+    workflow.add_edge(START, "analyze_turn")
     workflow.add_conditional_edges(
-        "resolve_references",
-        build_traced_router("after_resolve_references", after_resolve_references, deps),
+        "analyze_turn",
+        build_traced_router("after_analyze_turn", after_analyze_turn, deps),
         {
             "ask_clarification": "ask_clarification",
             "collect_lead_data": "collect_lead_data",
-            "classify_intent": "classify_intent",
+            "capture_memory_entities": "capture_memory_entities",
         },
     )
     workflow.add_edge("ask_clarification", END)
-    workflow.add_edge("collect_lead_data", "synthesize")
     workflow.add_conditional_edges(
-        "classify_intent",
-        build_traced_router("after_classify_intent", after_classify_intent, deps),
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+        "capture_memory_entities",
+        build_traced_router("after_capture_memory", after_capture_memory, deps),
+        {
+            "memory_lookup": "memory_lookup",
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+        },
     )
+    workflow.add_conditional_edges(
+        "memory_lookup",
+        build_traced_router("after_memory_lookup", after_memory_lookup, deps),
+        {
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+            "end": END,
+        },
+    )
+    workflow.add_edge("collect_lead_data", "synthesize")
     workflow.add_conditional_edges(
         "route_next_intent",
         build_traced_router("after_route_next_intent", after_route_next_intent, deps),
         {
-            "extract_search_filters": "extract_search_filters",
+            "search": "search",
+            "describe_result_set": "describe_result_set",
+            "show_result_cards": "show_result_cards",
+            "focus_property": "focus_property",
             "financial_calc": "financial_calc",
             "compare_properties": "compare_properties",
             "mutate_comparison_set": "mutate_comparison_set",
@@ -118,7 +145,9 @@ def build_realtor_graph(deps: GraphDependencies):
             "lead_advisor": "lead_advisor",
         },
     )
-    workflow.add_edge("extract_search_filters", "search")
+    workflow.add_edge("describe_result_set", "check_queue")
+    workflow.add_edge("show_result_cards", "check_queue")
+    workflow.add_edge("focus_property", "check_queue")
     workflow.add_conditional_edges(
         "search",
         build_traced_router("after_search", after_search, deps),

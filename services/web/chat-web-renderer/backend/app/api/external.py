@@ -118,6 +118,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
     
     session_context = {
         "client_id": client_id,
+        "session_id": req.session_id or session_data.get("session_id"),
         "conversation_id": str(req.conversation_id) if req.conversation_id else session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
         "brand_project": session_data.get("brand_project"),
@@ -135,17 +136,20 @@ async def external_chat(req: ExternalChatRequest, request: Request):
             session=session_context,
         )
         
+        new_session_id = ai_response.get("session_id") or session_context.get("session_id")
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
         resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
-        if new_conversation_id:
+        if new_session_id or new_conversation_id:
             await session_manager.upsert_session(
                 client_id=client_id,
                 channel=channel,
                 channel_user_id=channel_user_id,
                 data={
+                    "session_id": str(new_session_id) if new_session_id else None,
                     "conversation_id": new_conversation_id,
                     "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
+                    "auth_user_id": session_context.get("auth_user_id"),
                 },
             )
         
@@ -181,7 +185,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
         policy_response = policy_handler.build_response(
             ai_text=ai_text,
             components=extracted_components,
-            session_id=str(new_conversation_id or "init"),
+            session_id=str(new_session_id or "init"),
         )
         
         components = []

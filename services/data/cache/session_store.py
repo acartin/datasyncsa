@@ -26,6 +26,10 @@ class SessionStore:
     async def set_state(self, client_id: str, session_id: str, payload: dict[str, object], ttl: int) -> None:
         await self.client.set(self.build_key(client_id, session_id), json.dumps(payload, default=str), ex=ttl)
 
+    async def delete_session(self, client_id: str, session_id: str) -> bool:
+        deleted = await self.client.delete(self.build_key(client_id, session_id))
+        return bool(deleted)
+
     async def delete_by_client(self, client_id: str) -> int:
         pattern = f"{client_id}:session:*:state"
         keys = [key async for key in self.client.scan_iter(match=pattern)]

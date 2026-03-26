@@ -6,9 +6,20 @@ from uuid import uuid4
 
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import ChatMessage
-from services.ai_runtime.domain.contracts import ChatRequest, ChatResponse, InternalMemoryResetResponse
+from services.ai_runtime.domain.contracts import (
+    ChatRequest,
+    ChatResponse,
+    InternalMemoryResetResponse,
+    InternalSessionResetResponse,
+)
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState, RealtorGraphState, build_base_state
+from services.ai_runtime.domain.state import (
+    BaseGraphState,
+    GenericGraphState,
+    MemoryLookupState,
+    RealtorGraphState,
+    build_base_state,
+)
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.runtime.turn_trace import (
     TurnTraceContext,
@@ -38,11 +49,35 @@ def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
                 "title": card.get("title"),
                 "price": card.get("price"),
                 "image_url": card.get("primary_image_url"),
+                "public_url": card.get("public_url"),
                 "city": card.get("province"),
                 "neighborhood": card.get("province"),
             }
         )
     return components
+
+
+def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
+    """Clear fields that belong to a single turn while keeping session memory alive."""
+
+    base_state.final_response = None
+    base_state.pending_clarification = None
+    base_state.clarification_attempts = 0
+    base_state.resolved_references = []
+    base_state.intent_queue = []
+    base_state.active_intent = None
+    base_state.completed_intents = []
+    base_state.turn_outputs = []
+    base_state.turn_analysis = None
+    base_state.lead_advisor.should_ask = False
+    base_state.lead_advisor.field_to_ask = None
+    base_state.memory.last_lookup = MemoryLookupState()
+
+    if isinstance(base_state, RealtorGraphState):
+        base_state.render_mode = None
+        base_state.cards_mode = None
+        base_state.ui_payload = None
+        base_state.search_attempts = 0
 
 
 class ConversationRuntime:
@@ -76,6 +111,12 @@ class ConversationRuntime:
         if existing_payload:
             state_cls = RealtorGraphState if tenant_config.vertical == "realtor" else GenericGraphState
             base_state = state_cls.model_validate(existing_payload)
+            base_state.tenant_config = tenant_config
+            base_state.capabilities = list(tenant_config.capabilities)
+            base_state.vertical = tenant_config.vertical
+            base_state.bridge = bridge
+            base_state.user_id = user_id
+            _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
             base_state.messages.append(ChatMessage(role="user", content=request.message))
             conversation_id = base_state.conversation_id
@@ -94,6 +135,7 @@ class ConversationRuntime:
                 base_state = RealtorGraphState.model_validate(state.model_dump())
             else:
                 base_state = GenericGraphState.model_validate(state.model_dump())
+            _reset_turn_scoped_state(base_state)
             conversation_id = base_state.conversation_id
 
         trace_context = TurnTraceContext(
@@ -177,4 +219,16 @@ class ConversationRuntime:
             client_id=client_id,
             conversations_deleted=conversations_deleted,
             cache_keys_deleted=cache_keys_deleted,
+        )
+
+    async def reset_session_memory(self, client_id: str, session_id: str) -> InternalSessionResetResponse:
+        state_deleted = await self.dependencies.session_store.delete_session(client_id, session_id)
+        lead_deleted = await self.dependencies.lead_store.delete_session(client_id, session_id)
+        trace_result = self.dependencies.trace_store.delete_session(client_id, session_id)
+        return InternalSessionResetResponse(
+            client_id=client_id,
+            session_id=session_id,
+            state_deleted=state_deleted,
+            lead_deleted=lead_deleted,
+            trace_deleted=bool(trace_result.get("deleted")),
         )

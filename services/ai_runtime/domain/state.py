@@ -10,12 +10,14 @@ from services.ai_runtime.domain.contracts import (
     Appointment,
     BridgeName,
     ChatMessage,
+    ConversationEntity,
     IntentDefinition,
     LeadExtracted,
     LeadPlaceholder,
     LeadScores,
     Property,
     TenantConfig,
+    TurnAnalysis,
     Vertical,
 )
 
@@ -24,6 +26,7 @@ class SearchFilters(BaseModel):
     ubicacion: str | None = None
     habitaciones: int | None = None
     banos: float | None = None
+    garage: int | None = None
     precio_max: float | None = None
     precio_min: float | None = None
     currency: str | None = None
@@ -58,6 +61,18 @@ class LeadAdvisorState(BaseModel):
     field_to_ask: str | None = None
 
 
+class MemoryLookupState(BaseModel):
+    handled: bool = False
+    key: str | None = None
+    answer: str | None = None
+    source: str | None = None
+
+
+class ConversationMemoryState(BaseModel):
+    entities: list[ConversationEntity] = Field(default_factory=list)
+    last_lookup: MemoryLookupState = Field(default_factory=MemoryLookupState)
+
+
 class BaseGraphState(BaseModel):
     """Shared state that exists from the first turn onward."""
 
@@ -80,9 +95,11 @@ class BaseGraphState(BaseModel):
     active_intent: IntentDefinition | None = None
     completed_intents: list[IntentDefinition] = Field(default_factory=list)
     turn_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    turn_analysis: TurnAnalysis | None = None
     cita: Appointment
     escalacion: EscalationState = Field(default_factory=EscalationState)
     lead_advisor: LeadAdvisorState = Field(default_factory=LeadAdvisorState)
+    memory: ConversationMemoryState = Field(default_factory=ConversationMemoryState)
     lead: LeadPlaceholder = Field(default_factory=LeadPlaceholder)
     final_response: str | None = None
 
@@ -135,4 +152,3 @@ def build_base_state(
         messages=[ChatMessage(role="user", content=initial_message)],
         cita=Appointment(client_id=client_id),
     )
-

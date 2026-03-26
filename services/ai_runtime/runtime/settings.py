@@ -19,6 +19,9 @@ class AISettings:
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
     llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
     llm_timeout_seconds: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
+    llm_context_cache_enabled: bool = os.getenv("LLM_CONTEXT_CACHE_ENABLED", "true").lower() == "true"
+    llm_context_cache_ttl_seconds: int = int(os.getenv("LLM_CONTEXT_CACHE_TTL_SECONDS", "1800"))
+    llm_context_cache_min_stable_chars: int = int(os.getenv("LLM_CONTEXT_CACHE_MIN_STABLE_CHARS", "2000"))
     turn_trace_enabled: bool = os.getenv("AI_TURN_TRACE_ENABLED", "true").lower() == "true"
     turn_trace_dir: str = os.getenv("AI_TURN_TRACE_DIR", "/app/log/turn-traces")
 

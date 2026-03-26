@@ -2,12 +2,65 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.contracts import Property, ReferenceDecision
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState
+from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState
+
+
+REFERENCE_CUES = (
+    "la primera",
+    "la segunda",
+    "la tercera",
+    "el primero",
+    "el segundo",
+    "el tercero",
+    "esa",
+    "ese",
+    "esta",
+    "este",
+    "aquella",
+    "aquel",
+    "la misma",
+    "el mismo",
+    "la de ",
+    "el de ",
+    "la del ",
+    "el del ",
+    "la mas ",
+    "la más ",
+    "el mas ",
+    "el más ",
+    "vimos",
+    "mostraste",
+    "mostrame otra",
+)
+
+
+def _looks_like_search_refinement(message: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (message or "").strip().lower())
+    if not normalized:
+        return False
+    if any(cue in normalized for cue in REFERENCE_CUES):
+        return False
+
+    direct_ref_pattern = re.compile(r"\b(esa|ese|esta|este|aquella|aquel|misma|mismo)\b")
+    if direct_ref_pattern.search(normalized):
+        return False
+
+    refinement_patterns = (
+        r"^en\s+[a-záéíóúñ0-9 .'-]+$",
+        r"^con\s+.+$",
+        r"^(maximo|máximo|minimo|mínimo|hasta|menos de|mas de|más de)\b",
+        r"\b(habitacion|habitaciones|cuarto|cuartos|bano|banos|baño|baños)\b",
+        r"\b(m2|mts|metros|metro|area|área|terreno|lote|tamano|tamaño)\b",
+        r"\b(precio|presupuesto|prima|cuota)\b",
+        r"\b(casa|apartamento|apartamentos|condominio|terreno|bodega|oficina|local)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in refinement_patterns)
 
 
 def _select_reference_candidate(items: list[Property], decision: ReferenceDecision) -> Property | None:
@@ -38,7 +91,14 @@ def _select_reference_candidate(items: list[Property], decision: ReferenceDecisi
 async def resolve_references(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     """Classify references with the LLM and resolve them to concrete entities in code."""
 
-    graph_state = BaseGraphState.model_validate(state)
+    graph_state = (
+        RealtorGraphState.model_validate(state)
+        if state.get("vertical") == "realtor"
+        else BaseGraphState.model_validate(state)
+    )
+    latest_message = graph_state.messages[-1].content
+    if _looks_like_search_refinement(latest_message):
+        return {"resolved_references": [], "pending_clarification": None}
     prompt = compose(
         "reference_classifier",
         graph_state.tenant_config,

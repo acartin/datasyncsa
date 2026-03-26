@@ -10,6 +10,26 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 Vertical = Literal["realtor", "healthcare", "legal"]
 BridgeName = Literal["property-bridge", "generic-bridge"]
+DialogueAct = Literal[
+    "new_search",
+    "refine_search",
+    "select_result",
+    "confirm_previous",
+    "reject_previous",
+    "ask_detail",
+    "compare",
+    "calculate",
+    "schedule",
+    "faq",
+    "document_query",
+    "memory_query",
+    "lead_capture",
+    "recommend",
+    "small_talk",
+    "unknown",
+]
+DetailAttributeKey = Literal["habitaciones", "banos", "area", "precio", "garage", "foto"]
+DetailScope = Literal["current_result_set", "resolved_reference"]
 ReferenceKind = Literal[
     "ORDINAL",
     "LAST_MENTIONED",
@@ -21,6 +41,9 @@ ReferenceKind = Literal[
 ]
 IntentStatus = Literal["pending", "running", "done", "failed", "skipped"]
 AppointmentType = Literal["presencial", "visita", "videollamada"]
+MemoryEntityStatus = Literal["explicit", "inferred", "confirmed"]
+MemoryEntityValueType = Literal["string", "number", "boolean", "list", "object"]
+MemoryLookupKey = Literal["nombre", "edad", "presupuesto", "email", "telefono"]
 
 
 class ChatMessage(BaseModel):
@@ -57,6 +80,7 @@ class TenantConfig(BaseModel):
     vertical: Vertical
     bot_name: str = "Datasyncsa AI"
     tone_prompt: str = ""
+    system_prompts: dict[str, str] = Field(default_factory=dict)
     capabilities: list[str] = Field(default_factory=list)
     redis_ttl_seconds: int = 3600
     business: TenantBusinessProfile
@@ -95,6 +119,7 @@ class PropertyLocation(BaseModel):
 class PropertyMeta(BaseModel):
     source_system: str | None = None
     source_property_ref: str | None = None
+    public_url: str | None = None
     ingested_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -144,6 +169,20 @@ class LeadExtracted(BaseModel):
     fecha_preferida: str | None = None
     tipo_cita: str | None = None
     appointment_intent: str | None = None
+
+
+class ConversationEntity(BaseModel):
+    """Durable conversational fact extracted from user turns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    value: Any
+    value_type: MemoryEntityValueType = "string"
+    confidence: float = 0
+    source_turn: int | None = None
+    source_text: str | None = None
+    status: MemoryEntityStatus = "explicit"
 
 
 class Appointment(BaseModel):
@@ -198,6 +237,18 @@ class IntentDefinition(BaseModel):
     output: dict[str, Any] | None = None
 
 
+class IntentPlanItem(BaseModel):
+    """Structured intent plan returned by analyze_turn before runtime IDs/status are assigned."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    priority: int
+    depends_on: list[str] = Field(default_factory=list)
+    condition: dict[str, Any] | None = None
+    skip_if_failed: bool = False
+
+
 class ReferenceDecision(BaseModel):
     """Structured output from the reference classifier prompt."""
 
@@ -210,6 +261,24 @@ class ReferenceDecision(BaseModel):
     location_hint: str | None = None
     history_hint: str | None = None
     clarification_target: str | None = None
+
+
+class TurnAnalysis(BaseModel):
+    """Structured understanding of a single user turn."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dialogue_act: DialogueAct = "unknown"
+    confidence: float = 0
+    needs_clarification: bool = False
+    clarification_target: str | None = None
+    reference: ReferenceDecision = Field(default_factory=lambda: ReferenceDecision(kind="NONE", confidence=0))
+    intent_plan: list[IntentPlanItem] = Field(default_factory=list)
+    filters_delta: dict[str, Any] = Field(default_factory=dict)
+    memory_lookup_key: MemoryLookupKey | None = None
+    reuse_current_filters: bool = False
+    detail_scope: DetailScope | None = None
+    detail_attribute_key: DetailAttributeKey | None = None
 
 
 class TextToSQLResult(BaseModel):
@@ -232,6 +301,7 @@ class CardPayload(BaseModel):
     bathrooms_clean: float
     sqm_clean: int | None = None
     primary_image_url: str | None = None
+    public_url: str | None = None
     province: str | None = None
 
 
@@ -296,3 +366,20 @@ class InternalMemoryResetResponse(BaseModel):
     client_id: str
     conversations_deleted: int
     cache_keys_deleted: int = 0
+
+
+class InternalSessionResetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    client_id: str = Field(validation_alias=AliasChoices("client_id", "clientId"))
+    session_id: str = Field(validation_alias=AliasChoices("session_id", "sessionId"))
+    reason: str | None = None
+
+
+class InternalSessionResetResponse(BaseModel):
+    status: str = "ok"
+    client_id: str
+    session_id: str
+    state_deleted: bool = False
+    lead_deleted: bool = False
+    trace_deleted: bool = False

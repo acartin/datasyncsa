@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.ai_runtime.config.geo_catalog import DEFAULT_COUNTRY_CODE, normalize_search_geo_filters
+from services.ai_runtime.config.property_type_catalog import normalize_property_type
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState, SearchFilters
@@ -34,6 +36,7 @@ def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def extract_search_filters(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
+    available_property_types = await deps.property_repository.load_property_types()
     prompt = compose(
         "search_filter_extractor",
         graph_state.tenant_config,
@@ -42,6 +45,7 @@ async def extract_search_filters(state: dict[str, Any], deps: GraphDependencies)
             "message": graph_state.messages[-1].content,
             "current_filters": graph_state.search_filters.model_dump(mode="json"),
             "resolved_references": graph_state.resolved_references,
+            "available_property_types": available_property_types,
         },
         include_tone=False,
     )
@@ -55,6 +59,18 @@ async def extract_search_filters(state: dict[str, Any], deps: GraphDependencies)
     for key, value in _normalize_payload(payload).items():
         if key in current_filters:
             merged_filters[key] = value
+
+    country_code = str(graph_state.tenant_config.metadata.get("country_code") or DEFAULT_COUNTRY_CODE)
+    merged_filters = normalize_search_geo_filters(
+        merged_filters,
+        message=graph_state.messages[-1].content,
+        country_code=country_code,
+    )
+    merged_filters["tipo"] = normalize_property_type(
+        merged_filters.get("tipo"),
+        message=graph_state.messages[-1].content,
+        available_types=available_property_types,
+    )
 
     normalized_filters = SearchFilters.model_validate(merged_filters)
     return {

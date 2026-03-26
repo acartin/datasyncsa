@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-from app.schemas.chat import InitRequest, InternalMemoryResetRequest
+from app.schemas.chat import InitRequest, InternalMemoryResetRequest, SessionResetRequest
 from app.schemas.internal_chat import InternalChatRequest
 from app.schemas.ui import SDUIResponse
 
@@ -113,6 +113,43 @@ async def chat_init(req: InitRequest):
     )
 
 
+@app.post("/chat/session/reset")
+async def chat_session_reset(req: SessionResetRequest):
+    client_id = str(req.client_id)
+    deleted = await session_manager.delete_session_multichannel(
+        client_id=client_id,
+        channel="web_html",
+        channel_user_id=req.channel_user_id,
+    )
+
+    runtime_reset = None
+    runtime_reset_error = None
+    if req.session_id:
+        try:
+            runtime_reset = await memory_reset_client.reset_runtime_session(
+                client_id=client_id,
+                session_id=str(req.session_id),
+                reason=req.reason or "new_chat",
+            )
+        except Exception as exc:  # pragma: no cover - best effort reset
+            runtime_reset_error = str(exc)
+            logger.warning(
+                "CHAT_SESSION_RESET runtime reset failed client_id=%s session_id=%s error=%s",
+                client_id,
+                req.session_id,
+                runtime_reset_error,
+            )
+
+    return {
+        "status": "ok",
+        "client_id": client_id,
+        "channel_user_id": req.channel_user_id,
+        "session_deleted": deleted,
+        "runtime_reset": runtime_reset,
+        "runtime_reset_error": runtime_reset_error,
+    }
+
+
 @app.post("/chat", response_model=SDUIResponse)
 async def chat_interaction(req: InternalChatRequest):
     """
@@ -130,6 +167,7 @@ async def chat_interaction(req: InternalChatRequest):
     channel_user_id = req.channel_user_id
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
+    incoming_session_id = str(req.session_id).strip() if req.session_id else None
     incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
     request_started = time.perf_counter()
 
@@ -141,19 +179,22 @@ async def chat_interaction(req: InternalChatRequest):
     
     session_context = {
         "client_id": client_id,
+        "session_id": incoming_session_id or session_data.get("session_id"),
         "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
         "brand_project": req.brand_project or session_data.get("brand_project"),
         "channel": channel,
         "channel_user_id": channel_user_id,
+        "auth_user_id": req.auth_user_id or session_data.get("auth_user_id"),
     }
     
     if metadata:
         session_context.update(metadata)
 
     logger.info(
-        "CHAT_RENDERER_INBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
-        "session_conversation_id=%s resolved_conversation_id=%s frontend_runtime_conversation_id=%s "
+        "CHAT_RENDERER_INBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_session_id=%s "
+        "stored_session_id=%s resolved_session_id=%s incoming_conversation_id=%s session_conversation_id=%s "
+        "resolved_conversation_id=%s frontend_runtime_session_id=%s frontend_runtime_conversation_id=%s "
         "frontend_stored_conversation_id=%s frontend_had_stored_conversation_id=%s "
         "frontend_runtime_channel_user_id=%s frontend_stored_channel_user_id=%s "
         "frontend_had_stored_channel_user_id=%s frontend_had_frontend_state=%s frontend_had_window_state=%s "
@@ -162,9 +203,13 @@ async def chat_interaction(req: InternalChatRequest):
         client_id,
         channel,
         channel_user_id,
+        incoming_session_id or "-",
+        session_data.get("session_id") or "-",
+        session_context.get("session_id") or "-",
         incoming_conversation_id or "-",
         session_data.get("conversation_id") or "-",
         session_context.get("conversation_id") or "-",
+        metadata.get("frontend_runtime_session_id") or "-",
         metadata.get("frontend_runtime_conversation_id") or "-",
         metadata.get("frontend_stored_conversation_id") or "-",
         metadata.get("frontend_had_stored_conversation_id"),
@@ -182,34 +227,42 @@ async def chat_interaction(req: InternalChatRequest):
     try:
         ai_response = await inference_client.chat(user_query=req.message_text, session=session_context)
         
+        new_session_id = ai_response.get("session_id") or session_context.get("session_id")
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
         resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
-        if new_conversation_id:
+        if new_session_id or new_conversation_id:
             await session_manager.upsert_session(
                 client_id=client_id,
                 channel=channel,
                 channel_user_id=channel_user_id,
                 data={
+                    "session_id": str(new_session_id) if new_session_id else None,
                     "conversation_id": new_conversation_id,
                     "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
+                    "auth_user_id": session_context.get("auth_user_id"),
                     "last_interaction": datetime.now(timezone.utc).isoformat(),
                 },
             )
 
         logger.info(
-            "CHAT_RENDERER_OUTBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
-            "resolved_conversation_id=%s outgoing_conversation_id=%s conversation_reused=%s "
+            "CHAT_RENDERER_OUTBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_session_id=%s "
+            "resolved_session_id=%s outgoing_session_id=%s incoming_conversation_id=%s resolved_conversation_id=%s "
+            "outgoing_conversation_id=%s session_reused=%s conversation_reused=%s "
             "session_fallback_used=%s components_count=%s answer_chars=%s latency_ms=%.1f",
             trace_id or "-",
             client_id,
             channel,
             channel_user_id,
+            incoming_session_id or "-",
+            session_context.get("session_id") or "-",
+            new_session_id or "-",
             incoming_conversation_id or "-",
             session_context.get("conversation_id") or "-",
             new_conversation_id or "-",
+            bool(incoming_session_id and str(incoming_session_id) == str(new_session_id)),
             bool(incoming_conversation_id and str(incoming_conversation_id) == str(new_conversation_id)),
-            bool((not incoming_conversation_id) and session_data.get("conversation_id")),
+            bool(((not incoming_session_id) and session_data.get("session_id")) or ((not incoming_conversation_id) and session_data.get("conversation_id"))),
             len(ai_response.get("components") or []),
             len((ai_response.get("answer") or "").strip()),
             (time.perf_counter() - request_started) * 1000.0,
@@ -261,7 +314,7 @@ async def chat_interaction(req: InternalChatRequest):
         policy_response = policy_handler.build_response(
             ai_text=ai_text,
             components=extracted_components,
-            session_id=str(new_conversation_id or "init"),
+            session_id=str(new_session_id or "init"),
         )
         
         from app.schemas.ui import BaseComponent
@@ -282,6 +335,7 @@ async def chat_interaction(req: InternalChatRequest):
                 final_components.append(ChatMessage(text=comp_data.get("text", ""), sender="bot"))
 
         response_meta = {
+            "session_id": str(new_session_id or ""),
             "conversation_id": str(new_conversation_id or ""),
             "lead_id": ai_response.get("lead_id"),
             "intent": ai_response.get("intent"),
@@ -294,7 +348,7 @@ async def chat_interaction(req: InternalChatRequest):
         response_meta = {k: v for k, v in response_meta.items() if v is not None}
 
         return SDUIResponse(
-            session_id=str(new_conversation_id or "init"),
+            session_id=str(new_session_id or "init"),
             branding=branding,
             components=final_components,
             meta=response_meta,

@@ -21,6 +21,7 @@ async def ask_clarification(state: dict[str, Any], deps: GraphDependencies) -> d
             "pending_clarification": graph_state.pending_clarification,
             "clarification_attempts": graph_state.clarification_attempts,
         },
+        include_tone=True,
     )
     question = await deps.llm.synthesize_response(prompt)
     return {
