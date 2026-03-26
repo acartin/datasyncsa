@@ -18,6 +18,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+log/
+**/turn-traces/
 
 # Python Cache
 __pycache__/
