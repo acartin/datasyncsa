@@ -78,6 +78,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
         base_state.cards_mode = None
         base_state.ui_payload = None
         base_state.search_attempts = 0
+        base_state.effective_search_filters = None
 
 
 class ConversationRuntime:

@@ -114,6 +114,7 @@ class RealtorGraphState(BaseGraphState):
     """State for the full realtor graph."""
 
     search_filters: SearchFilters = Field(default_factory=SearchFilters)
+    effective_search_filters: SearchFilters | None = None
     inventory: list[Property] = Field(default_factory=list)
     last_search_results: list[Property] = Field(default_factory=list)
     last_mentioned: Property | None = None

@@ -20,13 +20,18 @@ def after_capture_memory(state: dict[str, object]) -> str:
     analysis = TurnAnalysis.model_validate(graph_state.turn_analysis or {})
     if analysis.memory_lookup_key:
         return "memory_lookup"
+    if analysis.dialogue_act == "inventory_probe":
+        return "synthesize"
     return "route_next_intent" if graph_state.intent_queue else "lead_advisor"
 
 
 def after_memory_lookup(state: dict[str, object]) -> str:
     graph_state = BaseGraphState.model_validate(state)
+    analysis = TurnAnalysis.model_validate(graph_state.turn_analysis or {})
     if graph_state.memory.last_lookup.handled:
         return "end"
+    if analysis.dialogue_act == "inventory_probe":
+        return "synthesize"
     return "route_next_intent" if graph_state.intent_queue else "lead_advisor"
 
 

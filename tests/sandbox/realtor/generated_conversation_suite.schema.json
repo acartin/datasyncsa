@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://datasyncsa.local/realtor/generated_conversation_suite.schema.json",
+  "title": "Generated Realtor Conversation Suite",
+  "type": "object",
+  "required": ["suite_id", "conversations"],
+  "properties": {
+    "suite_id": {
+      "type": "string"
+    },
+    "suite_type": {
+      "type": "string",
+      "enum": ["generated", "regression", "manual"]
+    },
+    "generator_notes": {
+      "type": "string"
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "expect": {
+          "$ref": "#/$defs/expectation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "conversations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/conversation"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "expectation": {
+      "type": "object",
+      "properties": {
+        "answer_contains_any": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "answer_contains_all": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "answer_excludes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "min_components": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_components": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "require_cards": {
+          "type": "boolean"
+        },
+        "expected_render_mode": {
+          "type": ["string", "null"]
+        },
+        "expected_cards_mode": {
+          "type": ["string", "null"]
+        },
+        "expected_dialogue_act_any": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_turn_output_types_any": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_search_match_scope_any": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["exact", "relaxed", "none"] }
+        },
+        "manual_review_focus": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "turn": {
+      "type": "object",
+      "required": ["user"],
+      "properties": {
+        "user": {
+          "type": "string"
+        },
+        "expect": {
+          "$ref": "#/$defs/expectation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "conversation": {
+      "type": "object",
+      "required": ["id", "description", "turns"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "turns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/turn"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

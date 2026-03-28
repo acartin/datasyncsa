@@ -1,0 +1,456 @@
+{
+  "suite_id": "realtor_generated_suite_01",
+  "suite_type": "generated",
+  "generator_notes": "Suite base de 20 conversaciones variadas para estresar presupuesto, referencias, memoria, FAQ, policy y follow-ups.",
+  "defaults": {
+    "expect": {
+      "answer_excludes": [
+        "seguimos viendo"
+      ]
+    }
+  },
+  "conversations": [
+    {
+      "id": "budget_near_match_curridabat",
+      "description": "Presupuesto duro con posible opcion cercana en la misma zona.",
+      "tags": ["budget", "near_match", "curridabat"],
+      "turns": [
+        {
+          "user": "Quiero una casa de menos de 240,000 en Curridabat",
+          "expect": {
+            "answer_contains_any": ["curridabat", "240,000", "opcion", "presupuesto"],
+            "manual_review_focus": [
+              "si hay opcion cercana, debe decirlo como cercana y no como match exacto"
+            ]
+          }
+        },
+        {
+          "user": "Y cumple exactamente ese monto?",
+          "expect": {
+            "answer_excludes": ["si, cumple exacto"],
+            "manual_review_focus": [
+              "confirmar que no mienta sobre cumplimiento exacto del monto"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hard_budget_no_exact_curridabat",
+      "description": "Sin match exacto, el bot debe ofrecer siguiente paso sin inventar resultados.",
+      "tags": ["budget", "no_exact"],
+      "turns": [
+        {
+          "user": "Quiero una casa de menos de 200,000 en Curridabat",
+          "expect": {
+            "answer_contains_any": ["curridabat", "200,000", "no encontr", "ajust"],
+            "require_cards": false
+          }
+        },
+        {
+          "user": "Si",
+          "expect": {
+            "answer_contains_any": ["no encontr", "ajust", "otra zona", "criterios"],
+            "require_cards": false
+          }
+        },
+        {
+          "user": "Que encontraste?",
+          "expect": {
+            "answer_excludes": ["195,000", "265,000", "te mostre"],
+            "require_cards": false,
+            "manual_review_focus": [
+              "no debe revivir una propiedad vieja si la busqueda quedo vacia"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "crc_budget_palos",
+      "description": "Monto coloquial en colones.",
+      "tags": ["currency", "crc"],
+      "turns": [
+        {
+          "user": "Busco una casa en Heredia por unos 60 palos",
+          "expect": {
+            "answer_contains_any": ["heredia", "casa", "presupuesto", "opciones"],
+            "manual_review_focus": [
+              "validar que interprete 60 palos como CRC y no como USD"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "usd_budget_k",
+      "description": "Monto corto con k en contexto inmobiliario.",
+      "tags": ["currency", "usd"],
+      "turns": [
+        {
+          "user": "Quiero apartamento en Escazu por 150k",
+          "expect": {
+            "answer_contains_any": ["escaz", "apart", "150"],
+            "manual_review_focus": [
+              "validar que interprete 150k como USD"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "location_refine_after_search",
+      "description": "Cambio de zona sobre una busqueda viva.",
+      "tags": ["location", "refine_search"],
+      "turns": [
+        {
+          "user": "Quiero ver casas en Heredia",
+          "expect": {
+            "answer_contains_any": ["heredia", "te voy a mostrar", "opciones"],
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Mejor en Curridabat",
+          "expect": {
+            "answer_contains_any": ["curridabat", "opciones", "busqueda"],
+            "manual_review_focus": [
+              "no debe arrastrar Heredia como si siguiera siendo la zona activa"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ordinal_focus_second",
+      "description": "Seleccion ordinal de una card ya mostrada.",
+      "tags": ["reference", "ordinal"],
+      "turns": [
+        {
+          "user": "Quiero ver casas en Heredia con tres habitaciones",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "La segunda",
+          "expect": {
+            "answer_contains_any": ["habitaciones", "ba", "m2", "propiedad"],
+            "require_cards": false,
+            "manual_review_focus": [
+              "debe tratarlo como seleccion/focus, no como comparacion automatica"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask_bathrooms_current_set",
+      "description": "Pregunta de detalle sobre el set visible.",
+      "tags": ["detail", "result_set"],
+      "turns": [
+        {
+          "user": "Estoy interesado en una casa en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Cuantos banos tienen?",
+          "expect": {
+            "answer_contains_any": ["ba", "tienen"],
+            "require_cards": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "ask_garage_current_set",
+      "description": "Pregunta de estacionamientos sobre el set visible.",
+      "tags": ["detail", "garage"],
+      "turns": [
+        {
+          "user": "Ando buscando una casa con 2 habitaciones en Heredia y con dos estacionamientos",
+          "expect": {
+            "answer_contains_any": ["heredia", "casa", "estacion"],
+            "manual_review_focus": [
+              "validar que garage vaya como filtro canonico y no como amenidad suelta"
+            ]
+          }
+        },
+        {
+          "user": "Cuantos estacionamientos tienen?",
+          "expect": {
+            "answer_contains_any": ["estacion", "parqueo", "cochera", "garage"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "show_photo_single_card",
+      "description": "Ver foto o ficha de una sola propiedad enfocada.",
+      "tags": ["photo", "single_card"],
+      "turns": [
+        {
+          "user": "Busco una casa en Curridabat",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Puedo ver la foto?",
+          "expect": {
+            "require_cards": true,
+            "answer_contains_any": ["ficha", "propiedad", "foto", "imagen"],
+            "manual_review_focus": [
+              "si no hay imagen, debe decirlo sin perder el contexto"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "memory_name_roundtrip",
+      "description": "Guardar y recuperar nombre del usuario.",
+      "tags": ["memory", "name"],
+      "turns": [
+        {
+          "user": "Me llamo Alvaro",
+          "expect": {
+            "manual_review_focus": [
+              "captura de nombre sin responder como si fuera memory_query"
+            ]
+          }
+        },
+        {
+          "user": "Recordas como me llamo?",
+          "expect": {
+            "answer_contains_any": ["alvaro", "te llamas", "me dijiste"],
+            "require_cards": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "memory_age_roundtrip",
+      "description": "Guardar y recuperar edad.",
+      "tags": ["memory", "age"],
+      "turns": [
+        {
+          "user": "Tengo 50 anos",
+          "expect": {
+            "manual_review_focus": [
+              "captura de edad como entidad conversacional"
+            ]
+          }
+        },
+        {
+          "user": "Que edad tengo?",
+          "expect": {
+            "answer_contains_any": ["50", "anos", "años"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "inventory_probe_count",
+      "description": "Bloqueo de consulta competitiva de conteo.",
+      "tags": ["policy", "inventory_probe"],
+      "turns": [
+        {
+          "user": "Cuantas propiedades manejas en Heredia?",
+          "expect": {
+            "require_cards": false,
+            "answer_contains_any": ["no te las puedo responder", "te puedo ayudar a buscar"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "inventory_probe_average_price",
+      "description": "Bloqueo de consulta competitiva de promedio.",
+      "tags": ["policy", "inventory_probe"],
+      "turns": [
+        {
+          "user": "Dame un promedio de precio de tus casas",
+          "expect": {
+            "require_cards": false,
+            "answer_contains_any": ["no te las puedo responder", "te puedo ayudar a buscar"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recommendation_then_challenge",
+      "description": "Recomendacion y objecion a la inferencia.",
+      "tags": ["recommend", "reject_previous"],
+      "turns": [
+        {
+          "user": "Quiero casas en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Cual me recomiendas?",
+          "expect": {
+            "answer_contains_any": ["me inclinaria", "de las opciones", "recomend"],
+            "manual_review_focus": [
+              "no debe inventar preferencias del usuario"
+            ]
+          }
+        },
+        {
+          "user": "Y como sabes eso?",
+          "expect": {
+            "answer_contains_any": ["tenes razon", "me base", "datos visibles", "opciones"],
+            "answer_excludes": ["hola", "en que te puedo ayudar"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "faq_business_scope",
+      "description": "Pregunta general sobre la agencia.",
+      "tags": ["faq", "rag_agencia"],
+      "turns": [
+        {
+          "user": "Hola, a que te dedicas?",
+          "expect": {
+            "answer_contains_any": ["compra", "venta", "alquiler", "propiedades"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "faq_off_domain_helados",
+      "description": "Pregunta fuera de dominio que debe reencauzar.",
+      "tags": ["off_domain"],
+      "turns": [
+        {
+          "user": "Vendes helados?",
+          "expect": {
+            "answer_contains_any": ["propiedades", "servicios inmobiliarios", "te ayudo"],
+            "answer_excludes": ["si, vendemos helados"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "document_query_bono",
+      "description": "Consulta documental sobre bono o tramites.",
+      "tags": ["documents", "rag_docs"],
+      "turns": [
+        {
+          "user": "Que requisitos piden para bono de vivienda?",
+          "expect": {
+            "answer_contains_any": ["requis", "bono", "vivienda"],
+            "manual_review_focus": [
+              "si no hay documento suficiente, debe responder con cautela y no inventar"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "compare_two_visible_properties",
+      "description": "Comparacion explicita entre cards visibles.",
+      "tags": ["compare", "reference"],
+      "turns": [
+        {
+          "user": "Quiero ver casas en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Compara la primera con la segunda",
+          "expect": {
+            "answer_contains_any": ["compar", "habitaciones", "precio", "area", "ba"],
+            "require_cards": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "show_cards_after_text_followup",
+      "description": "Pedir cards despues de una respuesta textual.",
+      "tags": ["cards", "follow_up"],
+      "turns": [
+        {
+          "user": "Busco una casa en Curridabat",
+          "expect": {
+            "manual_review_focus": [
+              "puede salir card unica o respuesta textual, pero debe mantener el foco"
+            ]
+          }
+        },
+        {
+          "user": "Puedo ver la ficha?",
+          "expect": {
+            "require_cards": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "confirm_previous_describe_results",
+      "description": "Afirmativo corto que debe continuar desde el contexto actual.",
+      "tags": ["confirm_previous"],
+      "turns": [
+        {
+          "user": "Tengo interes en una casa en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Si",
+          "expect": {
+            "answer_excludes": ["Hola. ¿En que te puedo ayudar hoy?", "Hola. ¿En qué te puedo ayudar hoy?"],
+            "manual_review_focus": [
+              "debe tomarlo como continuidad del turno anterior, no como reinicio"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "new_search_should_drop_old_filters",
+      "description": "Nueva busqueda no debe arrastrar filtros viejos que ya no aplican.",
+      "tags": ["search_reset", "filters"],
+      "turns": [
+        {
+          "user": "Quiero una casa en Heredia con dos habitaciones y dos estacionamientos",
+          "expect": {
+            "answer_contains_any": ["heredia", "casa"]
+          }
+        },
+        {
+          "user": "Ahora mejor busco un lote en Guanacaste",
+          "expect": {
+            "answer_excludes": ["dos habitaciones", "estacionamientos", "cochera"],
+            "manual_review_focus": [
+              "la nueva busqueda debe reemplazar el contexto viejo"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ambiguous_money_needs_care",
+      "description": "Monto ambiguo que no deberia inventar moneda alegremente.",
+      "tags": ["currency", "ambiguity"],
+      "turns": [
+        {
+          "user": "Busco una casa maximo 180 mil en Alajuela",
+          "expect": {
+            "manual_review_focus": [
+              "si no tiene contexto de moneda, deberia aclarar o actuar con mucha cautela"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ BridgeName = Literal["property-bridge", "generic-bridge"]
 DialogueAct = Literal[
     "new_search",
     "refine_search",
+    "inventory_probe",
     "select_result",
     "confirm_previous",
     "reject_previous",

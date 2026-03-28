@@ -1,0 +1,104 @@
+{
+  "suite_id": "realtor_manual_suite_01",
+  "suite_type": "manual",
+  "generator_notes": "Suite manual corta para smoke de recorridos representativos y revisiones humanas de tono/contexto.",
+  "defaults": {
+    "expect": {
+      "answer_excludes": [
+        "seguimos viendo"
+      ]
+    }
+  },
+  "conversations": [
+    {
+      "id": "manual_smoke_search_focus_compare",
+      "description": "Smoke manual de busqueda, seleccion ordinal y comparacion visible.",
+      "tags": ["manual", "smoke", "search", "compare"],
+      "turns": [
+        {
+          "user": "Quiero ver casas en Heredia",
+          "expect": {
+            "require_cards": true,
+            "expected_dialogue_act_any": [
+              "new_search"
+            ]
+          }
+        },
+        {
+          "user": "La segunda",
+          "expect": {
+            "answer_contains_any": [
+              "habitaciones",
+              "baños",
+              "m²",
+              "propiedad"
+            ],
+            "expected_dialogue_act_any": [
+              "select_result"
+            ],
+            "manual_review_focus": [
+              "verificar que el tono se sienta natural y no roboticamente templado"
+            ]
+          }
+        },
+        {
+          "user": "Compara la primera con la segunda",
+          "expect": {
+            "answer_contains_any": [
+              "primera",
+              "segunda",
+              "habitaciones",
+              "baños"
+            ],
+            "expected_dialogue_act_any": [
+              "compare"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "manual_smoke_recommendation_objection",
+      "description": "Smoke manual de recomendacion y objecion del usuario.",
+      "tags": ["manual", "smoke", "recommendation", "objection"],
+      "turns": [
+        {
+          "user": "Quiero casas en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Cual me recomiendas?",
+          "expect": {
+            "answer_contains_any": [
+              "me inclinaría",
+              "me inclinaria",
+              "recomiendo"
+            ],
+            "manual_review_focus": [
+              "no debe inventar preferencias ni sonar sobreactuado"
+            ]
+          }
+        },
+        {
+          "user": "Y como sabes eso?",
+          "expect": {
+            "answer_contains_any": [
+              "Tenes razon",
+              "tenes razon",
+              "me basé",
+              "me base"
+            ],
+            "answer_excludes": [
+              "la informacion la obtengo de la base de datos"
+            ],
+            "manual_review_focus": [
+              "la objecion debe responderse con admision natural y base factual visible"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

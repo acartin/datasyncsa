@@ -85,12 +85,17 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "capture_memory_entities",
         build_traced_router("after_capture_memory", after_capture_memory, deps),
-        {"memory_lookup": "memory_lookup", "route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+        {
+            "memory_lookup": "memory_lookup",
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+            "synthesize": "synthesize",
+        },
     )
     workflow.add_conditional_edges(
         "memory_lookup",
         build_traced_router("after_memory_lookup", after_memory_lookup, deps),
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END},
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "synthesize"},
     )
     workflow.add_edge("collect_lead_data", "synthesize")
     workflow.add_conditional_edges(

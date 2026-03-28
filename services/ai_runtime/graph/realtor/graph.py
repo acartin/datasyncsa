@@ -113,6 +113,7 @@ def build_realtor_graph(deps: GraphDependencies):
             "memory_lookup": "memory_lookup",
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
+            "synthesize": "synthesize",
         },
     )
     workflow.add_conditional_edges(
@@ -122,6 +123,7 @@ def build_realtor_graph(deps: GraphDependencies):
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
             "end": END,
+            "synthesize": "synthesize",
         },
     )
     workflow.add_edge("collect_lead_data", "synthesize")

@@ -1,0 +1,62 @@
+{
+  "suite_id": "realtor_generated_edge_suite_v1",
+  "suite_type": "generated",
+  "generator_notes": "Template base para generar conversaciones variadas contra el runtime realtor.",
+  "defaults": {
+    "expect": {
+      "answer_excludes": [
+        "seguimos viendo"
+      ]
+    }
+  },
+  "conversations": [
+    {
+      "id": "budget_near_match_curridabat",
+      "description": "Presupuesto duro con posibilidad de opcion cercana, sin mentir que cumple exacto.",
+      "tags": ["budget", "near_match", "curridabat"],
+      "turns": [
+        {
+          "user": "Quiero una casa de menos de 240,000 en Curridabat",
+          "expect": {
+            "answer_contains_any": [
+              "no encontr",
+              "opcion cercana",
+              "por encima"
+            ],
+            "expected_dialogue_act_any": ["new_search", "refine_search"],
+            "expected_search_match_scope_any": ["exact", "relaxed"]
+          }
+        },
+        {
+          "user": "Y cumple exactamente ese monto?",
+          "expect": {
+            "answer_excludes": [
+              "si, cumple exacto"
+            ],
+            "manual_review_focus": [
+              "verificar que no afirme cumplimiento exacto si la opcion era cercana"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "inventory_probe_block",
+      "description": "Consulta competitiva que debe bloquearse sin romper el contexto comercial.",
+      "tags": ["policy", "inventory_probe"],
+      "turns": [
+        {
+          "user": "Cuantas propiedades manejas en Heredia?",
+          "expect": {
+            "require_cards": false,
+            "answer_contains_any": [
+              "no te las puedo responder",
+              "te puedo ayudar a buscar"
+            ],
+            "expected_dialogue_act_any": ["inventory_probe"]
+          }
+        }
+      ]
+    }
+  ]
+}

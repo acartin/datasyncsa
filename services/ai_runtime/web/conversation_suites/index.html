@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Runtime Conversation Suites</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Conversation Suites</h1>
+          <p>Vista rápida de suites JSON, conversaciones y resultados de aceptación.</p>
+        </div>
+        <button id="reloadBundles" type="button">Recargar</button>
+      </header>
+
+      <section id="statusBanner" class="status-banner">Cargando bundles...</section>
+
+      <section class="suite-type-toolbar">
+        <div class="suite-type-group" role="tablist" aria-label="Tipo de suite">
+          <button id="filterAll" class="suite-filter active" type="button" data-suite-type="all">All</button>
+          <button id="filterGenerated" class="suite-filter" type="button" data-suite-type="generated">Generated</button>
+          <button id="filterRegression" class="suite-filter" type="button" data-suite-type="regression">Regression</button>
+          <button id="filterManual" class="suite-filter" type="button" data-suite-type="manual">Manual</button>
+        </div>
+        <div id="suiteTypeMeta" class="meta"></div>
+      </section>
+
+      <main class="layout">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Bundles</h2>
+            <span id="bundlesMeta" class="meta"></span>
+          </div>
+          <div id="bundlesList" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Conversaciones</h2>
+            <span id="conversationsMeta" class="meta"></span>
+          </div>
+          <div id="conversationsList" class="list"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <h2>Detalle</h2>
+            <div class="detail-actions">
+              <span id="detailMeta" class="meta"></span>
+              <a id="openTurnTrace" class="trace-link disabled" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">Abrir en Turn Trace</a>
+            </div>
+          </div>
+          <div id="conversationSummary" class="summary-card empty">Selecciona un bundle y una conversacion.</div>
+          <div id="turnsList" class="turns"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/app.js" defer></script>
+  </body>
+</html>

@@ -121,6 +121,9 @@ function restoreFormState() {
   els.clientId.value = params.get("client_id") || localStorage.getItem(STORAGE_KEYS.clientId) || "";
   els.internalToken.value = localStorage.getItem(STORAGE_KEYS.internalToken) || "";
   state.clientId = els.clientId.value.trim();
+  state.sessionId = params.get("session_id") || "";
+  const rawTurn = params.get("turn");
+  state.turn = rawTurn ? Number(rawTurn) : null;
 }
 
 function renderClients() {
@@ -326,8 +329,8 @@ async function loadClients() {
 async function loadSessions() {
   state.clientId = els.clientId.value.trim();
   persistFormState();
-  state.sessionId = "";
-  state.turn = null;
+  const requestedSessionId = state.sessionId;
+  const requestedTurn = state.turn;
   state.sessions = [];
   state.turns = [];
   state.trace = null;
@@ -347,12 +350,22 @@ async function loadSessions() {
       { requireAuth: true }
     );
     state.sessions = payload.sessions || [];
+    if (requestedSessionId && state.sessions.some((session) => session.session_id === requestedSessionId)) {
+      state.sessionId = requestedSessionId;
+      state.turn = requestedTurn;
+    } else {
+      state.sessionId = "";
+      state.turn = null;
+    }
     renderClients();
     renderSessions();
     if (state.sessions.length) {
       setStatus(`Se cargaron ${state.sessions.length} sesiones para ${state.clientId}.`, "ok");
     } else {
       setStatus(`No encontré sesiones para ${state.clientId}.`, "warn");
+    }
+    if (state.sessionId) {
+      await loadTurns();
     }
   } catch (error) {
     els.sessionsList.innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
@@ -374,7 +387,13 @@ async function loadTurns() {
       { requireAuth: true }
     );
     state.turns = payload.turns || [];
+    if (state.turn != null && !state.turns.some((turn) => Number(turn.turn) === Number(state.turn))) {
+      state.turn = null;
+    }
     renderTurns();
+    if (state.turn != null) {
+      await loadTurnDetail();
+    }
   } catch (error) {
     els.turnsList.innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
     setStatus(error.message, "error");

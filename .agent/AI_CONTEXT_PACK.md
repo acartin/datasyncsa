@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-24T21:37:19Z`
+- Generated UTC: `2026-03-27T00:12:43Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-20`
-- Git commit: `67982d3`
+- Git branch: `HETZNER-LOCAL-2026-03-27`
+- Git commit: `819243b`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-24T21:37:19Z`
+- Generated UTC: `2026-03-27T00:12:43Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-20`
-- Git commit: `67982d3`
+- Git branch: `HETZNER-LOCAL-2026-03-27`
+- Git commit: `819243b`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -55,22 +55,22 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
+redis
 postgres
+ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
+etl-docs
+scoring-core
+scoring-core-worker
+etl-docs-worker
+portainer
+generic-bridge
+property-bridge
 admin-console-api
 admin-console-web
 datasyncsa-web
-redis
-etl-docs
-ai-runtime
-generic-bridge
-scoring-core
-property-bridge
 test-ui
-chat-web-renderer-api
-portainer
-scoring-core-worker
-chat-web-renderer-ui
-etl-docs-worker
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -104,21 +104,21 @@ etl-docs-worker
 
 ```text
 postgres
-admin-console-api
-admin-console-web
 redis
-etl-docs-worker
 ai-runtime
 property-bridge
-portainer
-chat-web-renderer-api
-etl-docs
-generic-bridge
 scoring-core
 scoring-core-worker
-test-ui
-chat-web-renderer-ui
 datasyncsa-web
+generic-bridge
+portainer
+test-ui
+admin-console-api
+admin-console-web
+chat-web-renderer-api
+etl-docs-worker
+chat-web-renderer-ui
+etl-docs
 ```
 ### `docker-compose.yml:1-220`
 
@@ -442,6 +442,7 @@ services:
 ### `.env.example:50-120`
 
 ```
+CHAT_HISTORY_MAX_MESSAGES=20
 SESSION_TTL_SECONDS=86400
 VERTICAL_CACHE_TTL_SECONDS=300
 
@@ -517,6 +518,9 @@ services/ai_runtime
 services/ai_runtime/__pycache__
 services/ai_runtime/config
 services/ai_runtime/config/__pycache__
+services/ai_runtime/config/geo
+services/ai_runtime/docs
+services/ai_runtime/docs/graphs
 services/ai_runtime/domain
 services/ai_runtime/domain/__pycache__
 services/ai_runtime/graph
@@ -549,11 +553,14 @@ services/ai_runtime/rag/documents
 services/ai_runtime/rag/documents/__pycache__
 services/ai_runtime/runtime
 services/ai_runtime/runtime/__pycache__
+services/ai_runtime/scripts
+services/ai_runtime/scripts/__pycache__
+services/ai_runtime/web
+services/ai_runtime/web/turn_trace
 services/ai_runtime/workers
 services/ai_runtime/workers/__pycache__
 services/ai_runtime/workers/lead-worker
 services/bridges
-services/bridges/_shared
 services/bridges/generic-bridge
 services/bridges/generic-bridge/__pycache__
 services/bridges/property-bridge
@@ -562,7 +569,6 @@ services/data
 services/data/__pycache__
 services/data/cache
 services/data/cache/__pycache__
-services/data/models
 services/data/repositories
 services/data/repositories/__pycache__
 services/etl-docs
@@ -577,6 +583,7 @@ services/etl-docs/tests/integration
 services/etl-docs/tests/smoke
 services/etl-docs/tests/unit
 services/scoring-core
+services/scoring-core/__pycache__
 services/scoring-core/app
 services/scoring-core/app/api
 services/scoring-core/app/core
@@ -672,22 +679,22 @@ services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py:36:if __
 services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/scoring-core/worker.py:31:if __name__ == "__main__":
 services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
-services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
-services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -706,6 +713,7 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 ```
 
 ## Rutas API Detectadas
@@ -718,22 +726,33 @@ services/bridges/generic-bridge/main.py:150:@app.post("/chat", response_model=Ge
 services/bridges/generic-bridge/main.py:256:@app.get("/health")
 services/bridges/generic-bridge/main.py:285:@app.get("/")
 services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:259:@router.get("/health")
+services/web/chat-web-renderer/backend/app/api/external.py:263:@router.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
 services/web/chat-web-renderer/backend/app/main.py:104:@app.post("/chat/init", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:116:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:315:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:329:@app.post("/internal/memory/reset")
+services/web/chat-web-renderer/backend/app/main.py:116:@app.post("/chat/session/reset")
+services/web/chat-web-renderer/backend/app/main.py:153:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:369:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:383:@app.post("/internal/memory/reset")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
-services/ai_runtime/api.py:26:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:31:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:45:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:36:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:41:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:55:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:64:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:73:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:78:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:83:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:91:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:99:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:107:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:114:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:123:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:137:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
 services/scoring-core/main.py:62:@app.get("/")
 services/scoring-core/app/api/scoring.py:50:@router.post("/scoring/jobs/enqueue", response_model=EnqueueScoreJobResponse)
 services/scoring-core/app/api/scoring.py:73:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
@@ -837,28 +856,6 @@ services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.ge
 services/web/admin-console/backend/app/modules/leads_v2/router.py:134:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:182:@router.get("/{lead_id}/scoring", response_model=ScoringValuesV2)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:203:@router.get("/schema/current", response_model=ScoringSchemaV2)
-services/web/admin-console/backend/app/main.py:56:@app.get("/health")
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.post("/pdfs/upload")
-services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
-services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
-services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/users/router.py:20:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/users/router.py:98:@router.get("/data", response_model=List[UserRow])
 services/web/admin-console/backend/app/modules/users/router.py:102:@router.get("/roles/simple-list")
@@ -866,6 +863,28 @@ services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("
 services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
+services/web/admin-console/backend/app/main.py:56:@app.get("/health")
+services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.post("/pdfs/upload")
+services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
+services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
+services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
+services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("/me/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
 ```
 
 ## AI Runtime
@@ -911,6 +930,9 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `config/prompt_composer.py`: tone + vertical + context.
 - `runtime/bootstrap.py`: wiring por defecto.
 - `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
+- `runtime/turn_trace.py`: trazado por turno para nodos, routers y LLM.
+- `docs/graphs/**`: diagramas exportados del `grafo_generico` y `grafo_realtor`.
+- `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
 - `graph/generic/**`: builder y nodos del vertical reducido.
 - `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
@@ -953,6 +975,20 @@ El estado esta modelado en `domain/state.py` y contiene:
   - `financial_context`
 
 ## LangGraph Control Loops
+
+Los diagramas renderizados del estado actual del runtime viven en `services/ai_runtime/docs/graphs/` y se regeneran desde `services/ai_runtime/scripts/export_graph_diagrams.py`.
+
+## Turn Trace
+
+Para desarrollo, `ai-runtime` registra una traza JSON por turno en `/app/log/turn-traces` y expone una consola en `/api/v1/debug/turn-trace/`.
+
+Cada turno registra:
+
+- inicio y cierre del turno
+- entrada y salida de cada nodo
+- decisiones de routers
+- prompts y respuestas del puerto LLM
+- resumen del estado antes y despues de cada paso
 
 ### Shared flow
 
@@ -1036,23 +1072,6 @@ Prompts incluidos:
   - `vertical/realtor/{plan,synthesis}_prompt.py`
   - `vertical/healthcare/{plan,synthesis}_prompt.py`
   - `vertical/legal/{plan,synthesis}_prompt.py`
-- realtor:
-  - `text_to_sql_prompt.py`
-  - `comparison_synthesizer_prompt.py`
-  - `recommendation_prompt.py`
-  - `appointment_data_collector_prompt.py`
-
-## Persistencia y Caches
-
-### Redis
-
-- `SessionStore`: estado del grafo
-- `LeadStore`: scores y campos extraidos
-- `TenantCache`: config y agentes
-
-### PostgreSQL
-
-- `TenantRepository`: config editable por tenant
 ```
 ### `services/ai_runtime/main.py`
 
@@ -1075,8 +1094,10 @@ app.include_router(router, prefix=settings.api_prefix)
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.ai_runtime.domain.contracts import (
@@ -1084,10 +1105,18 @@ from services.ai_runtime.domain.contracts import (
     ChatResponse,
     InternalMemoryResetRequest,
     InternalMemoryResetResponse,
+    InternalSessionResetRequest,
+    InternalSessionResetResponse,
 )
 from services.ai_runtime.runtime.bootstrap import runtime
 
 router = APIRouter()
+TURN_TRACE_WEB_ROOT = Path(__file__).resolve().parent / "web" / "turn_trace"
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 
 class HealthResponse(BaseModel):
@@ -1121,6 +1150,92 @@ async def internal_memory_reset(
 ) -> InternalMemoryResetResponse:
     _assert_internal_token(request)
     return await runtime.reset_client_memory(payload.client_id)
+
+
+@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+async def internal_session_reset(
+    payload: InternalSessionResetRequest,
+    request: Request,
+) -> InternalSessionResetResponse:
+    _assert_internal_token(request)
+    return await runtime.reset_session_memory(payload.client_id, payload.session_id)
+
+
+@router.get("/debug/turn-trace")
+async def turn_trace_console_redirect(request: Request) -> RedirectResponse:
+    return RedirectResponse(url=f"{request.url.path}/")
+
+
+@router.get("/debug/turn-trace/")
+async def turn_trace_console() -> FileResponse:
+    return FileResponse(TURN_TRACE_WEB_ROOT / "index.html", headers=NO_CACHE_HEADERS)
+
+
+@router.get("/debug/turn-trace/assets/{asset_path:path}")
+async def turn_trace_asset(asset_path: str) -> FileResponse:
+    resolved = (TURN_TRACE_WEB_ROOT / asset_path).resolve()
+    if not str(resolved).startswith(str(TURN_TRACE_WEB_ROOT.resolve())) or not resolved.exists():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(resolved, headers=NO_CACHE_HEADERS)
+
+
+@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+async def debug_turn_trace_sessions(client_id: str, request: Request) -> dict[str, object]:
+    return {
+        "client_id": client_id,
+        "sessions": runtime.dependencies.trace_store.list_sessions(client_id),
+    }
+
+
+@router.get("/debug/turn-traces/config")
+async def debug_turn_trace_config() -> dict[str, object]:
+    return {
+        "trace_enabled": runtime.dependencies.trace_store.enabled,
+        "token_required": False,
+    }
+
+
+@router.get("/debug/turn-traces/clients")
+async def debug_turn_trace_clients(request: Request) -> dict[str, object]:
+    return {
+        "clients": runtime.dependencies.trace_store.list_clients(),
+    }
+
+
+@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+async def debug_turn_trace_turns(client_id: str, session_id: str, request: Request) -> dict[str, object]:
+    return {
+        "client_id": client_id,
+        "session_id": session_id,
+        "turns": runtime.dependencies.trace_store.list_turns(client_id, session_id),
+    }
+
+
+@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+async def debug_turn_trace_delete_session(
+    client_id: str,
+    session_id: str,
+    request: Request,
+) -> dict[str, object]:
+    payload = runtime.dependencies.trace_store.delete_session(client_id, session_id)
+    return {
+        "client_id": client_id,
+        "session_id": session_id,
+        **payload,
+    }
+
+
+@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+async def debug_turn_trace_turn(
+    client_id: str,
+    session_id: str,
+    turn: int,
+    request: Request,
+) -> dict[str, object]:
+    payload = runtime.dependencies.trace_store.get_turn(client_id, session_id, turn)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Turn trace not found")
+    return payload
 ```
 ### `services/ai_runtime/runtime/settings.py`
 
@@ -1142,11 +1257,18 @@ class AISettings:
     session_ttl_seconds: int = int(os.getenv("AI_SESSION_TTL_SECONDS", "3600"))
     request_timeout_seconds: int = int(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "30"))
     mail_provider: str = os.getenv("AI_MAIL_PROVIDER", "placeholder")
-    llm_provider: str = os.getenv("AI_LLM_PROVIDER", "noop")
+    llm_provider: str = os.getenv("AI_LLM_PROVIDER", "auto")
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    llm_timeout_seconds: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
+    llm_context_cache_enabled: bool = os.getenv("LLM_CONTEXT_CACHE_ENABLED", "true").lower() == "true"
+    llm_context_cache_ttl_seconds: int = int(os.getenv("LLM_CONTEXT_CACHE_TTL_SECONDS", "1800"))
+    llm_context_cache_min_stable_chars: int = int(os.getenv("LLM_CONTEXT_CACHE_MIN_STABLE_CHARS", "2000"))
+    turn_trace_enabled: bool = os.getenv("AI_TURN_TRACE_ENABLED", "true").lower() == "true"
+    turn_trace_dir: str = os.getenv("AI_TURN_TRACE_DIR", "/app/log/turn-traces")
 
 
 settings = AISettings()
-
 ```
 ### `services/ai_runtime/runtime/bootstrap.py`
 
@@ -1161,8 +1283,10 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.rag.agency.repository import AgencyRAGRepository
 from services.ai_runtime.rag.documents.repository import DocumentsRAGRepository
-from services.ai_runtime.runtime.llm import NoopLLMPort
+from services.ai_runtime.runtime.llm import build_llm_port
 from services.ai_runtime.runtime.service import ConversationRuntime
+from services.ai_runtime.runtime.settings import settings
+from services.ai_runtime.runtime.turn_trace import FileTurnTraceStore, TracingLLMPort
 from services.data.cache.lead_store import LeadStore
 from services.data.cache.session_store import SessionStore
 from services.data.cache.tenant_cache import TenantCache
@@ -1191,13 +1315,15 @@ engine = build_engine()
 tenant_cache = TenantCache()
 tenant_repository = TenantRepository(engine)
 agent_repository = AgentRepository(engine)
+trace_store = FileTurnTraceStore(settings.turn_trace_dir, enabled=settings.turn_trace_enabled)
 tenant_loader = TenantLoader(
     tenant_repository=tenant_repository,
     agent_repository=agent_repository,
     tenant_cache=tenant_cache,
 )
+llm = TracingLLMPort(build_llm_port(settings), trace_store)
 dependencies = GraphDependencies(
-    llm=NoopLLMPort(),
+    llm=llm,
     session_store=SessionStore(),
     lead_store=LeadStore(),
     tenant_cache=tenant_cache,
@@ -1209,6 +1335,7 @@ dependencies = GraphDependencies(
     documents_rag_repository=DocumentsRAGRepository(engine),
     mailer=PlaceholderMailer(),
     worker_dispatcher=InlineWorkerDispatcher(),
+    trace_store=trace_store,
 )
 runtime = ConversationRuntime(
     tenant_loader=tenant_loader,
@@ -1227,10 +1354,30 @@ from uuid import uuid4
 
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import ChatMessage
-from services.ai_runtime.domain.contracts import ChatRequest, ChatResponse, InternalMemoryResetResponse
+from services.ai_runtime.domain.contracts import (
+    ChatRequest,
+    ChatResponse,
+    InternalMemoryResetResponse,
+    InternalSessionResetResponse,
+)
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState, RealtorGraphState, build_base_state
+from services.ai_runtime.domain.state import (
+    BaseGraphState,
+    GenericGraphState,
+    MemoryLookupState,
+    RealtorGraphState,
+    build_base_state,
+)
 from services.ai_runtime.graph.registry import GraphRegistry
+from services.ai_runtime.runtime.turn_trace import (
+    TurnTraceContext,
+    activate_turn_trace,
+    activate_latest_turn_state,
+    deactivate_turn_trace,
+    deactivate_latest_turn_state,
+    summarize_state,
+    utc_now_iso,
+)
 
 
 def _resolve_bridge(vertical: str, bridge: str | None) -> str:
@@ -1250,11 +1397,35 @@ def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
                 "title": card.get("title"),
                 "price": card.get("price"),
                 "image_url": card.get("primary_image_url"),
+                "public_url": card.get("public_url"),
                 "city": card.get("province"),
                 "neighborhood": card.get("province"),
             }
         )
     return components
+
+
+def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
+    """Clear fields that belong to a single turn while keeping session memory alive."""
+
+    base_state.final_response = None
+    base_state.pending_clarification = None
+    base_state.clarification_attempts = 0
+    base_state.resolved_references = []
+    base_state.intent_queue = []
+    base_state.active_intent = None
+    base_state.completed_intents = []
+    base_state.turn_outputs = []
+    base_state.turn_analysis = None
+    base_state.lead_advisor.should_ask = False
+    base_state.lead_advisor.field_to_ask = None
+    base_state.memory.last_lookup = MemoryLookupState()
+
+    if isinstance(base_state, RealtorGraphState):
+        base_state.render_mode = None
+        base_state.cards_mode = None
+        base_state.ui_payload = None
+        base_state.search_attempts = 0
 
 
 class ConversationRuntime:
@@ -1288,6 +1459,12 @@ class ConversationRuntime:
         if existing_payload:
             state_cls = RealtorGraphState if tenant_config.vertical == "realtor" else GenericGraphState
             base_state = state_cls.model_validate(existing_payload)
+            base_state.tenant_config = tenant_config
+            base_state.capabilities = list(tenant_config.capabilities)
+            base_state.vertical = tenant_config.vertical
+            base_state.bridge = bridge
+            base_state.user_id = user_id
+            _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
             base_state.messages.append(ChatMessage(role="user", content=request.message))
             conversation_id = base_state.conversation_id
@@ -1306,54 +1483,49 @@ class ConversationRuntime:
                 base_state = RealtorGraphState.model_validate(state.model_dump())
             else:
                 base_state = GenericGraphState.model_validate(state.model_dump())
+            _reset_turn_scoped_state(base_state)
             conversation_id = base_state.conversation_id
 
-        graph = self.graph_registry.get_graph(tenant_config.vertical, bridge, self.dependencies)
-        final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
-        final_state = (
-            RealtorGraphState.model_validate(final_payload)
-            if tenant_config.vertical == "realtor"
-            else GenericGraphState.model_validate(final_payload)
-        )
-        components = _build_components(final_state)
-        rag_outputs = [
-            item
-            for item in final_state.turn_outputs
-            if item.get("type") in {"rag_agencia", "rag_docs"}
-        ]
-        sources = [chunk for output in rag_outputs for chunk in output.get("chunks", [])]
-        await self.dependencies.session_store.set_state(
-            request.client_id,
-            session_id,
-            final_state.model_dump(mode="json"),
-            tenant_config.redis_ttl_seconds,
-        )
-        return ChatResponse(
+        trace_context = TurnTraceContext(
+            trace_id=str(uuid4()),
+            client_id=request.client_id,
             session_id=session_id,
             conversation_id=conversation_id,
-            client_id=request.client_id,
             vertical=tenant_config.vertical,
-            answer=final_state.final_response or "",
-            components=components,
-            sources=sources,
-            ui_payload=getattr(final_state, "ui_payload", None),
-            render_mode=getattr(final_state, "render_mode", None),
-            cards_mode=getattr(final_state, "cards_mode", None),
-            escalated=final_state.escalacion.solicitada,
-            scoring_status="disabled",
-            metadata={"bridge": bridge, "turn": final_state.current_turn},
+            bridge=bridge,
+            turn=base_state.current_turn,
+            user_id=user_id,
+            user_message=request.message,
+            started_at=utc_now_iso(),
         )
-
-    async def reset_client_memory(self, client_id: str) -> InternalMemoryResetResponse:
-        conversations_deleted = await self.dependencies.session_store.delete_by_client(client_id)
-        cache_keys_deleted = 0
-        cache_keys_deleted += await self.dependencies.lead_store.delete_by_client(client_id)
-        cache_keys_deleted += await self.dependencies.tenant_cache.delete_client_runtime(client_id)
-        return InternalMemoryResetResponse(
-            client_id=client_id,
-            conversations_deleted=conversations_deleted,
-            cache_keys_deleted=cache_keys_deleted,
+        token = activate_turn_trace(trace_context)
+        state_token = activate_latest_turn_state(base_state.model_dump(mode="json"))
+        self.dependencies.trace_store.start_turn(
+            trace_context,
+            request_metadata=request.metadata,
+            state_summary=summarize_state(base_state.model_dump(mode="json")),
         )
+        graph = self.graph_registry.get_graph(tenant_config.vertical, bridge, self.dependencies)
+        try:
+            final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
+            final_state = (
+                RealtorGraphState.model_validate(final_payload)
+                if tenant_config.vertical == "realtor"
+                else GenericGraphState.model_validate(final_payload)
+            )
+            components = _build_components(final_state)
+            rag_outputs = [
+                item
+                for item in final_state.turn_outputs
+                if item.get("type") in {"rag_agencia", "rag_docs"}
+            ]
+            sources = [chunk for output in rag_outputs for chunk in output.get("chunks", [])]
+            await self.dependencies.session_store.set_state(
+                request.client_id,
+                session_id,
+                final_state.model_dump(mode="json"),
+                tenant_config.redis_ttl_seconds,
+            )
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1370,12 +1542,14 @@ from services.ai_runtime.domain.contracts import (
     Appointment,
     BridgeName,
     ChatMessage,
+    ConversationEntity,
     IntentDefinition,
     LeadExtracted,
     LeadPlaceholder,
     LeadScores,
     Property,
     TenantConfig,
+    TurnAnalysis,
     Vertical,
 )
 
@@ -1384,6 +1558,7 @@ class SearchFilters(BaseModel):
     ubicacion: str | None = None
     habitaciones: int | None = None
     banos: float | None = None
+    garage: int | None = None
     precio_max: float | None = None
     precio_min: float | None = None
     currency: str | None = None
@@ -1418,6 +1593,18 @@ class LeadAdvisorState(BaseModel):
     field_to_ask: str | None = None
 
 
+class MemoryLookupState(BaseModel):
+    handled: bool = False
+    key: str | None = None
+    answer: str | None = None
+    source: str | None = None
+
+
+class ConversationMemoryState(BaseModel):
+    entities: list[ConversationEntity] = Field(default_factory=list)
+    last_lookup: MemoryLookupState = Field(default_factory=MemoryLookupState)
+
+
 class BaseGraphState(BaseModel):
     """Shared state that exists from the first turn onward."""
 
@@ -1440,9 +1627,11 @@ class BaseGraphState(BaseModel):
     active_intent: IntentDefinition | None = None
     completed_intents: list[IntentDefinition] = Field(default_factory=list)
     turn_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    turn_analysis: TurnAnalysis | None = None
     cita: Appointment
     escalacion: EscalationState = Field(default_factory=EscalationState)
     lead_advisor: LeadAdvisorState = Field(default_factory=LeadAdvisorState)
+    memory: ConversationMemoryState = Field(default_factory=ConversationMemoryState)
     lead: LeadPlaceholder = Field(default_factory=LeadPlaceholder)
     final_response: str | None = None
 
@@ -1495,7 +1684,6 @@ def build_base_state(
         messages=[ChatMessage(role="user", content=initial_message)],
         cita=Appointment(client_id=client_id),
     )
-
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -1535,36 +1723,38 @@ from services.ai_runtime.domain.state import GenericGraphState
 from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes import (
+    analyze_turn,
     ask_clarification,
+    capture_memory_entities,
     check_queue,
-    classify_intent,
     collect_lead_data,
     lead_advisor,
-    resolve_references,
+    memory_lookup,
     route_next_intent,
     synthesize,
 )
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
-from services.ai_runtime.graph._shared.routers.common import after_check_queue, after_classify_intent, after_resolve_references
+from services.ai_runtime.graph._shared.routers.common import (
+    after_analyze_turn,
+    after_capture_memory,
+    after_check_queue,
+    after_memory_lookup,
+)
 from services.ai_runtime.graph._shared.tools.mensajear import mensajear
-from services.ai_runtime.graph.generic.nodes.capabilities import assign_agent, collect_appointment_data, rag_agencia
+from services.ai_runtime.graph.generic.nodes.assign_agent_node import assign_agent
+from services.ai_runtime.graph.generic.nodes.collect_appointment_data_node import collect_appointment_data
+from services.ai_runtime.graph.generic.nodes.rag_agencia_node import rag_agencia
 from services.ai_runtime.graph.generic.routers.routes import after_collect_appointment_data, after_route_next_intent
-
-
-def _wrap_async(function, deps: GraphDependencies):
-    async def _inner(state: dict):
-        return await function(state, deps)
-
-    return _inner
+from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
 
 
 def _mail_node(deps: GraphDependencies):
-    async def _inner(state: dict):
+    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
         tenant_config = TenantConfig.model_validate(state["tenant_config"])
         graph_state = GenericGraphState.model_validate(state)
         output = (
             await mensajear(
-                dependencies=deps,
+                dependencies=runtime_deps,
                 client_id=state["client_id"],
                 tipo="appointment_confirmation",
                 destinatarios=[],
@@ -1577,44 +1767,55 @@ def _mail_node(deps: GraphDependencies):
             **complete_active_intent(graph_state, {"type": "mensajear", **output}),
         }
 
-    return _inner
+    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_generic_graph(deps: GraphDependencies):
     workflow = StateGraph(dict)
-    workflow.add_node("resolve_references", _wrap_async(resolve_references, deps))
-    workflow.add_node("ask_clarification", _wrap_async(ask_clarification, deps))
-    workflow.add_node("classify_intent", _wrap_async(classify_intent, deps))
-    workflow.add_node("route_next_intent", _wrap_async(route_next_intent, deps))
-    workflow.add_node("collect_lead_data", _wrap_async(collect_lead_data, deps))
-    workflow.add_node("rag_agencia", _wrap_async(rag_agencia, deps))
-    workflow.add_node("collect_appointment_data", _wrap_async(collect_appointment_data, deps))
-    workflow.add_node("assign_agent", _wrap_async(assign_agent, deps))
+    workflow.add_node("analyze_turn", build_traced_node("analyze_turn", analyze_turn, deps))
+    workflow.add_node("ask_clarification", build_traced_node("ask_clarification", ask_clarification, deps))
+    workflow.add_node("capture_memory_entities", build_traced_node("capture_memory_entities", capture_memory_entities, deps))
+    workflow.add_node("memory_lookup", build_traced_node("memory_lookup", memory_lookup, deps))
+    workflow.add_node("route_next_intent", build_traced_node("route_next_intent", route_next_intent, deps))
+    workflow.add_node("collect_lead_data", build_traced_node("collect_lead_data", collect_lead_data, deps))
+    workflow.add_node("rag_agencia", build_traced_node("rag_agencia", rag_agencia, deps))
+    workflow.add_node("collect_appointment_data", build_traced_node("collect_appointment_data", collect_appointment_data, deps))
+    workflow.add_node("assign_agent", build_traced_node("assign_agent", assign_agent, deps))
     workflow.add_node("mensajear", _mail_node(deps))
-    workflow.add_node("check_queue", _wrap_async(check_queue, deps))
-    workflow.add_node("lead_advisor", _wrap_async(lead_advisor, deps))
-    workflow.add_node("synthesize", _wrap_async(synthesize, deps))
+    workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
+    workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
+    workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
-    workflow.add_edge(START, "resolve_references")
+    workflow.add_edge(START, "analyze_turn")
     workflow.add_conditional_edges(
-        "resolve_references",
-        after_resolve_references,
+        "analyze_turn",
+        build_traced_router("after_analyze_turn", after_analyze_turn, deps),
         {
             "ask_clarification": "ask_clarification",
             "collect_lead_data": "collect_lead_data",
-            "classify_intent": "classify_intent",
+            "capture_memory_entities": "capture_memory_entities",
         },
     )
     workflow.add_edge("ask_clarification", END)
-    workflow.add_edge("collect_lead_data", "synthesize")
     workflow.add_conditional_edges(
-        "classify_intent",
-        after_classify_intent,
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+        "capture_memory_entities",
+        build_traced_router("after_capture_memory", after_capture_memory, deps),
+        {
+            "memory_lookup": "memory_lookup",
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+            "synthesize": "synthesize",
+        },
     )
     workflow.add_conditional_edges(
+        "memory_lookup",
+        build_traced_router("after_memory_lookup", after_memory_lookup, deps),
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "synthesize"},
+    )
+    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_conditional_edges(
         "route_next_intent",
-        after_route_next_intent,
+        build_traced_router("after_route_next_intent", after_route_next_intent, deps),
         {
             "rag_agencia": "rag_agencia",
             "collect_lead_data": "collect_lead_data",
@@ -1626,14 +1827,14 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_edge("rag_agencia", "check_queue")
     workflow.add_conditional_edges(
         "collect_appointment_data",
-        after_collect_appointment_data,
+        build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
         {"assign_agent": "assign_agent", "synthesize": "synthesize"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")
     workflow.add_conditional_edges(
         "check_queue",
-        after_check_queue,
+        build_traced_router("after_check_queue", after_check_queue, deps),
         {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
     )
     workflow.add_edge("lead_advisor", "synthesize")
@@ -1653,21 +1854,36 @@ from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes import (
+    analyze_turn,
     ask_clarification,
+    capture_memory_entities,
     check_queue,
-    classify_intent,
     collect_lead_data,
     lead_advisor,
-    resolve_references,
+    memory_lookup,
     route_next_intent,
     synthesize,
 )
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
-from services.ai_runtime.graph._shared.routers.common import after_check_queue, after_classify_intent, after_resolve_references
+from services.ai_runtime.graph._shared.routers.common import (
+    after_analyze_turn,
+    after_capture_memory,
+    after_check_queue,
+    after_memory_lookup,
+)
 from services.ai_runtime.graph._shared.tools.mensajear import mensajear
-from services.ai_runtime.graph.realtor.nodes.appointments import assign_agent, collect_appointment_data
-from services.ai_runtime.graph.realtor.nodes.decisioning import compare_properties, llm_recommend, mutate_comparison_set
-from services.ai_runtime.graph.realtor.nodes.search_and_cards import rag_agencia, rag_documents, render_cards, search
+from services.ai_runtime.graph.realtor.nodes.assign_agent_node import assign_agent
+from services.ai_runtime.graph.realtor.nodes.collect_appointment_data_node import collect_appointment_data
+from services.ai_runtime.graph.realtor.nodes.compare_properties_node import compare_properties
+from services.ai_runtime.graph.realtor.nodes.describe_result_set_node import describe_result_set
+from services.ai_runtime.graph.realtor.nodes.focus_property_node import focus_property
+from services.ai_runtime.graph.realtor.nodes.llm_recommend_node import llm_recommend
+from services.ai_runtime.graph.realtor.nodes.mutate_comparison_set_node import mutate_comparison_set
+from services.ai_runtime.graph.realtor.nodes.rag_agencia_node import rag_agencia
+from services.ai_runtime.graph.realtor.nodes.rag_documents_node import rag_documents
+from services.ai_runtime.graph.realtor.nodes.render_cards_node import render_cards
+from services.ai_runtime.graph.realtor.nodes.search_node import search
+from services.ai_runtime.graph.realtor.nodes.show_result_cards_node import show_result_cards
 from services.ai_runtime.graph.realtor.routers.routes import (
     after_collect_appointment_data,
     after_render_cards,
@@ -1675,21 +1891,15 @@ from services.ai_runtime.graph.realtor.routers.routes import (
     after_search,
 )
 from services.ai_runtime.graph.realtor.tools.financial_calc import financial_calc
-
-
-def _wrap_async(function, deps: GraphDependencies):
-    async def _inner(state: dict):
-        return await function(state, deps)
-
-    return _inner
+from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
 
 
 def _mail_node(deps: GraphDependencies):
-    async def _inner(state: dict):
+    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
         tenant_config = TenantConfig.model_validate(state["tenant_config"])
         graph_state = RealtorGraphState.model_validate(state)
         result = await mensajear(
-            dependencies=deps,
+            dependencies=runtime_deps,
             client_id=state["client_id"],
             tipo="appointment_confirmation",
             destinatarios=[],
@@ -1702,53 +1912,75 @@ def _mail_node(deps: GraphDependencies):
             **complete_active_intent(graph_state, output),
         }
 
-    return _inner
+    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_realtor_graph(deps: GraphDependencies):
     workflow = StateGraph(dict)
-    workflow.add_node("resolve_references", _wrap_async(resolve_references, deps))
-    workflow.add_node("ask_clarification", _wrap_async(ask_clarification, deps))
-    workflow.add_node("classify_intent", _wrap_async(classify_intent, deps))
-    workflow.add_node("route_next_intent", _wrap_async(route_next_intent, deps))
-    workflow.add_node("search", _wrap_async(search, deps))
-    workflow.add_node("render_cards", _wrap_async(render_cards, deps))
-    workflow.add_node("financial_calc", _wrap_async(financial_calc, deps))
-    workflow.add_node("compare_properties", _wrap_async(compare_properties, deps))
-    workflow.add_node("mutate_comparison_set", _wrap_async(mutate_comparison_set, deps))
-    workflow.add_node("collect_appointment_data", _wrap_async(collect_appointment_data, deps))
-    workflow.add_node("assign_agent", _wrap_async(assign_agent, deps))
-    workflow.add_node("rag_agencia", _wrap_async(rag_agencia, deps))
-    workflow.add_node("rag_documents", _wrap_async(rag_documents, deps))
-    workflow.add_node("collect_lead_data", _wrap_async(collect_lead_data, deps))
-    workflow.add_node("llm_recommend", _wrap_async(llm_recommend, deps))
+    workflow.add_node("analyze_turn", build_traced_node("analyze_turn", analyze_turn, deps))
+    workflow.add_node("ask_clarification", build_traced_node("ask_clarification", ask_clarification, deps))
+    workflow.add_node("capture_memory_entities", build_traced_node("capture_memory_entities", capture_memory_entities, deps))
+    workflow.add_node("memory_lookup", build_traced_node("memory_lookup", memory_lookup, deps))
+    workflow.add_node("route_next_intent", build_traced_node("route_next_intent", route_next_intent, deps))
+    workflow.add_node("describe_result_set", build_traced_node("describe_result_set", describe_result_set, deps))
+    workflow.add_node("show_result_cards", build_traced_node("show_result_cards", show_result_cards, deps))
+    workflow.add_node("focus_property", build_traced_node("focus_property", focus_property, deps))
+    workflow.add_node("search", build_traced_node("search", search, deps))
+    workflow.add_node("render_cards", build_traced_node("render_cards", render_cards, deps))
+    workflow.add_node("financial_calc", build_traced_node("financial_calc", financial_calc, deps))
+    workflow.add_node("compare_properties", build_traced_node("compare_properties", compare_properties, deps))
+    workflow.add_node("mutate_comparison_set", build_traced_node("mutate_comparison_set", mutate_comparison_set, deps))
+    workflow.add_node("collect_appointment_data", build_traced_node("collect_appointment_data", collect_appointment_data, deps))
+    workflow.add_node("assign_agent", build_traced_node("assign_agent", assign_agent, deps))
+    workflow.add_node("rag_agencia", build_traced_node("rag_agencia", rag_agencia, deps))
+    workflow.add_node("rag_documents", build_traced_node("rag_documents", rag_documents, deps))
+    workflow.add_node("collect_lead_data", build_traced_node("collect_lead_data", collect_lead_data, deps))
+    workflow.add_node("llm_recommend", build_traced_node("llm_recommend", llm_recommend, deps))
     workflow.add_node("mensajear", _mail_node(deps))
-    workflow.add_node("check_queue", _wrap_async(check_queue, deps))
-    workflow.add_node("lead_advisor", _wrap_async(lead_advisor, deps))
-    workflow.add_node("synthesize", _wrap_async(synthesize, deps))
+    workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
+    workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
+    workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
-    workflow.add_edge(START, "resolve_references")
+    workflow.add_edge(START, "analyze_turn")
     workflow.add_conditional_edges(
-        "resolve_references",
-        after_resolve_references,
+        "analyze_turn",
+        build_traced_router("after_analyze_turn", after_analyze_turn, deps),
         {
             "ask_clarification": "ask_clarification",
             "collect_lead_data": "collect_lead_data",
-            "classify_intent": "classify_intent",
+            "capture_memory_entities": "capture_memory_entities",
         },
     )
     workflow.add_edge("ask_clarification", END)
-    workflow.add_edge("collect_lead_data", "synthesize")
     workflow.add_conditional_edges(
-        "classify_intent",
-        after_classify_intent,
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+        "capture_memory_entities",
+        build_traced_router("after_capture_memory", after_capture_memory, deps),
+        {
+            "memory_lookup": "memory_lookup",
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+            "synthesize": "synthesize",
+        },
     )
     workflow.add_conditional_edges(
+        "memory_lookup",
+        build_traced_router("after_memory_lookup", after_memory_lookup, deps),
+        {
+            "route_next_intent": "route_next_intent",
+            "lead_advisor": "lead_advisor",
+            "end": END,
+            "synthesize": "synthesize",
+        },
+    )
+    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_conditional_edges(
         "route_next_intent",
-        after_route_next_intent,
+        build_traced_router("after_route_next_intent", after_route_next_intent, deps),
         {
             "search": "search",
+            "describe_result_set": "describe_result_set",
+            "show_result_cards": "show_result_cards",
+            "focus_property": "focus_property",
             "financial_calc": "financial_calc",
             "compare_properties": "compare_properties",
             "mutate_comparison_set": "mutate_comparison_set",
@@ -1761,12 +1993,19 @@ def build_realtor_graph(deps: GraphDependencies):
             "lead_advisor": "lead_advisor",
         },
     )
+    workflow.add_edge("describe_result_set", "check_queue")
+    workflow.add_edge("show_result_cards", "check_queue")
+    workflow.add_edge("focus_property", "check_queue")
     workflow.add_conditional_edges(
         "search",
-        after_search,
+        build_traced_router("after_search", after_search, deps),
         {"search": "search", "lead_advisor": "lead_advisor", "check_queue": "check_queue", "render_cards": "render_cards"},
     )
-    workflow.add_conditional_edges("render_cards", after_render_cards, {"check_queue": "check_queue"})
+    workflow.add_conditional_edges(
+        "render_cards",
+        build_traced_router("after_render_cards", after_render_cards, deps),
+        {"check_queue": "check_queue"},
+    )
     workflow.add_edge("financial_calc", "check_queue")
     workflow.add_edge("compare_properties", "check_queue")
     workflow.add_edge("mutate_comparison_set", "check_queue")
@@ -1775,19 +2014,16 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_edge("llm_recommend", "check_queue")
     workflow.add_conditional_edges(
         "collect_appointment_data",
-        after_collect_appointment_data,
+        build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
         {"assign_agent": "assign_agent", "synthesize": "synthesize"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")
     workflow.add_conditional_edges(
         "check_queue",
-        after_check_queue,
+        build_traced_router("after_check_queue", after_check_queue, deps),
         {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
     )
-    workflow.add_edge("lead_advisor", "synthesize")
-    workflow.add_edge("synthesize", END)
-    return workflow.compile()
 ```
 
 ## Bridges y Canal Web
@@ -2214,6 +2450,9 @@ class InferenceClient:
         user_metadata = {
             "lead_id": session.get("lead_id"),
             "brand_project": session.get("brand_project"),
+            "channel": session.get("channel"),
+            "channel_user_id": session.get("channel_user_id"),
+            "user_id": session.get("auth_user_id") or session.get("channel_user_id"),
             "utm_source": session.get("utm_source"),
             "utm_medium": session.get("utm_medium"),
             "utm_campaign": session.get("utm_campaign"),
@@ -2235,6 +2474,8 @@ class InferenceClient:
         payload = {
             "queryText": user_query,
             "clientId": session.get("client_id", self.default_client_id),
+            "userId": session.get("auth_user_id") or session.get("channel_user_id"),
+            "sessionId": session.get("session_id"),
             "conversationId": session.get("conversation_id"),
             "userMetadata": user_metadata if user_metadata else None
         }
@@ -2244,9 +2485,10 @@ class InferenceClient:
             timeout = httpx.Timeout(timeout=self.timeout, connect=self.connect_timeout)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 logger.info(
-                    "📤 Enviando mensaje al Core: trace_id=%s client_id=%s conversation_id=%s channel=%s channel_user_id=%s text=%s",
+                    "📤 Enviando mensaje al Core: trace_id=%s client_id=%s session_id=%s conversation_id=%s channel=%s channel_user_id=%s text=%s",
                     trace_id,
                     session.get("client_id"),
+                    session.get("session_id"),
                     session.get("conversation_id"),
                     session.get("channel"),
                     session.get("channel_user_id"),
@@ -2257,8 +2499,9 @@ class InferenceClient:
                 
                 data = response.json()
                 logger.info(
-                    "📥 Respuesta recibida del Core: trace_id=%s conversation_id=%s answer_chars=%s components=%s",
+                    "📥 Respuesta recibida del Core: trace_id=%s session_id=%s conversation_id=%s answer_chars=%s components=%s",
                     trace_id,
+                    data.get("sessionId", data.get("session_id")),
                     data.get("conversationId", data.get("conversation_id")),
                     len((data.get("answer") or "").strip()),
                     len(data.get("components") or []),
@@ -2290,6 +2533,7 @@ class InferenceClient:
             "sources": data.get("sources", []),
             "components": data.get("components", []),
             "intent": data.get("intent"),
+            "session_id": str(data.get("sessionId", data.get("session_id", ""))),
             "conversation_id": str(data.get("conversationId", data.get("conversation_id", ""))),
         }
         
@@ -2430,6 +2674,37 @@ class MemoryResetClient:
                 headers=headers,
             )
 
+    async def reset_runtime_session(
+        self,
+        *,
+        client_id: str,
+        session_id: str,
+        reason: str | None = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "client_id": client_id,
+            "session_id": session_id,
+        }
+        if reason:
+            payload["reason"] = reason
+
+        headers: Dict[str, str] = {}
+        if self.internal_token:
+            headers["X-Internal-Token"] = self.internal_token
+
+        session_reset_url = self.agent_core_reset_url.replace(
+            "/internal/memory/reset",
+            "/internal/session/reset",
+        )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await self._post_reset(
+                client=client,
+                url=session_reset_url,
+                payload=payload,
+                headers=headers,
+            )
+
     async def reset_runtime_memory(self, client_id: str, reason: str | None = None) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"client_id": client_id}
         if reason:
@@ -2484,7 +2759,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-from app.schemas.chat import InitRequest, InternalMemoryResetRequest
+from app.schemas.chat import InitRequest, InternalMemoryResetRequest, SessionResetRequest
 from app.schemas.internal_chat import InternalChatRequest
 from app.schemas.ui import SDUIResponse
 
@@ -2591,6 +2866,43 @@ async def chat_init(req: InitRequest):
     )
 
 
+@app.post("/chat/session/reset")
+async def chat_session_reset(req: SessionResetRequest):
+    client_id = str(req.client_id)
+    deleted = await session_manager.delete_session_multichannel(
+        client_id=client_id,
+        channel="web_html",
+        channel_user_id=req.channel_user_id,
+    )
+
+    runtime_reset = None
+    runtime_reset_error = None
+    if req.session_id:
+        try:
+            runtime_reset = await memory_reset_client.reset_runtime_session(
+                client_id=client_id,
+                session_id=str(req.session_id),
+                reason=req.reason or "new_chat",
+            )
+        except Exception as exc:  # pragma: no cover - best effort reset
+            runtime_reset_error = str(exc)
+            logger.warning(
+                "CHAT_SESSION_RESET runtime reset failed client_id=%s session_id=%s error=%s",
+                client_id,
+                req.session_id,
+                runtime_reset_error,
+            )
+
+    return {
+        "status": "ok",
+        "client_id": client_id,
+        "channel_user_id": req.channel_user_id,
+        "session_deleted": deleted,
+        "runtime_reset": runtime_reset,
+        "runtime_reset_error": runtime_reset_error,
+    }
+
+
 @app.post("/chat", response_model=SDUIResponse)
 async def chat_interaction(req: InternalChatRequest):
     """
@@ -2608,6 +2920,7 @@ async def chat_interaction(req: InternalChatRequest):
     channel_user_id = req.channel_user_id
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
+    incoming_session_id = str(req.session_id).strip() if req.session_id else None
     incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
     request_started = time.perf_counter()
 
@@ -2618,44 +2931,6 @@ async def chat_interaction(req: InternalChatRequest):
     )
     
     session_context = {
-        "client_id": client_id,
-        "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
-        "lead_id": session_data.get("lead_id"),
-        "brand_project": req.brand_project or session_data.get("brand_project"),
-        "channel": channel,
-        "channel_user_id": channel_user_id,
-    }
-    
-    if metadata:
-        session_context.update(metadata)
-
-    logger.info(
-        "CHAT_RENDERER_INBOUND trace_id=%s client_id=%s channel=%s channel_user_id=%s incoming_conversation_id=%s "
-        "session_conversation_id=%s resolved_conversation_id=%s frontend_runtime_conversation_id=%s "
-        "frontend_stored_conversation_id=%s frontend_had_stored_conversation_id=%s "
-        "frontend_runtime_channel_user_id=%s frontend_stored_channel_user_id=%s "
-        "frontend_had_stored_channel_user_id=%s frontend_had_frontend_state=%s frontend_had_window_state=%s "
-        "frontend_message_seq=%s frontend_page_load_id=%s landing_page_url=%s referrer_url=%s",
-        trace_id or "-",
-        client_id,
-        channel,
-        channel_user_id,
-        incoming_conversation_id or "-",
-        session_data.get("conversation_id") or "-",
-        session_context.get("conversation_id") or "-",
-        metadata.get("frontend_runtime_conversation_id") or "-",
-        metadata.get("frontend_stored_conversation_id") or "-",
-        metadata.get("frontend_had_stored_conversation_id"),
-        metadata.get("frontend_runtime_channel_user_id") or "-",
-        metadata.get("frontend_stored_channel_user_id") or "-",
-        metadata.get("frontend_had_stored_channel_user_id"),
-        metadata.get("frontend_had_frontend_state"),
-        metadata.get("frontend_had_window_state"),
-        metadata.get("frontend_message_seq"),
-        metadata.get("frontend_page_load_id") or "-",
-        metadata.get("landing_page_url") or "-",
-        metadata.get("referrer_url") or "-",
-    )
 ```
 
 ## Data Layer Compartida
@@ -2718,6 +2993,10 @@ class SessionStore:
 
     async def set_state(self, client_id: str, session_id: str, payload: dict[str, object], ttl: int) -> None:
         await self.client.set(self.build_key(client_id, session_id), json.dumps(payload, default=str), ex=ttl)
+
+    async def delete_session(self, client_id: str, session_id: str) -> bool:
+        deleted = await self.client.delete(self.build_key(client_id, session_id))
+        return bool(deleted)
 
     async def delete_by_client(self, client_id: str) -> int:
         pattern = f"{client_id}:session:*:state"
@@ -2782,25 +3061,23 @@ class TenantLoader:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
 from services.ai_runtime.domain.contracts import TenantConfig, Vertical
+from services.ai_runtime.domain.prompts import PromptPayload
+from services.ai_runtime.graph._shared.prompts.analyze_turn_prompt import build_prompt as analyze_turn_prompt
 from services.ai_runtime.graph._shared.prompts.clarification_prompt import build_prompt as clarification_prompt
 from services.ai_runtime.graph._shared.prompts.intent_detector_prompt import build_prompt as intent_detector_prompt
 from services.ai_runtime.graph._shared.prompts.lazy_condition_evaluator_prompt import (
     build_prompt as lazy_condition_prompt,
 )
 from services.ai_runtime.graph._shared.prompts.lead_data_collector_prompt import build_prompt as lead_data_collector_prompt
-from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
-from services.ai_runtime.graph._shared.prompts.vertical.healthcare.plan_prompt import PROMPT as HEALTHCARE_PLAN_PROMPT
-from services.ai_runtime.graph._shared.prompts.vertical.healthcare.synthesis_prompt import (
-    PROMPT as HEALTHCARE_SYNTHESIS_PROMPT,
+from services.ai_runtime.graph._shared.prompts.memory_entity_extractor_prompt import (
+    build_prompt as memory_entity_extractor_prompt,
 )
-from services.ai_runtime.graph._shared.prompts.vertical.legal.plan_prompt import PROMPT as LEGAL_PLAN_PROMPT
-from services.ai_runtime.graph._shared.prompts.vertical.legal.synthesis_prompt import PROMPT as LEGAL_SYNTHESIS_PROMPT
-from services.ai_runtime.graph._shared.prompts.vertical.realtor.plan_prompt import PROMPT as REALTOR_PLAN_PROMPT
-from services.ai_runtime.graph._shared.prompts.vertical.realtor.synthesis_prompt import PROMPT as REALTOR_SYNTHESIS_PROMPT
+from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
 from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
     build_prompt as appointment_collector_prompt,
 )
@@ -2808,50 +3085,75 @@ from services.ai_runtime.graph.realtor.prompts.comparison_synthesizer_prompt imp
     build_prompt as comparison_synthesizer_prompt,
 )
 from services.ai_runtime.graph.realtor.prompts.recommendation_prompt import build_prompt as recommendation_prompt
+from services.ai_runtime.graph.realtor.prompts.search_filter_extractor_prompt import (
+    build_prompt as search_filter_extractor_prompt,
+)
 from services.ai_runtime.graph.realtor.prompts.text_to_sql_prompt import build_prompt as text_to_sql_prompt
 
-
-VERTICAL_PROMPTS: dict[Vertical, dict[str, str]] = {
-    "realtor": {
-        "plan_prompt": REALTOR_PLAN_PROMPT,
-        "synthesis_prompt": REALTOR_SYNTHESIS_PROMPT,
-    },
-    "healthcare": {
-        "plan_prompt": HEALTHCARE_PLAN_PROMPT,
-        "synthesis_prompt": HEALTHCARE_SYNTHESIS_PROMPT,
-    },
-    "legal": {
-        "plan_prompt": LEGAL_PLAN_PROMPT,
-        "synthesis_prompt": LEGAL_SYNTHESIS_PROMPT,
-    },
+SYSTEM_NODE_SLUG_BY_TYPE = {
+    "plan_prompt": "planner_system",
+    "synthesis_prompt": "synthesizer_system",
 }
+
+CONTEXT_CACHEABLE_NODE_TYPES = {
+    "analyze_turn",
+    "synthesis_prompt",
+    "clarification",
+    "comparison_synthesizer",
+    "recommendation",
+}
+DEFAULT_CONTEXT_CACHE_TTL_SECONDS = 1800
 
 
 def load_tone_prompt(tenant_config: TenantConfig) -> str:
     return tenant_config.tone_prompt.strip()
 
 
-def load_vertical_prompt(vertical: Vertical, node_type: str) -> str:
-    try:
-        return VERTICAL_PROMPTS[vertical][node_type]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported prompt node_type={node_type!r} for vertical={vertical!r}") from exc
+def load_vertical_prompt(tenant_config: TenantConfig, vertical: Vertical, node_type: str) -> str:
+    system_node_slug = SYSTEM_NODE_SLUG_BY_TYPE.get(node_type)
+    if not system_node_slug:
+        raise ValueError(f"Unsupported vertical prompt node_type={node_type!r} for vertical={vertical!r}")
+    runtime_prompt = (tenant_config.system_prompts.get(system_node_slug) or "").strip()
+    if runtime_prompt:
+        return runtime_prompt
+    raise ValueError(
+        f"Missing system prompt slug={system_node_slug!r} for vertical={vertical!r} and client_id={tenant_config.client_id!r}"
+    )
 
 
 def _render_context(context: dict[str, Any]) -> str:
     return json.dumps(context, ensure_ascii=True, indent=2, default=str)
 
 
-def compose(node_type: str, tenant_config: TenantConfig, vertical: Vertical, context: dict[str, Any]) -> str:
-    """Compose tone + base prompt + runtime context as the canonical prompt payload."""
+def compose(
+    node_type: str,
+    tenant_config: TenantConfig,
+    vertical: Vertical,
+    context: dict[str, Any],
+    *,
+    include_tone: bool = False,
+) -> PromptPayload:
+    """Compose stable instructions + runtime context as the canonical prompt payload."""
 
-    tone = load_tone_prompt(tenant_config)
+    tone = load_tone_prompt(tenant_config) if include_tone else ""
     if node_type in {"plan_prompt", "synthesis_prompt"}:
-        base = load_vertical_prompt(vertical, node_type)
+        base = load_vertical_prompt(tenant_config, vertical, node_type)
+    elif node_type == "analyze_turn":
+        base = "\n\n".join(
+            [
+                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
+                analyze_turn_prompt(),
+            ]
+        )
     elif node_type == "reference_classifier":
         base = reference_classifier_prompt()
     elif node_type == "intent_detector":
-        base = intent_detector_prompt()
+        base = "\n\n".join(
+            [
+                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
+                intent_detector_prompt(),
+            ]
+        )
     elif node_type == "lazy_condition_evaluator":
         base = lazy_condition_prompt()
     elif node_type == "clarification":
@@ -2860,6 +3162,10 @@ def compose(node_type: str, tenant_config: TenantConfig, vertical: Vertical, con
         base = lead_data_collector_prompt()
     elif node_type == "text_to_sql":
         base = text_to_sql_prompt()
+    elif node_type == "search_filter_extractor":
+        base = search_filter_extractor_prompt()
+    elif node_type == "memory_entity_extractor":
+        base = memory_entity_extractor_prompt()
     elif node_type == "comparison_synthesizer":
         base = comparison_synthesizer_prompt()
     elif node_type == "recommendation":
@@ -2868,8 +3174,23 @@ def compose(node_type: str, tenant_config: TenantConfig, vertical: Vertical, con
         base = appointment_collector_prompt()
     else:
         raise ValueError(f"Unsupported prompt node_type={node_type!r}")
-    return "\n\n".join(part for part in [tone, base, _render_context(context)] if part)
 
+    stable_prefix = "\n\n".join(part for part in [tone, base] if part)
+    dynamic_context = _render_context(context)
+    full_prompt = "\n\n".join(part for part in [stable_prefix, dynamic_context] if part)
+    cache_source = "\n\n".join(part for part in [node_type, stable_prefix] if part)
+    cache_key = hashlib.sha256(cache_source.encode("utf-8")).hexdigest()
+
+    return PromptPayload(
+        node_type=node_type,
+        stable_prefix=stable_prefix,
+        dynamic_context=dynamic_context,
+        full_prompt=full_prompt,
+        cacheable=node_type in CONTEXT_CACHEABLE_NODE_TYPES and bool(stable_prefix.strip()),
+        cache_namespace=node_type if node_type in CONTEXT_CACHEABLE_NODE_TYPES else None,
+        cache_key=cache_key,
+        cache_ttl_seconds=DEFAULT_CONTEXT_CACHE_TTL_SECONDS,
+    )
 ```
 
 ## Scoring Boundary
@@ -3037,10 +3358,6 @@ tests/sandbox/realtor/realtor_v3_regression_battery.py
 tests/sandbox/realtor/simulate_chat_realtor.py
 tests/sandbox/realtor/simulate_multichat_realtor.py
 tests/sandbox/realtor/test_gemini_latency_realtor_contract.py
-tests/sandbox/simulate_chat_dentist.py
-tests/sandbox/simulate_chat_realtor.py
-tests/sandbox/simulate_multichat_dentist.py
-tests/sandbox/simulate_multichat_realtor.py
 tests/scripts/check_no_hardcoded_realtor_copy.sh
 tests/system/__pycache__/test_active_chat_scoring_e2e.cpython-312.pyc
 tests/system/__pycache__/test_chat_e2e.cpython-312.pyc

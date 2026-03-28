@@ -13,7 +13,7 @@ from services.ai_runtime.graph._shared.nodes.helpers import complete_active_inte
 logger = logging.getLogger(__name__)
 
 
-def _relax_filters(filters: SearchFilters) -> SearchFilters:
+def _relax_filters_once(filters: SearchFilters) -> SearchFilters:
     if filters.amenidades:
         return filters.model_copy(update={"amenidades": []})
     if filters.precio_max:
@@ -27,6 +27,19 @@ def _relax_filters(filters: SearchFilters) -> SearchFilters:
     if filters.habitaciones:
         return filters.model_copy(update={"habitaciones": None})
     return filters
+
+
+def _build_effective_filters(requested_filters: SearchFilters, *, attempts: int) -> SearchFilters:
+    effective = requested_filters
+    for _ in range(max(0, attempts)):
+        effective = _relax_filters_once(effective)
+    return effective
+
+
+def _match_scope(*, result_count: int, relaxation_applied: bool) -> str:
+    if result_count <= 0:
+        return "none"
+    return "relaxed" if relaxation_applied else "exact"
 
 
 def _build_fallback_search_sql(graph_state: RealtorGraphState, filters: SearchFilters) -> tuple[str, dict[str, Any]]:
@@ -77,16 +90,21 @@ def _build_fallback_search_sql(graph_state: RealtorGraphState, filters: SearchFi
 
 async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
-    filters = graph_state.search_filters
-    if graph_state.search_attempts > 0:
-        filters = _relax_filters(filters)
+    requested_filters = graph_state.search_filters
+    effective_filters = _build_effective_filters(
+        requested_filters,
+        attempts=graph_state.search_attempts,
+    )
+    requested_dump = requested_filters.model_dump(mode="json")
+    effective_dump = effective_filters.model_dump(mode="json")
+    relaxation_applied = requested_dump != effective_dump
     prompt = compose(
         "text_to_sql",
         graph_state.tenant_config,
         graph_state.vertical,
         {
             "client_id": graph_state.client_id,
-            "search_filters": filters.model_dump(mode="json"),
+            "search_filters": effective_dump,
         },
         include_tone=False,
     )
@@ -101,7 +119,7 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
         )
     except Exception as exc:
         logger.warning("search fallback activated after SQL execution error: %s", exc)
-        fallback_sql, fallback_params = _build_fallback_search_sql(graph_state, filters)
+        fallback_sql, fallback_params = _build_fallback_search_sql(graph_state, effective_filters)
         results = await deps.property_repository.run_text_to_sql_query(
             client_id=graph_state.client_id,
             sql=fallback_sql,
@@ -113,18 +131,28 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
     output = {
         "type": "search",
         "count": len(results),
-        "filters": filters.model_dump(mode="json"),
+        "filters": effective_dump,
+        "requested_filters": requested_dump,
+        "effective_filters": effective_dump,
+        "relaxation_applied": relaxation_applied,
+        "match_scope": _match_scope(result_count=len(results), relaxation_applied=relaxation_applied),
+        "attempt_index": graph_state.search_attempts,
         "execution_mode": execution_mode,
     }
     if sql_error:
         output["sql_error"] = sql_error
     updates = {
-        "search_filters": filters.model_dump(mode="json"),
+        "search_filters": requested_dump,
+        "effective_search_filters": effective_dump,
         "last_search_results": [item.model_dump(mode="json") for item in results],
         "inventory": [item.model_dump(mode="json") for item in results],
         "search_attempts": graph_state.search_attempts + (1 if not results else 0),
         "turn_outputs": [*graph_state.turn_outputs, output],
     }
+    if not results:
+        updates["cards_shown"] = []
+        updates["last_mentioned"] = None
+        updates["active_comparison"] = []
     if not results and updates["search_attempts"] >= 3:
         updates |= complete_active_intent(graph_state, output)
     return updates

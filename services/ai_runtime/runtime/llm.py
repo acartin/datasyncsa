@@ -79,6 +79,54 @@ def _extract_bool(value: Any) -> bool:
     return text == "true"
 
 
+DETAIL_ATTRIBUTE_ALIASES = {
+    "baño": "banos",
+    "baños": "banos",
+    "bano": "banos",
+    "banos": "banos",
+    "servicio": "banos",
+    "servicios": "banos",
+    "cuarto": "habitaciones",
+    "cuartos": "habitaciones",
+    "dormitorio": "habitaciones",
+    "dormitorios": "habitaciones",
+    "metros": "area",
+    "metro": "area",
+    "m2": "area",
+    "m²": "area",
+    "tamaño": "area",
+    "tamano": "area",
+    "garaje": "garage",
+    "cochera": "garage",
+    "cocheras": "garage",
+    "estacionamiento": "garage",
+    "estacionamientos": "garage",
+    "parqueo": "garage",
+    "parqueos": "garage",
+    "ficha": "foto",
+    "fichas": "foto",
+    "imagen": "foto",
+    "imagenes": "foto",
+    "imágenes": "foto",
+    "anuncio": "foto",
+    "anuncios": "foto",
+    "card": "foto",
+    "cards": "foto",
+    "tarjeta": "foto",
+    "tarjetas": "foto",
+}
+
+
+def _normalize_turn_analysis_payload(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+    normalized = dict(payload)
+    raw_key = normalized.get("detail_attribute_key")
+    if isinstance(raw_key, str):
+        normalized["detail_attribute_key"] = DETAIL_ATTRIBUTE_ALIASES.get(raw_key.strip().lower(), raw_key.strip().lower())
+    return normalized
+
+
 class NoopLLMPort:
     """Safe default provider used while the runtime is being wired to a real model."""
 
@@ -374,6 +422,7 @@ class GeminiLLMPort:
     async def analyze_turn(self, prompt: PromptInput) -> TurnAnalysis:
         try:
             payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=1200)
+            payload = _normalize_turn_analysis_payload(payload)
             return TurnAnalysis.model_validate(payload)
         except Exception as exc:
             logger.warning("LLM analyze_turn fallback empty analysis: %s", exc)

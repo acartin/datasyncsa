@@ -10,6 +10,7 @@ from shutil import rmtree
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 import json
+import logging
 import traceback
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 AsyncNodeFn = Callable[[dict[str, Any], "GraphDependencies"], Awaitable[dict[str, Any]]]
 RouterFn = Callable[[dict[str, object]], str]
+logger = logging.getLogger(__name__)
 
 _ACTIVE_TRACE: ContextVar["TurnTraceContext | None"] = ContextVar("ai_runtime_turn_trace", default=None)
 _LATEST_STATE: ContextVar[dict[str, Any] | None] = ContextVar("ai_runtime_turn_trace_latest_state", default=None)
@@ -180,6 +182,7 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
         summary["realtor"] = {
             "search_attempts": state.get("search_attempts"),
             "search_filters": _safe_serialize(state.get("search_filters", {})),
+            "effective_search_filters": _safe_serialize(state.get("effective_search_filters")),
             "last_search_count": len(state.get("last_search_results", [])),
             "cards_mode": state.get("cards_mode"),
             "render_mode": state.get("render_mode"),
@@ -198,7 +201,15 @@ class FileTurnTraceStore:
         self.enabled = enabled
         self._lock = Lock()
         if self.enabled:
-            self.root_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.root_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                logger.warning("Turn trace disabled during init; unable to create %s: %s", self.root_dir, exc)
+                self.enabled = False
+
+    def _disable_due_to_io_failure(self, action: str, exc: Exception) -> None:
+        logger.warning("Turn trace disabled after %s failure at %s: %s", action, self.root_dir, exc)
+        self.enabled = False
 
     def _trace_path(self, context: TurnTraceContext) -> Path:
         return self.root_dir / context.client_id / context.session_id / f"turn-{context.turn:04d}-{context.trace_id}.json"
@@ -234,8 +245,11 @@ class FileTurnTraceStore:
                 }
             ],
         }
-        with self._lock:
-            self._write_document(path, document)
+        try:
+            with self._lock:
+                self._write_document(path, document)
+        except Exception as exc:
+            self._disable_due_to_io_failure("start_turn", exc)
 
     def append_event(self, kind: str, name: str, payload: dict[str, Any] | None = None) -> None:
         if not self.enabled:
@@ -244,19 +258,22 @@ class FileTurnTraceStore:
         if not context:
             return
         path = self._trace_path(context)
-        with self._lock:
-            document = self._load_document(path)
-            events = document.setdefault("events", [])
-            events.append(
-                {
-                    "seq": len(events) + 1,
-                    "timestamp": utc_now_iso(),
-                    "kind": kind,
-                    "name": name,
-                    "payload": _safe_serialize(payload or {}),
-                }
-            )
-            self._write_document(path, document)
+        try:
+            with self._lock:
+                document = self._load_document(path)
+                events = document.setdefault("events", [])
+                events.append(
+                    {
+                        "seq": len(events) + 1,
+                        "timestamp": utc_now_iso(),
+                        "kind": kind,
+                        "name": name,
+                        "payload": _safe_serialize(payload or {}),
+                    }
+                )
+                self._write_document(path, document)
+        except Exception as exc:
+            self._disable_due_to_io_failure("append_event", exc)
 
     def finish_turn(
         self,
@@ -272,32 +289,35 @@ class FileTurnTraceStore:
         if not context:
             return
         path = self._trace_path(context)
-        with self._lock:
-            document = self._load_document(path)
-            document["status"] = status
-            document["ended_at"] = utc_now_iso()
-            if final_state_summary is not None:
-                document["final_state_summary"] = final_state_summary
-            if response_payload is not None:
-                document["response_payload"] = _safe_serialize(response_payload)
-            if error:
-                document["error"] = error
-            events = document.setdefault("events", [])
-            events.append(
-                {
-                    "seq": len(events) + 1,
-                    "timestamp": utc_now_iso(),
-                    "kind": "turn_end" if status == "completed" else "turn_error",
-                    "name": "handle_turn",
-                    "payload": {
-                        "status": status,
-                        "final_state_summary": final_state_summary,
-                        "response_payload": _safe_serialize(response_payload),
-                        "error": error,
-                    },
-                }
-            )
-            self._write_document(path, document)
+        try:
+            with self._lock:
+                document = self._load_document(path)
+                document["status"] = status
+                document["ended_at"] = utc_now_iso()
+                if final_state_summary is not None:
+                    document["final_state_summary"] = final_state_summary
+                if response_payload is not None:
+                    document["response_payload"] = _safe_serialize(response_payload)
+                if error:
+                    document["error"] = error
+                events = document.setdefault("events", [])
+                events.append(
+                    {
+                        "seq": len(events) + 1,
+                        "timestamp": utc_now_iso(),
+                        "kind": "turn_end" if status == "completed" else "turn_error",
+                        "name": "handle_turn",
+                        "payload": {
+                            "status": status,
+                            "final_state_summary": final_state_summary,
+                            "response_payload": _safe_serialize(response_payload),
+                            "error": error,
+                        },
+                    }
+                )
+                self._write_document(path, document)
+        except Exception as exc:
+            self._disable_due_to_io_failure("finish_turn", exc)
 
     def list_sessions(self, client_id: str) -> list[dict[str, Any]]:
         if not self.enabled:
