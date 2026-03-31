@@ -1,21 +1,19 @@
-"""Graph registry for bridge and vertical selection."""
+"""Graph registry for flow and vertical selection."""
 
 from __future__ import annotations
 
-from services.ai_runtime.domain.contracts import BridgeName, Vertical
+from services.ai_runtime.domain.contracts import FlowName, Vertical
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.graph.generic.graph import build_generic_graph
-from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+from services.ai_runtime.verticals import get_vertical_spec
 
 
 class GraphRegistry:
     """Select the correct LangGraph builder for the resolved tenant vertical."""
 
-    def get_graph(self, vertical: Vertical, bridge: BridgeName, deps: GraphDependencies):
-        if bridge == "property-bridge" and vertical != "realtor":
-            raise ValueError("property-bridge solo puede usarse con vertical realtor")
-        if bridge == "generic-bridge" and vertical == "realtor":
-            raise ValueError("generic-bridge no puede usarse con vertical realtor")
-        if vertical == "realtor":
-            return build_realtor_graph(deps)
-        return build_generic_graph(deps)
+    def get_graph(self, vertical: Vertical, flow: FlowName, deps: GraphDependencies):
+        spec = get_vertical_spec(vertical)
+        if flow != spec.default_flow:
+            raise ValueError(
+                f"{flow} no puede usarse con vertical {vertical}; flow esperado={spec.default_flow}"
+            )
+        return spec.graph_builder(deps)

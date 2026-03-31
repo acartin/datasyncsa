@@ -363,7 +363,7 @@ def export_graph_diagrams() -> list[Path]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     specs = [
-        _build_spec("generic", build_generic_graph),
+        _build_spec("basic", build_generic_graph),
         _build_spec("realtor", build_realtor_graph),
     ]
     written: list[Path] = []

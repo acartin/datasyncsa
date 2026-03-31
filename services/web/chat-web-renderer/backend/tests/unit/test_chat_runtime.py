@@ -23,12 +23,13 @@ class _EchoPolicy:
         }
 
 
-def _request(channel: str = "web_html") -> InternalChatRequest:
+def _request(channel: str = "web_html", session_id: str | None = None) -> InternalChatRequest:
     return InternalChatRequest(
         client_id="64f357a0-98eb-44f1-9f41-6e615ed26180",
         channel=channel,
         channel_user_id="user-1",
         message_text="hola",
+        session_id=session_id,
     )
 
 
@@ -90,6 +91,46 @@ async def test_chat_uses_composite_session_storage(monkeypatch):
     assert get_session_mc.await_count == 1
     assert upsert_session_mc.await_count == 1
     assert get_session_mc.await_args.kwargs["channel"] == "web_html"
+
+
+@pytest.mark.asyncio
+async def test_chat_ignores_init_placeholder_and_promotes_conversation_id_to_session(monkeypatch):
+    async def fake_chat(user_query, session):
+        assert user_query == "hola"
+        assert session["session_id"] is None
+        return {
+            "conversation_id": "conv-1",
+            "answer": "ok",
+            "intent": None,
+            "sources": [],
+        }
+
+    monkeypatch.setattr(main_module.inference_client, "chat", fake_chat)
+    monkeypatch.setattr(
+        main_module.vertical_router,
+        "resolve_vertical_for_client_async",
+        AsyncMock(return_value="generic"),
+    )
+    monkeypatch.setattr(
+        main_module.vertical_router,
+        "get_handler_async",
+        AsyncMock(return_value=_DummyPolicy()),
+    )
+    monkeypatch.setattr(main_module.transformer, "_extract_properties_from_sources", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        main_module.transformer,
+        "_get_branding_for_client",
+        AsyncMock(return_value={"agent_name": "x"}),
+    )
+    monkeypatch.setattr(main_module.session_manager, "get_session_multichannel", AsyncMock(return_value={}))
+    upsert_session_mc = AsyncMock(return_value=None)
+    monkeypatch.setattr(main_module.session_manager, "upsert_session", upsert_session_mc)
+
+    resp = await main_module.chat_interaction(_request(session_id="init"))
+
+    assert resp.session_id == "conv-1"
+    assert upsert_session_mc.await_args.kwargs["data"]["session_id"] == "conv-1"
+    assert upsert_session_mc.await_args.kwargs["data"]["conversation_id"] == "conv-1"
 
 
 @pytest.mark.asyncio

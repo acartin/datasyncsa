@@ -138,7 +138,7 @@ function renderClients() {
       (client) => `
         <button class="client-chip ${client.client_id === state.clientId ? "selected" : ""}" data-client-id="${escapeHtml(client.client_id)}">
           <strong>${escapeHtml(client.client_id)}</strong>
-          <span>${escapeHtml(client.vertical || "-")} · ${escapeHtml(client.bridge || "-")}</span>
+          <span>${escapeHtml(client.vertical || "-")} · ${escapeHtml(client.flow || "-")}</span>
           <span>sesiones: ${escapeHtml(client.session_count || 0)}</span>
         </button>
       `
@@ -168,7 +168,7 @@ function renderSessions() {
       (session) => `
         <button class="list-item ${session.session_id === state.sessionId ? "selected" : ""}" data-session="${escapeHtml(session.session_id)}">
           <strong>${escapeHtml(session.session_id)}</strong>
-          <span>${escapeHtml(session.vertical || "-")} · ${escapeHtml(session.bridge || "-")}</span>
+          <span>${escapeHtml(session.vertical || "-")} · ${escapeHtml(session.flow || "-")}</span>
           <span>${escapeHtml(session.latest_user_message || "-")}</span>
           <span>turnos: ${escapeHtml(session.turn_count || 0)}</span>
         </button>
@@ -238,7 +238,7 @@ function renderTrace() {
     <div><strong>Client:</strong> ${escapeHtml(state.trace.client_id || "-")}</div>
     <div><strong>Mensaje:</strong> ${escapeHtml(state.trace.user_message || "-")}</div>
     <div><strong>Vertical:</strong> ${escapeHtml(state.trace.vertical || "-")}</div>
-    <div><strong>Bridge:</strong> ${escapeHtml(state.trace.bridge || "-")}</div>
+    <div><strong>Flow:</strong> ${escapeHtml(state.trace.flow || "-")}</div>
     <div><strong>Inicio:</strong> ${escapeHtml(state.trace.started_at || "-")}</div>
     <div><strong>Fin:</strong> ${escapeHtml(state.trace.ended_at || "-")}</div>
     <div><strong>Respuesta:</strong> ${escapeHtml((state.trace.response_payload || {}).answer || "-")}</div>

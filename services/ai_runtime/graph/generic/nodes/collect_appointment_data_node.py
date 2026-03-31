@@ -6,7 +6,7 @@ from typing import Any
 
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import GenericGraphState
+from services.ai_runtime.domain.state import GenericGraphState, has_valid_lead_contact
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
 
 
@@ -28,11 +28,17 @@ async def collect_appointment_data(state: dict[str, Any], deps: GraphDependencie
             **{key: value for key, value in extracted.items() if value not in (None, "", [])},
         }
     )
-    cita.datos_completos = bool(cita.tipo and cita.fecha and cita.hora and (graph_state.lead_advisor.lead_extracted.telefono or graph_state.lead_advisor.lead_extracted.email))
+    contact_ok = has_valid_lead_contact(graph_state.lead_advisor.lead_extracted)
+    cita.datos_completos = bool(cita.tipo and cita.fecha and cita.hora and contact_ok)
     output = {"type": "appointment", "cita": cita.model_dump(mode="json")}
     completion = {} if cita.datos_completos else complete_active_intent(graph_state, output)
-    return {
+    updates_payload: dict[str, Any] = {
         "cita": cita.model_dump(mode="json"),
         "turn_outputs": [*graph_state.turn_outputs, output],
         **completion,
     }
+    if cita.tipo and cita.fecha and cita.hora and not contact_ok:
+        updates_payload["lead_advisor"] = graph_state.lead_advisor.model_copy(
+            update={"should_ask": True, "field_to_ask": "contacto"}
+        ).model_dump(mode="json")
+    return updates_payload

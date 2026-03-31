@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-27T00:12:43Z`
+- Generated UTC: `2026-03-30T17:01:54Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-27`
-- Git commit: `819243b`
+- Git branch: `HETZNER-LOCAL-2026-03-28`
+- Git commit: `e88b29f`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-27T00:12:43Z`
+- Generated UTC: `2026-03-30T17:01:54Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-27`
-- Git commit: `819243b`
+- Git branch: `HETZNER-LOCAL-2026-03-28`
+- Git commit: `e88b29f`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -24,8 +24,6 @@
 |---|---|---:|
 | `docker-compose.yml` | Orquestacion oficial del stack local. | 5 |
 | `services/ai_runtime` | Runtime conversacional LangGraph multitenant; autoridad principal de chat. | 5 |
-| `services/bridges/generic-bridge` | Adapter fino para verticales no realtor hacia `ai-runtime`. | 4 |
-| `services/bridges/property-bridge` | Adapter fino del vertical realtor hacia `ai-runtime`. | 4 |
 | `services/scoring-core` | Dominio separado de scoring asincrono con API y worker propios. | 5 |
 | `services/web/chat-web-renderer` | Canal web y renderer SDUI que consume `ai-runtime`. | 5 |
 | `services/web/admin-console` | Consola operativa multi-tenant. | 4 |
@@ -38,16 +36,13 @@
 
 | Carpeta | Estado |
 |---|---|
-| `services/agent-core` | Legacy; no es el cerebro activo del compose actual. |
-| `services/inference-stack-v2` | Legacy archivado o compatibilidad historica. |
 | `services/etl-processor` | Deprecado. |
 | `services/ai-agents` | Exploracion; no participa en el runtime operativo. |
 
 ## 3. ARQUITECTURA CORE
 
-- `ai-runtime` resuelve tenant, vertical, bridge y estado de sesion.
-- `property-bridge` solo aplica a vertical `realtor`.
-- `generic-bridge` aplica a `healthcare` y `legal`.
+- `ai-runtime` resuelve tenant, vertical, flow y estado de sesion.
+- `realtor_flow` y `generic_flow` son selectores logicos internos.
 - `scoring-core` permanece separado y no debe absorber decisiones conversacionales.
 - `chat-web-renderer` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por `client_id`.
@@ -55,30 +50,26 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
-redis
 postgres
+redis
 ai-runtime
-chat-web-renderer-api
-chat-web-renderer-ui
+datasyncsa-web
 etl-docs
+portainer
 scoring-core
 scoring-core-worker
-etl-docs-worker
-portainer
-generic-bridge
-property-bridge
+test-ui
 admin-console-api
 admin-console-web
-datasyncsa-web
-test-ui
+chat-web-renderer-api
+chat-web-renderer-ui
+etl-docs-worker
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
 
 - `services/ai_runtime/main.py`
 - `services/scoring-core/main.py`
-- `services/bridges/generic-bridge/main.py`
-- `services/bridges/property-bridge/main.py`
 - `services/web/chat-web-renderer/backend/app/main.py`
 - `services/web/admin-console/backend/app/main.py`
 - `services/etl-docs/main.py`
@@ -106,19 +97,17 @@ test-ui
 postgres
 redis
 ai-runtime
-property-bridge
-scoring-core
-scoring-core-worker
+chat-web-renderer-api
+chat-web-renderer-ui
 datasyncsa-web
-generic-bridge
+etl-docs
+etl-docs-worker
 portainer
-test-ui
 admin-console-api
 admin-console-web
-chat-web-renderer-api
-etl-docs-worker
-chat-web-renderer-ui
-etl-docs
+scoring-core
+scoring-core-worker
+test-ui
 ```
 ### `docker-compose.yml:1-220`
 
@@ -344,7 +333,7 @@ services:
   # ETL Docs Worker (RQ)
   etl-docs-worker:
 ```
-### `docker-compose.yml:300-390`
+### `docker-compose.yml:300-360`
 
 ```
 
@@ -383,50 +372,6 @@ services:
     networks:
       - internal_network
 
-  # Generic Bridge
-  generic-bridge:
-    build:
-      context: ./services/bridges/generic-bridge
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-generic-bridge
-    restart: unless-stopped
-    ports:
-      - "${GENERIC_BRIDGE_PORT:-8093}:8000"
-    environment:
-      - TZ=${TZ:-UTC}
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - REQUEST_TIMEOUT=30
-      - MAX_RETRIES=3
-      - HOST=0.0.0.0
-      - PORT=8000
-    depends_on:
-      - ai-runtime
-    networks:
-      - internal_network
-
-  # Property Bridge
-  property-bridge:
-    build:
-      context: ./services/bridges/property-bridge
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-property-bridge
-    restart: unless-stopped
-    ports:
-      - "${PROPERTY_BRIDGE_PORT:-8094}:8000"
-    environment:
-      - TZ=${TZ:-UTC}
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - REQUEST_TIMEOUT=30
-      - MAX_RETRIES=3
-      - HOST=0.0.0.0
-      - PORT=8000
-    depends_on:
-      - ai-runtime
-    networks:
-      - internal_network
-
   # Chat Web Renderer Frontend (Nginx)
   chat-web-renderer-ui:
     image: nginx:alpine
@@ -438,19 +383,24 @@ services:
       - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:ro
       - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
+      - TZ=${TZ:-UTC}
+      - API_HOST=chat-web-renderer-api
+    depends_on:
+      - chat-web-renderer-api
+    networks:
+      - internal_network
+
+  # Corporate Website (Static)
+  datasyncsa-web:
+    image: nginx:alpine
+    container_name: ${ENV_PREFIX}-web-corporate
+    restart: unless-stopped
+    ports:
+      - "${CORPORATE_WEB_PORT}:80"
 ```
 ### `.env.example:50-120`
 
 ```
-CHAT_HISTORY_MAX_MESSAGES=20
-SESSION_TTL_SECONDS=86400
-VERTICAL_CACHE_TTL_SECONDS=300
-
-# --- CHAT MULTI-CHANNEL FEATURE FLAGS ---
-CHANNEL_GATEWAY_ENABLED=true
-VERTICAL_ROUTING_ENABLED=true
-META_ADAPTER_ENABLED=false
-
 # --- AI/SCORING SERVICE DISCOVERY ---
 AI_RUNTIME_API=http://ai-runtime:8000
 AI_RUNTIME_API_PREFIX=/api/v1
@@ -556,15 +506,11 @@ services/ai_runtime/runtime/__pycache__
 services/ai_runtime/scripts
 services/ai_runtime/scripts/__pycache__
 services/ai_runtime/web
+services/ai_runtime/web/conversation_suites
 services/ai_runtime/web/turn_trace
 services/ai_runtime/workers
 services/ai_runtime/workers/__pycache__
 services/ai_runtime/workers/lead-worker
-services/bridges
-services/bridges/generic-bridge
-services/bridges/generic-bridge/__pycache__
-services/bridges/property-bridge
-services/bridges/property-bridge/__pycache__
 services/data
 services/data/__pycache__
 services/data/cache
@@ -668,33 +614,25 @@ tests/system/__pycache__
 ## Entry Points Detectados
 
 ```text
-services/bridges/property-bridge/main.py:41:app = FastAPI(
-services/bridges/property-bridge/main.py:360:if __name__ == "__main__":
-services/bridges/property-bridge/main.py:366:    uvicorn.run(
-services/bridges/generic-bridge/main.py:40:app = FastAPI(
-services/bridges/generic-bridge/main.py:299:if __name__ == "__main__":
-services/bridges/generic-bridge/main.py:305:    uvicorn.run(
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/scoring-core/worker.py:31:if __name__ == "__main__":
 services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
-services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -713,46 +651,14 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 ```
 
 ## Rutas API Detectadas
 
 ```text
-services/bridges/property-bridge/main.py:218:@app.post("/chat", response_model=PropertyChatResponse)
-services/bridges/property-bridge/main.py:315:@app.get("/health")
-services/bridges/property-bridge/main.py:345:@app.get("/")
-services/bridges/generic-bridge/main.py:150:@app.post("/chat", response_model=GenericChatResponse)
-services/bridges/generic-bridge/main.py:256:@app.get("/health")
-services/bridges/generic-bridge/main.py:285:@app.get("/")
-services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:263:@router.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
-services/web/chat-web-renderer/backend/app/main.py:104:@app.post("/chat/init", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:116:@app.post("/chat/session/reset")
-services/web/chat-web-renderer/backend/app/main.py:153:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:369:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:383:@app.post("/internal/memory/reset")
-services/etl-docs/main.py:28:@app.get("/")
-services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
-services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
-services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
-services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
-services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
-services/ai_runtime/api.py:36:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:41:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:55:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:64:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:73:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:78:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:83:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:91:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:99:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:107:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:114:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:123:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:137:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
 services/scoring-core/main.py:62:@app.get("/")
 services/scoring-core/app/api/scoring.py:50:@router.post("/scoring/jobs/enqueue", response_model=EnqueueScoreJobResponse)
 services/scoring-core/app/api/scoring.py:73:@router.get("/scoring/jobs/{job_id}", response_model=ScoringJobResponse)
@@ -799,6 +705,25 @@ services/web/admin-console/backend/app/modules/clients/router.py:517:@router.get
 services/web/admin-console/backend/app/modules/clients/router.py:545:@router.delete("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:567:@router.post("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:568:@router.put("/brand-config/{client_id}/item")  # Support PUT for edit action
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/grid_presets/router.py:13:@router.post("", response_model=GridPresetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:29:@router.get("/{grid_id}", response_model=List[GridPresetResponse])
 services/web/admin-console/backend/app/modules/grid_presets/router.py:41:@router.delete("/{preset_id}")
@@ -863,7 +788,6 @@ services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("
 services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
-services/web/admin-console/backend/app/main.py:56:@app.get("/health")
 services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
@@ -871,7 +795,6 @@ services/web/admin-console/backend/app/modules/ai_library/router.py:260:@router.
 services/web/admin-console/backend/app/modules/ai_library/router.py:311:@router.get("/pdfs/jobs/{job_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:327:@router.delete("/pdfs/{content_id}")
 services/web/admin-console/backend/app/modules/ai_library/router.py:348:@router.get("/urls/data", response_model=List[dict])
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
 services/web/admin-console/backend/app/modules/leads/router.py:16:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:17:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:67:@router.get("/data", response_model=List[dict])
@@ -879,12 +802,29 @@ services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("
 services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/main.py:56:@app.get("/health")
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:263:@router.get("/health")
+services/etl-docs/main.py:28:@app.get("/")
+services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
+services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
+services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
+services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
+services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
+services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
+services/web/chat-web-renderer/backend/app/main.py:92:@app.post("/chat/init", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:104:@app.post("/chat/session/reset")
+services/web/chat-web-renderer/backend/app/main.py:141:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:357:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:371:@app.post("/internal/memory/reset")
 ```
 
 ## AI Runtime
@@ -941,27 +881,19 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 
 ## Flujo de Entrada
 
-### property-bridge
+### Entrada directa al runtime
 
-1. Valida `client_id`.
-2. Envía `bridge=property-bridge`.
-3. `ConversationRuntime` carga `tenant_config`.
-4. `GraphRegistry` exige `vertical=realtor`.
-5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor`.
-
-### generic-bridge
-
-1. Valida `client_id`.
-2. Envía `bridge=generic-bridge`.
-3. `ConversationRuntime` carga `tenant_config`.
-4. `GraphRegistry` exige `vertical in {healthcare, legal}`.
-5. Se hidrata o recupera sesion y se ejecuta `grafo_generico`.
+1. El cliente de canal llama directo a `ai-runtime`.
+2. Puede omitir `flow`; si lo hace, `ConversationRuntime` lo resuelve por vertical.
+3. Si envía `flow=realtor_flow`, `GraphRegistry` exige `vertical=realtor`.
+4. Si envía `flow=generic_flow`, `GraphRegistry` exige `vertical in {healthcare, legal}`.
+5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor` o `grafo_generico`.
 
 ## Estado Canonico
 
 El estado esta modelado en `domain/state.py` y contiene:
 
-- sesion: `session_id`, `conversation_id`, `user_id`, `client_id`, `vertical`, `bridge`, `current_turn`
+- sesion: `session_id`, `conversation_id`, `user_id`, `client_id`, `vertical`, `flow`, `current_turn`
 - prompts/config: `capabilities`, `tenant_config`
 - referencias: `resolved_references`, `pending_clarification`, `clarification_attempts`
 - cola: `intent_queue`, `active_intent`, `completed_intents`, `turn_outputs`
@@ -1072,6 +1004,14 @@ Prompts incluidos:
   - `vertical/realtor/{plan,synthesis}_prompt.py`
   - `vertical/healthcare/{plan,synthesis}_prompt.py`
   - `vertical/legal/{plan,synthesis}_prompt.py`
+- realtor:
+  - `text_to_sql_prompt.py`
+  - `comparison_synthesizer_prompt.py`
+  - `recommendation_prompt.py`
+  - `appointment_data_collector_prompt.py`
+
+## Persistencia y Caches
+
 ```
 ### `services/ai_runtime/main.py`
 
@@ -1093,6 +1033,7 @@ app.include_router(router, prefix=settings.api_prefix)
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -1112,6 +1053,10 @@ from services.ai_runtime.runtime.bootstrap import runtime
 
 router = APIRouter()
 TURN_TRACE_WEB_ROOT = Path(__file__).resolve().parent / "web" / "turn_trace"
+CONVERSATION_SUITE_WEB_ROOT = Path(__file__).resolve().parent / "web" / "conversation_suites"
+GENERATED_CONVERSATION_SUITE_DIR = Path(
+    os.getenv("AI_GENERATED_CONVERSATION_SUITES_DIR", "/app/log/generated-conversation-suites")
+)
 NO_CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
@@ -1122,6 +1067,89 @@ NO_CACHE_HEADERS = {
 class HealthResponse(BaseModel):
     status: str
     service: str
+
+
+def _load_json_file(path: Path) -> dict[str, object] | list[object] | None:
+    if not path.exists() or not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _infer_suite_type(*, bundle_id: str, meta: dict[str, object], report: dict[str, object]) -> str:
+    explicit = str(meta.get("suite_type") or report.get("suite_type") or "").strip().lower()
+    if explicit in {"generated", "regression", "manual"}:
+        return explicit
+
+    candidates = [
+        bundle_id,
+        str(meta.get("suite_id") or ""),
+        str(report.get("suite_id") or ""),
+    ]
+    for candidate in candidates:
+        normalized = candidate.strip().lower()
+        if "regression" in normalized:
+            return "regression"
+        if "manual" in normalized:
+            return "manual"
+        if "generated" in normalized:
+            return "generated"
+    return "manual"
+
+
+def _list_generated_suite_bundles() -> list[dict[str, object]]:
+    if not GENERATED_CONVERSATION_SUITE_DIR.exists():
+        return []
+    bundles: list[dict[str, object]] = []
+    for entry in GENERATED_CONVERSATION_SUITE_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        meta = _load_json_file(entry / "meta.json") or {}
+        report = _load_json_file(entry / "report.json") or {}
+        summary = (report.get("summary") or {}) if isinstance(report, dict) else {}
+        suite_type = _infer_suite_type(
+            bundle_id=entry.name,
+            meta=meta if isinstance(meta, dict) else {},
+            report=report if isinstance(report, dict) else {},
+        )
+        bundles.append(
+            {
+                "bundle_id": entry.name,
+                "suite_id": meta.get("suite_id") or entry.name,
+                "suite_type": suite_type,
+                "generated_at": meta.get("generated_at"),
+                "conversations_total": summary.get("conversations_total"),
+                "turns_total": summary.get("turns_total"),
+                "turns_failed": summary.get("turns_failed"),
+            }
+        )
+    bundles.sort(key=lambda item: str(item.get("generated_at") or ""), reverse=True)
+    return bundles
+
+
+def _load_generated_suite_bundle(bundle_id: str) -> dict[str, object]:
+    bundle_dir = (GENERATED_CONVERSATION_SUITE_DIR / bundle_id).resolve()
+    if not str(bundle_dir).startswith(str(GENERATED_CONVERSATION_SUITE_DIR.resolve())) or not bundle_dir.exists():
+        raise HTTPException(status_code=404, detail="Bundle not found")
+    suite = _load_json_file(bundle_dir / "suite.json")
+    report = _load_json_file(bundle_dir / "report.json")
+    meta = _load_json_file(bundle_dir / "meta.json")
+    if suite is None and report is None:
+        raise HTTPException(status_code=404, detail="Bundle is empty")
+    bundle_meta = dict(meta or {}) if isinstance(meta, dict) else {}
+    bundle_report = dict(report or {}) if isinstance(report, dict) else {}
+    suite_type = _infer_suite_type(
+        bundle_id=bundle_id,
+        meta=bundle_meta,
+        report=bundle_report,
+    )
+    bundle_meta.setdefault("suite_type", suite_type)
+    bundle_report.setdefault("suite_type", suite_type)
+    return {
+        "bundle_id": bundle_id,
+        "meta": bundle_meta,
+        "suite": suite,
+        "report": bundle_report,
+    }
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -1181,61 +1209,6 @@ async def turn_trace_asset(asset_path: str) -> FileResponse:
 
 @router.get("/debug/turn-traces/clients/{client_id}/sessions")
 async def debug_turn_trace_sessions(client_id: str, request: Request) -> dict[str, object]:
-    return {
-        "client_id": client_id,
-        "sessions": runtime.dependencies.trace_store.list_sessions(client_id),
-    }
-
-
-@router.get("/debug/turn-traces/config")
-async def debug_turn_trace_config() -> dict[str, object]:
-    return {
-        "trace_enabled": runtime.dependencies.trace_store.enabled,
-        "token_required": False,
-    }
-
-
-@router.get("/debug/turn-traces/clients")
-async def debug_turn_trace_clients(request: Request) -> dict[str, object]:
-    return {
-        "clients": runtime.dependencies.trace_store.list_clients(),
-    }
-
-
-@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-async def debug_turn_trace_turns(client_id: str, session_id: str, request: Request) -> dict[str, object]:
-    return {
-        "client_id": client_id,
-        "session_id": session_id,
-        "turns": runtime.dependencies.trace_store.list_turns(client_id, session_id),
-    }
-
-
-@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-async def debug_turn_trace_delete_session(
-    client_id: str,
-    session_id: str,
-    request: Request,
-) -> dict[str, object]:
-    payload = runtime.dependencies.trace_store.delete_session(client_id, session_id)
-    return {
-        "client_id": client_id,
-        "session_id": session_id,
-        **payload,
-    }
-
-
-@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-async def debug_turn_trace_turn(
-    client_id: str,
-    session_id: str,
-    turn: int,
-    request: Request,
-) -> dict[str, object]:
-    payload = runtime.dependencies.trace_store.get_turn(client_id, session_id, turn)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="Turn trace not found")
-    return payload
 ```
 ### `services/ai_runtime/runtime/settings.py`
 
@@ -1380,10 +1353,10 @@ from services.ai_runtime.runtime.turn_trace import (
 )
 
 
-def _resolve_bridge(vertical: str, bridge: str | None) -> str:
-    if bridge:
-        return bridge
-    return "property-bridge" if vertical == "realtor" else "generic-bridge"
+def _resolve_flow(vertical: str, flow: str | None) -> str:
+    if flow:
+        return flow
+    return "realtor_flow" if vertical == "realtor" else "generic_flow"
 
 
 def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
@@ -1426,6 +1399,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
         base_state.cards_mode = None
         base_state.ui_payload = None
         base_state.search_attempts = 0
+        base_state.effective_search_filters = None
 
 
 class ConversationRuntime:
@@ -1444,7 +1418,7 @@ class ConversationRuntime:
 
     async def handle_turn(self, request: ChatRequest) -> ChatResponse:
         tenant_config = await self.tenant_loader.load(request.client_id)
-        bridge = _resolve_bridge(tenant_config.vertical, request.bridge)
+        flow = _resolve_flow(tenant_config.vertical, request.flow)
         user_id = (
             request.user_id
             or str(request.metadata.get("channel_user_id") or "")
@@ -1462,7 +1436,7 @@ class ConversationRuntime:
             base_state.tenant_config = tenant_config
             base_state.capabilities = list(tenant_config.capabilities)
             base_state.vertical = tenant_config.vertical
-            base_state.bridge = bridge
+            base_state.flow = flow
             base_state.user_id = user_id
             _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
@@ -1475,7 +1449,7 @@ class ConversationRuntime:
                 user_id=user_id,
                 client_id=request.client_id,
                 vertical=tenant_config.vertical,
-                bridge=bridge,
+                flow=flow,
                 tenant_config=tenant_config,
                 initial_message=request.message,
             )
@@ -1492,7 +1466,7 @@ class ConversationRuntime:
             session_id=session_id,
             conversation_id=conversation_id,
             vertical=tenant_config.vertical,
-            bridge=bridge,
+            flow=flow,
             turn=base_state.current_turn,
             user_id=user_id,
             user_message=request.message,
@@ -1505,7 +1479,7 @@ class ConversationRuntime:
             request_metadata=request.metadata,
             state_summary=summarize_state(base_state.model_dump(mode="json")),
         )
-        graph = self.graph_registry.get_graph(tenant_config.vertical, bridge, self.dependencies)
+        graph = self.graph_registry.get_graph(tenant_config.vertical, flow, self.dependencies)
         try:
             final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
             final_state = (
@@ -1525,7 +1499,6 @@ class ConversationRuntime:
                 session_id,
                 final_state.model_dump(mode="json"),
                 tenant_config.redis_ttl_seconds,
-            )
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1540,9 +1513,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from services.ai_runtime.domain.contracts import (
     Appointment,
-    BridgeName,
     ChatMessage,
     ConversationEntity,
+    FlowName,
     IntentDefinition,
     LeadExtracted,
     LeadPlaceholder,
@@ -1615,7 +1588,7 @@ class BaseGraphState(BaseModel):
     user_id: str
     client_id: str
     vertical: Vertical
-    bridge: BridgeName
+    flow: FlowName
     current_turn: int = 1
     messages: list[ChatMessage] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
@@ -1646,6 +1619,7 @@ class RealtorGraphState(BaseGraphState):
     """State for the full realtor graph."""
 
     search_filters: SearchFilters = Field(default_factory=SearchFilters)
+    effective_search_filters: SearchFilters | None = None
     inventory: list[Property] = Field(default_factory=list)
     last_search_results: list[Property] = Field(default_factory=list)
     last_mentioned: Property | None = None
@@ -1666,7 +1640,7 @@ def build_base_state(
     user_id: str,
     client_id: str,
     vertical: Vertical,
-    bridge: BridgeName,
+    flow: FlowName,
     tenant_config: TenantConfig,
     initial_message: str,
 ) -> BaseGraphState:
@@ -1678,7 +1652,7 @@ def build_base_state(
         user_id=user_id,
         client_id=client_id,
         vertical=vertical,
-        bridge=bridge,
+        flow=flow,
         capabilities=list(tenant_config.capabilities),
         tenant_config=tenant_config,
         messages=[ChatMessage(role="user", content=initial_message)],
@@ -1688,11 +1662,11 @@ def build_base_state(
 ### `services/ai_runtime/graph/registry.py`
 
 ```
-"""Graph registry for bridge and vertical selection."""
+"""Graph registry for flow and vertical selection."""
 
 from __future__ import annotations
 
-from services.ai_runtime.domain.contracts import BridgeName, Vertical
+from services.ai_runtime.domain.contracts import FlowName, Vertical
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph.generic.graph import build_generic_graph
 from services.ai_runtime.graph.realtor.graph import build_realtor_graph
@@ -1701,11 +1675,11 @@ from services.ai_runtime.graph.realtor.graph import build_realtor_graph
 class GraphRegistry:
     """Select the correct LangGraph builder for the resolved tenant vertical."""
 
-    def get_graph(self, vertical: Vertical, bridge: BridgeName, deps: GraphDependencies):
-        if bridge == "property-bridge" and vertical != "realtor":
-            raise ValueError("property-bridge solo puede usarse con vertical realtor")
-        if bridge == "generic-bridge" and vertical == "realtor":
-            raise ValueError("generic-bridge no puede usarse con vertical realtor")
+    def get_graph(self, vertical: Vertical, flow: FlowName, deps: GraphDependencies):
+        if flow == "realtor_flow" and vertical != "realtor":
+            raise ValueError("realtor_flow solo puede usarse con vertical realtor")
+        if flow == "generic_flow" and vertical == "realtor":
+            raise ValueError("generic_flow no puede usarse con vertical realtor")
         if vertical == "realtor":
             return build_realtor_graph(deps)
         return build_generic_graph(deps)
@@ -2026,377 +2000,9 @@ def build_realtor_graph(deps: GraphDependencies):
     )
 ```
 
-## Bridges y Canal Web
+## Canal Web
 
-### `services/bridges/generic-bridge/main.py`
-
-```
-"""
-Generic Bridge
-Adapts generic chat requests to the active AI runtime API
-"""
-import asyncio
-import logging
-import time
-from typing import Dict, Any, Optional
-from uuid import UUID
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, ConfigDict, AliasChoices
-from pydantic.alias_generators import to_camel
-import httpx
-import os
-
-
-# Configuration
-INFERENCE_API_URL = os.getenv(
-    "AI_RUNTIME_API",
-    os.getenv(
-        "AGENT_CORE_API",
-        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
-    ),
-)
-INFERENCE_API_PREFIX = os.getenv(
-    "AI_RUNTIME_API_PREFIX",
-    os.getenv(
-        "AGENT_CORE_API_PREFIX",
-        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-    ),
-)
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("generic-bridge")
-
-# FastAPI app
-app = FastAPI(
-    title="Generic Bridge",
-    description="Adapts generic chat requests to the active AI runtime",
-    version="1.0.0"
-)
-
-
-class GenericChatRequest(BaseModel):
-    """Generic chat request contract"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="ignore",
-    )
-
-    query_text: str = Field(
-        ...,
-        min_length=1,
-        max_length=4000,
-        validation_alias=AliasChoices("query_text", "queryText", "text"),
-    )
-    client_id: UUID = Field(
-        ...,
-        description="Tenant/client identifier",
-        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
-    )
-    business_domain: Optional[str] = Field(None, description="Optional business domain")
-    conversation_id: Optional[UUID] = Field(None, description="Existing conversation ID")
-    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-class GenericChatResponse(BaseModel):
-    """Generic chat response contract"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-    answer: str
-    conversation_id: UUID
-    lead_id: Optional[UUID] = None
-    scorecard_id: Optional[UUID] = None
-    scoring_status: Optional[str] = None
-    scoring_job_id: Optional[UUID] = None
-    scoring_eta: Optional[str] = None
-    score_total: Optional[float] = None
-    priority_label: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class HealthResponse(BaseModel):
-    """Health check response"""
-    status: str
-    service: str
-    inference_status: str
-
-
-class AsyncHTTPClient:
-    """Async HTTP client with retry logic"""
-    
-    def __init__(self):
-        self.client = None
-        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
-    
-    async def __aenter__(self):
-        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.aclose()
-    
-    async def post_with_retry(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-        retries: int = MAX_RETRIES
-    ) -> httpx.Response:
-        """POST request with retry logic"""
-        url = f"{self.base_url}{endpoint}"
-        
-        for attempt in range(retries):
-            try:
-                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
-                response = await self.client.post(url, json=payload)
-                
-                if response.status_code < 500 or attempt == retries - 1:
-                    return response
-                
-                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                if attempt == retries - 1:
-                    raise
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(2 ** attempt)
-        
-        raise httpx.RequestError("Max retries exceeded")
-
-
-def _pick(payload: Dict[str, Any], *keys: str):
-    for key in keys:
-        if key in payload:
-            return payload[key]
-    return None
-
-
-@app.post("/chat", response_model=GenericChatResponse)
-async def chat_endpoint(request: GenericChatRequest):
-    """
-    Generic chat endpoint that forwards to the active AI runtime
-    
-    Required:
-    - query_text: User's question/message
-    - client_id: Tenant/client identifier
-    
-    Optional:
-    - business_domain: Additional granularity for model resolution
-    - conversation_id: Continue existing conversation
-    """
-    start_time = time.time()
-    
-    try:
-        request_payload = {
-            "queryText": request.query_text,
-            "clientId": str(request.client_id),
-            "bridge": "generic-bridge",
-            "businessDomain": request.business_domain,
-            "conversationId": str(request.conversation_id) if request.conversation_id else None,
-            "userMetadata": request.user_metadata,
-            "filters": request.filters
-        }
-        
-        # Forward to the AI runtime
-        async with AsyncHTTPClient() as http_client:
-            response = await http_client.post_with_retry("/chat", request_payload)
-            
-            if response.status_code == 400:
-```
-### `services/bridges/property-bridge/main.py`
-
-```
-"""
-Property Bridge
-Adapts property-specific chat requests to the active AI runtime API
-Maintains compatibility with existing property integrations
-"""
-import asyncio
-import logging
-import time
-from typing import Dict, Any, Optional
-from uuid import UUID
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, ConfigDict, AliasChoices
-from pydantic.alias_generators import to_camel
-import httpx
-import os
-
-
-# Configuration
-INFERENCE_API_URL = os.getenv(
-    "AI_RUNTIME_API",
-    os.getenv(
-        "AGENT_CORE_API",
-        os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
-    ),
-)
-INFERENCE_API_PREFIX = os.getenv(
-    "AI_RUNTIME_API_PREFIX",
-    os.getenv(
-        "AGENT_CORE_API_PREFIX",
-        os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-    ),
-)
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("property-bridge")
-
-# FastAPI app
-app = FastAPI(
-    title="Property Bridge",
-    description="Adapts property chat requests to the active AI runtime",
-    version="1.0.0"
-)
-
-
-class PropertyChatRequest(BaseModel):
-    """Property chat request (compatible with existing contract)"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        extra="ignore"
-    )
-    
-    query_text: str = Field(
-        ...,
-        min_length=1,
-        max_length=4000,
-        validation_alias=AliasChoices("query_text", "queryText", "text"),
-    )
-    client_id: UUID = Field(
-        ...,
-        description="Tenant/client identifier",
-        validation_alias=AliasChoices("client_id", "clientId", "cliente_id", "clienteId"),
-    )
-    filters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    conversation_id: Optional[UUID] = Field(None)
-    user_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-class SourceDocument(BaseModel):
-    """Source document for backward compatibility"""
-    content_id: str
-    title: Optional[str] = None
-    body_content: str
-    score: float
-    metadata: Dict[str, Any]
-
-
-class LeadScoringResult(BaseModel):
-    """Legacy scoring result for backward compatibility"""
-    score_engagement: int = Field(0)
-    score_finance: int = Field(0)
-    score_timeline: int = Field(0)
-    score_match: int = Field(0)
-    score_info: int = Field(0)
-    reasoning: str = Field("")
-    
-    # Extracted fields
-    extracted_name: Optional[str] = None
-    extracted_email: Optional[str] = None
-    extracted_phone: Optional[str] = None
-    extracted_income: Optional[float] = None
-    extracted_debts: Optional[float] = None
-    extracted_currency_id: Optional[str] = None
-    extracted_contact_pref_id: Optional[str] = None
-
-
-class PropertyChatResponse(BaseModel):
-    """Property chat response (compatible with existing contract)"""
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-    answer: str
-    sources: list[SourceDocument] = Field(default_factory=list)
-    conversation_id: UUID
-    lead_scoring: Optional[LeadScoringResult] = None
-    scoring_status: Optional[str] = None
-    scoring_job_id: Optional[UUID] = None
-    scoring_eta: Optional[str] = None
-
-
-class AsyncHTTPClient:
-    """Async HTTP client for the active AI runtime"""
-    
-    def __init__(self):
-        self.client = None
-        self.base_url = f"{INFERENCE_API_URL}{INFERENCE_API_PREFIX}"
-    
-    async def __aenter__(self):
-        self.client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.aclose()
-    
-    async def post_with_retry(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-        retries: int = MAX_RETRIES
-    ) -> httpx.Response:
-        """POST request with retry logic"""
-        url = f"{self.base_url}{endpoint}"
-        
-        for attempt in range(retries):
-            try:
-                logger.debug(f"Attempt {attempt + 1}/{retries}: POST {url}")
-                response = await self.client.post(url, json=payload)
-                
-                if response.status_code < 500 or attempt == retries - 1:
-                    return response
-                
-                logger.warning(f"Attempt {attempt + 1} failed: {response.status_code}")
-                await asyncio.sleep(2 ** attempt)
-                
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                if attempt == retries - 1:
-                    raise
-                logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                await asyncio.sleep(2 ** attempt)
-        
-        raise httpx.RequestError("Max retries exceeded")
-    
-def map_v2_scorecard_to_legacy(scorecard: Dict[str, Any]) -> LeadScoringResult:
-    """
-    Map runtime scorecard to legacy scoring format
-    
-    This is a simplified mapping for backward compatibility.
-    In production, would need business logic to map criteria to legacy pillars.
-    """
-    if not scorecard:
-        return LeadScoringResult(
-            score_engagement=0,
-            score_finance=0,
-            score_timeline=0,
-            score_match=0,
-            score_info=0,
-            reasoning="No scoring available",
-        )
-    
-    # Extract scores from runtime score items
-    engagement_score = 0
-    finance_score = 0
-    timeline_score = 0
-    match_score = 0
-```
-### `services/web/chat-web-renderer/backend/app/core/inference_bridge.py`
+### `services/web/chat-web-renderer/backend/app/core/runtime_client.py`
 
 ```
 import os
@@ -2406,7 +2012,7 @@ from typing import Dict, Any
 
 # Logger config
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("inference_bridge")
+logger = logging.getLogger("runtime_client")
 
 
 class InferenceClient:
@@ -2420,20 +2026,8 @@ class InferenceClient:
         self.timeout = int(os.getenv("INFERENCE_TIMEOUT", 60))
         self.connect_timeout = float(os.getenv("INFERENCE_CONNECT_TIMEOUT", 5))
         self.default_client_id = os.getenv("DEFAULT_CLIENT_ID", "")
-        inference_url = os.getenv(
-            "AI_RUNTIME_API",
-            os.getenv(
-                "AGENT_CORE_API",
-                os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
-            ),
-        )
-        api_prefix = os.getenv(
-            "AI_RUNTIME_API_PREFIX",
-            os.getenv(
-                "AGENT_CORE_API_PREFIX",
-                os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-            ),
-        )
+        inference_url = os.getenv("AI_RUNTIME_API", "http://ai-runtime:8000")
+        api_prefix = os.getenv("AI_RUNTIME_API_PREFIX", "/api/v1")
         self.base_url = inference_url.rstrip("/") + api_prefix
         logger.info("🔌 InferenceClient conectado a %s (Timeout: %ss)", self.base_url, self.timeout)
 
@@ -2521,7 +2115,7 @@ class InferenceClient:
             raise ConnectionError("No se pudo conectar con el cerebro de IA.")
 
         except Exception as e:
-            logger.error(f"❌ Error inesperado en el bridge: {str(e)}")
+            logger.error(f"❌ Error inesperado en el runtime client: {str(e)}")
             raise
 
     def _normalize_v2_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -2593,29 +2187,18 @@ class RuntimeMemoryResetError(RuntimeError):
 
 class MemoryResetClient:
     def __init__(self):
-        self.agent_core_reset_url = os.getenv(
+        self.ai_runtime_reset_url = os.getenv(
             "AI_RUNTIME_RESET_URL",
-            os.getenv(
-                "AGENT_CORE_RESET_URL",
-                os.getenv(
-                    "INFERENCE_RESET_URL",
-                    os.getenv(
-                        "INFERENCE_V2_RESET_URL",
-                        "http://ai-runtime:8000/api/v1/internal/memory/reset",
-                    ),
-                ),
-            ),
+            "http://ai-runtime:8000/api/v1/internal/memory/reset",
         ).rstrip("/")
         self.scoring_core_reset_url = self._resolve_scoring_reset_url()
         self.timeout = float(os.getenv("INFERENCE_TIMEOUT", 60))
         self.internal_token = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
-        self.version = "runtime"
 
         logger.info(
-            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s version=%s)",
-            self.agent_core_reset_url,
+            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s)",
+            self.ai_runtime_reset_url,
             self.scoring_core_reset_url,
-            self.version,
         )
 
     @staticmethod
@@ -2669,7 +2252,7 @@ class MemoryResetClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             return await self._post_reset(
                 client=client,
-                url=self.agent_core_reset_url,
+                url=self.ai_runtime_reset_url,
                 payload=payload,
                 headers=headers,
             )
@@ -2692,7 +2275,7 @@ class MemoryResetClient:
         if self.internal_token:
             headers["X-Internal-Token"] = self.internal_token
 
-        session_reset_url = self.agent_core_reset_url.replace(
+        session_reset_url = self.ai_runtime_reset_url.replace(
             "/internal/memory/reset",
             "/internal/session/reset",
         )
@@ -2718,7 +2301,7 @@ class MemoryResetClient:
             agent_result, scoring_result = await asyncio.gather(
                 self._post_reset(
                     client=client,
-                    url=self.agent_core_reset_url,
+                    url=self.ai_runtime_reset_url,
                     payload=payload,
                     headers=headers,
                 ),
@@ -2734,9 +2317,9 @@ class MemoryResetClient:
         results: Dict[str, Any] = {}
         failures: Dict[str, str] = {}
         if isinstance(agent_result, Exception):
-            failures["agent_core"] = self._format_error(agent_result)
+            failures["ai_runtime"] = self._format_error(agent_result)
         else:
-            results["agent_core"] = agent_result
+            results["ai_runtime"] = agent_result
 
         if isinstance(scoring_result, Exception):
             failures["scoring_core"] = self._format_error(scoring_result)
@@ -2795,20 +2378,8 @@ async def dependencies_health():
     Lightweight dependency health for frontend status indicator.
     """
     timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
-    inference_base = os.getenv(
-        "AI_RUNTIME_API",
-        os.getenv(
-            "AGENT_CORE_API",
-            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
-        ),
-    ).rstrip("/")
-    inference_prefix = os.getenv(
-        "AI_RUNTIME_API_PREFIX",
-        os.getenv(
-            "AGENT_CORE_API_PREFIX",
-            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-        ),
-    )
+    inference_base = os.getenv("AI_RUNTIME_API", "http://ai-runtime:8000").rstrip("/")
+    inference_prefix = os.getenv("AI_RUNTIME_API_PREFIX", "/api/v1")
     inference_url = f"{inference_base}{inference_prefix}/health"
 
     result = {
@@ -2838,7 +2409,7 @@ async def dependencies_health():
     result["status"] = "operational" if all_ok else "degraded"
     return result
 
-from app.core.inference_bridge import InferenceClient
+from app.core.runtime_client import InferenceClient
 from app.core.memory_reset import MemoryResetClient, RuntimeMemoryResetError
 from app.core.vertical_router import vertical_router
 from app.transformer.core import SDUITransformer
@@ -2931,6 +2502,18 @@ async def chat_interaction(req: InternalChatRequest):
     )
     
     session_context = {
+        "client_id": client_id,
+        "session_id": incoming_session_id or session_data.get("session_id"),
+        "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
+        "lead_id": session_data.get("lead_id"),
+        "brand_project": req.brand_project or session_data.get("brand_project"),
+        "channel": channel,
+        "channel_user_id": channel_user_id,
+        "auth_user_id": req.auth_user_id or session_data.get("auth_user_id"),
+    }
+    
+    if metadata:
+        session_context.update(metadata)
 ```
 
 ## Data Layer Compartida
@@ -3354,7 +2937,14 @@ tests/sandbox/__pycache__/simulate_multichat_realtor.cpython-312.pyc
 tests/sandbox/__pycache__/test_gemini_latency_realtor_contract.cpython-312.pyc
 tests/sandbox/dentist/simulate_chat_dentist.py
 tests/sandbox/dentist/simulate_multichat_dentist.py
+tests/sandbox/realtor/generated_conversation_suite.schema.json
+tests/sandbox/realtor/generated_conversation_suite.template.json
+tests/sandbox/realtor/generated_conversation_suite_prompt.md
+tests/sandbox/realtor/generated_suite_01.json
+tests/sandbox/realtor/manual_suite_01.json
 tests/sandbox/realtor/realtor_v3_regression_battery.py
+tests/sandbox/realtor/regression_suite_01.json
+tests/sandbox/realtor/run_generated_conversation_suite.py
 tests/sandbox/realtor/simulate_chat_realtor.py
 tests/sandbox/realtor/simulate_multichat_realtor.py
 tests/sandbox/realtor/test_gemini_latency_realtor_contract.py
@@ -3363,13 +2953,4 @@ tests/system/__pycache__/test_active_chat_scoring_e2e.cpython-312.pyc
 tests/system/__pycache__/test_chat_e2e.cpython-312.pyc
 tests/system/test_active_chat_scoring_e2e.py
 tests/system/test_chat_e2e.py
-```
-
-## Legacy y Zonas de Referencia
-
-```text
-services/agent-core -> legacy, fuera del runtime principal
-services/inference-stack-v2 -> legacy, no autoridad actual
-services/etl-processor -> deprecado
-services/ai-agents -> exploracion no operativa
 ```

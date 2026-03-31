@@ -1,13 +1,15 @@
 ---
-title: ai-runtime generic graph
+title: ai-runtime basic graph
 ---
 flowchart TD
     n___start__([START])
-    n_resolve_references[resolve_references]
-    n_after_resolve_references{after_resolve_references}
+    n_analyze_turn[analyze_turn]
+    n_after_analyze_turn{after_analyze_turn}
     n_ask_clarification[ask_clarification]
-    n_classify_intent[classify_intent]
-    n_after_classify_intent{after_classify_intent}
+    n_capture_memory_entities[capture_memory_entities]
+    n_after_capture_memory_entities{after_capture_memory_entities}
+    n_memory_lookup[memory_lookup]
+    n_after_memory_lookup{after_memory_lookup}
     n_route_next_intent[route_next_intent]
     n_after_route_next_intent{after_route_next_intent}
     n_collect_lead_data[collect_lead_data]
@@ -21,7 +23,7 @@ flowchart TD
     n_lead_advisor[lead_advisor]
     n_synthesize[synthesize]
     n___end__((END))
-    n___start__ --> n_resolve_references
+    n___start__ --> n_analyze_turn
     n_ask_clarification --> n___end__
     n_assign_agent --> n_mensajear
     n_collect_lead_data --> n_synthesize
@@ -29,13 +31,20 @@ flowchart TD
     n_mensajear --> n_check_queue
     n_rag_agencia --> n_check_queue
     n_synthesize --> n___end__
-    n_resolve_references --> n_after_resolve_references
-    n_after_resolve_references -->|ask_clarification| n_ask_clarification
-    n_after_resolve_references -->|collect_lead_data| n_collect_lead_data
-    n_after_resolve_references -->|classify_intent| n_classify_intent
-    n_classify_intent --> n_after_classify_intent
-    n_after_classify_intent -->|route_next_intent| n_route_next_intent
-    n_after_classify_intent -->|lead_advisor| n_lead_advisor
+    n_analyze_turn --> n_after_analyze_turn
+    n_after_analyze_turn -->|ask_clarification| n_ask_clarification
+    n_after_analyze_turn -->|collect_lead_data| n_collect_lead_data
+    n_after_analyze_turn -->|capture_memory_entities| n_capture_memory_entities
+    n_capture_memory_entities --> n_after_capture_memory_entities
+    n_after_capture_memory_entities -->|memory_lookup| n_memory_lookup
+    n_after_capture_memory_entities -->|route_next_intent| n_route_next_intent
+    n_after_capture_memory_entities -->|lead_advisor| n_lead_advisor
+    n_after_capture_memory_entities -->|synthesize| n_synthesize
+    n_memory_lookup --> n_after_memory_lookup
+    n_after_memory_lookup -->|route_next_intent| n_route_next_intent
+    n_after_memory_lookup -->|lead_advisor| n_lead_advisor
+    n_after_memory_lookup -->|end| n___end__
+    n_after_memory_lookup -->|synthesize| n_synthesize
     n_route_next_intent --> n_after_route_next_intent
     n_after_route_next_intent -->|rag_agencia| n_rag_agencia
     n_after_route_next_intent -->|collect_lead_data| n_collect_lead_data

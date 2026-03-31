@@ -10,8 +10,13 @@ from app.api.schemas import (
     ExternalErrorResponse,
     EXTERNAL_ERROR_CODES,
 )
-from app.core.inference_bridge import InferenceClient
-from app.core.vertical_router import vertical_router
+from app.core.runtime_client import InferenceClient
+from app.core.session_identity import (
+    normalize_session_id,
+    resolve_effective_session_id,
+    resolve_request_session_id,
+)
+from app.core.vertical_router import GENERIC_RENDER_VERTICALS, vertical_router
 from app.transformer.core import SDUITransformer
 from app.transformer.realtor_policy import RealtorRendererPolicy
 from app.transformer.generic_policy import GenericRendererPolicy
@@ -27,7 +32,12 @@ transformer = SDUITransformer()
 session_manager = SessionManager()
 
 vertical_router.register_strategy("realtor", "api", RealtorRendererPolicy(channel="api"))
-vertical_router.register_strategy("generic", "api", GenericRendererPolicy(channel="api"))
+for vertical_slug in GENERIC_RENDER_VERTICALS:
+    vertical_router.register_strategy(
+        vertical_slug,
+        "api",
+        GenericRendererPolicy(channel="api", vertical_slug=vertical_slug),
+    )
 
 
 def _assert_external_token(request: Request) -> None:
@@ -118,7 +128,12 @@ async def external_chat(req: ExternalChatRequest, request: Request):
     
     session_context = {
         "client_id": client_id,
-        "session_id": req.session_id or session_data.get("session_id"),
+        "session_id": resolve_request_session_id(
+            incoming_session_id=normalize_session_id(req.session_id),
+            stored_session_id=session_data.get("session_id"),
+            incoming_conversation_id=str(req.conversation_id) if req.conversation_id else None,
+            stored_conversation_id=session_data.get("conversation_id"),
+        ),
         "conversation_id": str(req.conversation_id) if req.conversation_id else session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
         "brand_project": session_data.get("brand_project"),
@@ -136,8 +151,14 @@ async def external_chat(req: ExternalChatRequest, request: Request):
             session=session_context,
         )
         
-        new_session_id = ai_response.get("session_id") or session_context.get("session_id")
+        new_session_id = normalize_session_id(ai_response.get("session_id")) or session_context.get("session_id")
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
+        effective_session_id = resolve_effective_session_id(
+            runtime_session_id=new_session_id,
+            runtime_conversation_id=new_conversation_id,
+            request_session_id=session_context.get("session_id"),
+            request_conversation_id=session_context.get("conversation_id"),
+        )
         resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
         if new_session_id or new_conversation_id:
             await session_manager.upsert_session(
@@ -145,7 +166,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
                 channel=channel,
                 channel_user_id=channel_user_id,
                 data={
-                    "session_id": str(new_session_id) if new_session_id else None,
+                    "session_id": effective_session_id if effective_session_id != "init" else None,
                     "conversation_id": new_conversation_id,
                     "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
@@ -185,7 +206,7 @@ async def external_chat(req: ExternalChatRequest, request: Request):
         policy_response = policy_handler.build_response(
             ai_text=ai_text,
             components=extracted_components,
-            session_id=str(new_session_id or "init"),
+            session_id=effective_session_id,
         )
         
         components = []

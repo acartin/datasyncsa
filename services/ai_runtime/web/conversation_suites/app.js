@@ -30,6 +30,37 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function parseCompactUtcTimestamp(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hour, minute, second] = match;
+  return {
+    raw,
+    display: `${year}-${month}-${day} ${hour}:${minute}:${second} UTC`,
+  };
+}
+
+function formatBundleTimestamp(bundle) {
+  const parsed =
+    parseCompactUtcTimestamp(bundle?.generated_at) ||
+    parseCompactUtcTimestamp(bundle?.meta?.generated_at) ||
+    parseCompactUtcTimestamp(bundle?.report?.generated_at);
+  if (parsed) {
+    return parsed;
+  }
+  const fallback = String(bundle?.generated_at || bundle?.meta?.generated_at || bundle?.report?.generated_at || "").trim();
+  if (!fallback) {
+    return { raw: "", display: "-" };
+  }
+  return {
+    raw: fallback,
+    display: fallback,
+  };
+}
+
 function setStatus(message, kind = "ok") {
   els.statusBanner.className = `status-banner status-${kind}`;
   els.statusBanner.textContent = message;
@@ -119,19 +150,26 @@ function renderBundles() {
     return;
   }
   els.bundlesList.innerHTML = filteredBundles
-    .map(
-      (bundle) => `
+    .map((bundle) => {
+      const suiteType = inferSuiteType(bundle);
+      const timestamp = formatBundleTimestamp(bundle);
+      return `
         <button class="list-item ${state.bundle?.bundle_id === bundle.bundle_id ? "selected" : ""}" data-bundle-id="${escapeHtml(bundle.bundle_id)}">
           <div class="list-item-top">
             <strong>${escapeHtml(bundle.suite_id || bundle.bundle_id)}</strong>
-            <span class="type-chip type-${escapeHtml(inferSuiteType(bundle))}">${escapeHtml(inferSuiteType(bundle))}</span>
+            <span class="type-chip type-${escapeHtml(suiteType)}">${escapeHtml(suiteType)}</span>
           </div>
-          <span>bundle: ${escapeHtml(bundle.bundle_id)}</span>
-          <span>turns: ${escapeHtml(bundle.turns_total || 0)} · failed: ${escapeHtml(bundle.turns_failed || 0)}</span>
-          <span>${escapeHtml(bundle.generated_at || "-")}</span>
+          <div class="bundle-meta-grid">
+            <span>bundle: ${escapeHtml(bundle.bundle_id)}</span>
+            <span>turns: ${escapeHtml(bundle.turns_total || 0)} · failed: ${escapeHtml(bundle.turns_failed || 0)}</span>
+          </div>
+          <div class="bundle-timestamp" title="${escapeHtml(timestamp.raw || timestamp.display)}">
+            <span class="timestamp-label">timestamp</span>
+            <span class="timestamp-value">${escapeHtml(timestamp.display)}</span>
+          </div>
         </button>
-      `
-    )
+      `;
+    })
     .join("");
 
   els.bundlesList.querySelectorAll("[data-bundle-id]").forEach((button) => {

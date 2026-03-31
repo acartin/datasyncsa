@@ -56,6 +56,18 @@ class TestVerticalResolver:
         assert resolver.resolve_vertical("client-456") == "generic"
 
     @patch("app.core.vertical_router.db_manager")
+    def test_returns_healthcare_when_configured(self, mock_db):
+        mock_db.get_client_vertical_context.return_value = {
+            "client_exists": True,
+            "vertical_id": 3,
+            "scoring_model_id": "model-789",
+            "vertical_slug": "healthcare",
+            "vertical_name": "Healthcare",
+        }
+        resolver = VerticalResolver()
+        assert resolver.resolve_vertical("client-healthcare") == "healthcare"
+
+    @patch("app.core.vertical_router.db_manager")
     def test_fallback_when_client_not_found(self, mock_db):
         mock_db.get_client_vertical_context.return_value = {
             "client_exists": False,
@@ -178,12 +190,18 @@ class TestVerticalRouter:
 
 
 class TestValidVerticals:
-    def test_valid_verticals_contains_realtor_and_generic(self):
+    def test_valid_verticals_contains_supported_runtime_verticals(self):
         assert "realtor" in VALID_VERTICALS
         assert "generic" in VALID_VERTICALS
+        assert "healthcare" in VALID_VERTICALS
+        assert "legal" in VALID_VERTICALS
+        assert "insurance" in VALID_VERTICALS
 
     def test_fallback_is_generic(self):
         assert FALLBACK_VERTICAL == "generic"
 
     def test_normalize_real_estate_alias(self):
         assert normalize_vertical_slug("real-estate") == "realtor"
+
+    def test_normalize_insurance_alias(self):
+        assert normalize_vertical_slug("seguros") == "insurance"

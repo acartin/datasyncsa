@@ -1,0 +1,45 @@
+{
+  "suite_id": "realtor_generated_suite_pending_decisions",
+  "suite_type": "regression",
+  "generator_notes": "Regresion puntual para decisiones pendientes despues de una busqueda sin resultados exactos.",
+  "defaults": {
+    "expect": {
+      "answer_excludes": [
+        "seguimos viendo"
+      ]
+    }
+  },
+  "conversations": [
+    {
+      "id": "search_relaxation_choice_after_no_results",
+      "description": "Si el usuario confirma despues de un no-match, el runtime debe pedir que escoja que flexibilizar.",
+      "tags": ["pending_decision", "budget", "no_exact"],
+      "turns": [
+        {
+          "user": "Quiero una casa de menos de 200,000 en Curridabat",
+          "expect": {
+            "answer_contains_any": ["curridabat", "200,000", "no encontr", "ajust"],
+            "require_cards": false
+          }
+        },
+        {
+          "user": "Si",
+          "expect": {
+            "answer_contains_all": ["precio", "zona"],
+            "answer_contains_any": ["todavia", "no encontr", "criterio"],
+            "require_cards": false
+          }
+        },
+        {
+          "user": "Que encontraste?",
+          "expect": {
+            "answer_contains_all": ["precio", "zona"],
+            "answer_contains_any": ["todavia", "no encontr", "criterio"],
+            "answer_excludes": ["195,000", "265,000", "te mostre"],
+            "require_cards": false
+          }
+        }
+      ]
+    }
+  ]
+}

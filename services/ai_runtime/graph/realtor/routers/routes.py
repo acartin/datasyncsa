@@ -44,4 +44,4 @@ def after_render_cards(state: dict[str, object]) -> str:
 
 def after_collect_appointment_data(state: dict[str, object]) -> str:
     graph_state = RealtorGraphState.model_validate(state)
-    return "assign_agent" if getattr(graph_state.cita, "datos_completos", False) else "synthesize"
+    return "assign_agent" if getattr(graph_state.cita, "datos_completos", False) else "lead_advisor"

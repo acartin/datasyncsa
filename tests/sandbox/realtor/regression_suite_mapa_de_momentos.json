@@ -1,0 +1,339 @@
+{
+  "suite_id": "realtor_regression_suite_mapa_de_momentos_v2",
+  "suite_type": "regression",
+  "generator_notes": "Bateria para validar el mapa de momentos con una regla mas estricta: la captura de datos solo puede comenzar desde la segunda muestra util de cards o datos de propiedades, y la respuesta final debe contener como maximo una pregunta.",
+  "defaults": {
+    "expect": {
+      "answer_excludes": [
+        "seguimos viendo"
+      ],
+      "max_questions": 1
+    }
+  },
+  "conversations": [
+    {
+      "id": "greeting_only_does_not_force_name",
+      "description": "Un saludo puro no debe disparar captura ni exposiciones utiles.",
+      "tags": ["mapa_momentos", "greeting", "lead_capture"],
+      "turns": [
+        {
+          "user": "Hola",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 0,
+            "answer_excludes": [
+              "con quien tengo el gusto",
+              "podrias decirme tu nombre",
+              "cual es tu nombre"
+            ],
+            "expected_criteria_max": {
+              "intencion": 1.5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "first_useful_exposure_does_not_ask_name_yet",
+      "description": "La primera muestra util de resultados puede orientar, pero no debe iniciar captura de lead.",
+      "tags": ["mapa_momentos", "nombre", "first_exposure"],
+      "turns": [
+        {
+          "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "expect": {
+            "answer_contains_any": [
+              "Heredia",
+              "habitaciones"
+            ],
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1,
+            "answer_excludes": [
+              "podrias indicarme tu nombre",
+              "podrías indicarme tu nombre",
+              "cual es tu nombre",
+              "con quien tengo el gusto"
+            ],
+            "expected_completed_fields_all": [
+              "preferencias",
+              "appointment_intent"
+            ],
+            "expected_criteria_min": {
+              "intencion": 4,
+              "apertura": 5,
+              "match": 5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "second_useful_exposure_unlocks_name_capture",
+      "description": "En la segunda muestra util ya se puede pedir nombre, pero con una sola pregunta total.",
+      "tags": ["mapa_momentos", "nombre", "second_exposure", "single_question"],
+      "turns": [
+        {
+          "user": "Busco una casa en Heredia con 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Cuantos baños tiene la primera?",
+          "expect": {
+            "answer_contains_any": [
+              "baños",
+              "banos"
+            ],
+            "expected_should_ask": true,
+            "expected_field_to_ask": "nombre",
+            "expected_capture_exposure_count": 2,
+            "expected_question_contains_any": [
+              "nombre",
+              "gusto"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ambiguous_name_statement_is_captured",
+      "description": "El patron corto 'con Nombre Apellido' debe guardarse aunque el sistema aun no haya pedido el nombre.",
+      "tags": ["mapa_momentos", "nombre", "memory_capture", "regression"],
+      "turns": [
+        {
+          "user": "Busco una casa en Heredia con 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Con Alvaro Cartin",
+          "expect": {
+            "answer_contains_any": [
+              "Alvaro",
+              "Álvaro"
+            ],
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1,
+            "expected_completed_fields_all": [
+              "nombre",
+              "preferencias"
+            ],
+            "expected_lead_extracted_contains": {
+              "nombre": "Alvaro Cartin"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "budget_after_viewing_context_is_captured",
+      "description": "Si el usuario aporta presupuesto despues de ver opciones, debe quedar capturado aunque no se abra otra pregunta.",
+      "tags": ["mapa_momentos", "presupuesto", "scoring_capture"],
+      "turns": [
+        {
+          "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Mi presupuesto ronda entre 130 mil y 150 mil",
+          "expect": {
+            "expected_should_ask": true,
+            "expected_field_to_ask": "nombre",
+            "expected_capture_exposure_count": 2,
+            "expected_completed_fields_all": [
+              "presupuesto",
+              "preferencias"
+            ],
+            "expected_lead_extracted_contains": {
+              "presupuesto": 150000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "financing_question_triggers_approval_after_name_is_known",
+      "description": "Una vez desbloqueada la captura y con nombre conocido, la pregunta de cuota debe abrir aprobacion financiera.",
+      "tags": ["mapa_momentos", "aprobacion", "financing"],
+      "turns": [
+        {
+          "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Cuantos baños tiene la primera?",
+          "expect": {
+            "expected_should_ask": true,
+            "expected_field_to_ask": "nombre",
+            "expected_capture_exposure_count": 2
+          }
+        },
+        {
+          "user": "Me llamo Alvaro Cartin",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_completed_fields_all": [
+              "nombre",
+              "preferencias"
+            ],
+            "expected_lead_extracted_contains": {
+              "nombre": "Alvaro Cartin"
+            }
+          }
+        },
+        {
+          "user": "Mi presupuesto ronda entre 130 mil y 150 mil",
+          "expect": {
+            "expected_completed_fields_all": [
+              "nombre",
+              "presupuesto",
+              "preferencias"
+            ],
+            "expected_lead_extracted_contains": {
+              "presupuesto": 150000
+            }
+          }
+        },
+        {
+          "user": "Si la financio, cuanto seria la cuota aproximada?",
+          "expect": {
+            "answer_contains_any": [
+              "cuota",
+              "preaprob",
+              "prima",
+              "financ"
+            ],
+            "expected_should_ask": true,
+            "expected_field_to_ask": "aprobacion",
+            "expected_completed_fields_all": [
+              "nombre",
+              "presupuesto",
+              "preferencias"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "timeline_signal_should_raise_time_score",
+      "description": "Una urgencia temporal explicita debe reflejarse en el score temporal aunque no dispare captura ese mismo turno.",
+      "tags": ["mapa_momentos", "plazo", "urgencia", "scoring"],
+      "turns": [
+        {
+          "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Podria mudarme este mes si aparece algo bueno",
+          "expect": {
+            "expected_criteria_min": {
+              "plazo": 5
+            },
+            "manual_review_focus": [
+              "si este turno falla, el scoring temporal sigue subestimando una urgencia bastante explicita"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "negative_appointment_intent_must_not_push_tipo_cita",
+      "description": "Si el usuario niega agendar, appointment_intent debe quedar negativo y no debe proponerse tipo de cita.",
+      "tags": ["mapa_momentos", "appointment", "negative_intent", "guardrail"],
+      "turns": [
+        {
+          "user": "Busco una casa en Heredia con 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "No quiero agendar todavia, solo estoy comparando",
+          "expect": {
+            "answer_contains_any": [
+              "comparando",
+              "no hay problema",
+              "entendido"
+            ],
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1,
+            "forbidden_field_to_ask_any": [
+              "tipo_cita"
+            ],
+            "expected_lead_extracted_contains": {
+              "appointment_intent": "negative"
+            },
+            "expected_criteria_max": {
+              "intencion": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "property_selection_unlocks_name_on_second_exposure",
+      "description": "Cuando el usuario ya quiere visitar en la segunda exposicion, sube la intencion pero sigue siendo prioridad pedir nombre.",
+      "tags": ["mapa_momentos", "high_intent", "identity_priority", "tipo_cita"],
+      "turns": [
+        {
+          "user": "Busco una casa en Heredia con 3 habitaciones",
+          "expect": {
+            "expected_should_ask": false,
+            "expected_field_to_ask": null,
+            "expected_capture_exposure_count": 1
+          }
+        },
+        {
+          "user": "Quiero visitar la primera",
+          "expect": {
+            "answer_contains_any": [
+              "Mercedes",
+              "nombre",
+              "visita"
+            ],
+            "expected_should_ask": true,
+            "expected_field_to_ask": "nombre",
+            "expected_capture_exposure_count": 2,
+            "expected_completed_fields_all": [
+              "tipo_cita",
+              "preferencias",
+              "appointment_intent"
+            ],
+            "expected_lead_extracted_contains": {
+              "tipo_cita": "visita",
+              "appointment_intent": "positive"
+            },
+            "expected_criteria_min": {
+              "intencion": 7,
+              "match": 8
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

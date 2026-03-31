@@ -484,6 +484,30 @@
             }
         };
 
+        const loadInitialBranding = async () => {
+            try {
+                const response = await fetch('/api/chat/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        brand_project: brandProject
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Branding init failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                applyBranding(data?.branding);
+                return data;
+            } catch (err) {
+                console.warn('Initial branding load warning:', err);
+                return null;
+            }
+        };
+
         const pushSystemMessage = (text) => {
             renderer.renderResponse({
                 components: [{ type: 'chat', text, sender: 'bot' }]
@@ -504,11 +528,8 @@
                 if (!res.ok) throw new Error(`health status ${res.status}`);
                 const data = await res.json();
                 const deps = data?.dependencies || {};
-                const runtimeOk = !!(
-                    deps?.ai_runtime?.ok ||
-                    deps?.inference_core_v2?.ok
-                );
-                const optionalDeps = Object.entries(deps).filter(([name]) => name !== 'ai_runtime' && name !== 'inference_core_v2');
+                const runtimeOk = !!deps?.ai_runtime?.ok;
+                const optionalDeps = Object.entries(deps).filter(([name]) => name !== 'ai_runtime');
                 const optionalFailures = optionalDeps.filter(([, payload]) => payload && payload.ok === false);
 
                 if (runtimeOk && optionalFailures.length === 0) {
@@ -741,6 +762,7 @@
 
         (async () => {
             try {
+                await loadInitialBranding();
                 await bootstrapConversation('page_load');
             } catch (e) {
                 console.warn("Chat bootstrap error:", e);
@@ -782,7 +804,7 @@
             try {
                 await sendChatPayload(text);
             } catch (err) {
-                console.error("Error bridge:", err);
+                console.error("Error runtime:", err);
                 if (err?.name === 'AbortError') {
                     pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");
                 } else {

@@ -23,8 +23,6 @@ Reglas base:
 |---|---|---|---|
 | `services/ai_runtime/` | `ai-runtime` | Rebuild si cambiaste codigo: `docker compose up -d --build ai-runtime` | `docker compose exec -T ai-runtime /bin/bash -lc "cd /app/services/ai_runtime && find . -type f -name '*.py' -print0 | xargs -0 python -m py_compile"` |
 | `services/data/` | `ai-runtime` | Rebuild de `ai-runtime` porque el codigo se copia dentro de la imagen del runtime: `docker compose up -d --build ai-runtime` | `docker compose exec -T ai-runtime /bin/bash -lc "cd /app && find services/ai_runtime services/data -type f -name '*.py' -print0 | xargs -0 python -m py_compile"` |
-| `services/bridges/generic-bridge/` | `generic-bridge` | Rebuild si cambiaste codigo: `docker compose up -d --build generic-bridge` | `docker compose exec -T generic-bridge python -m py_compile main.py` |
-| `services/bridges/property-bridge/` | `property-bridge` | Rebuild si cambiaste codigo: `docker compose up -d --build property-bridge` | `docker compose exec -T property-bridge python -m py_compile main.py` |
 | `services/scoring-core/` | `scoring-core` o `scoring-core-worker` | Rebuild de ambos si cambiaste codigo: `docker compose up -d --build scoring-core scoring-core-worker` | `docker compose exec -T scoring-core /bin/bash -lc "find . -type f -name '*.py' -print0 | xargs -0 python -m py_compile"` |
 | `services/web/admin-console/backend/` | `admin-console-api` | Rebuild si cambiaste codigo: `docker compose up -d --build admin-console-api` | `docker compose exec -T admin-console-api pytest -q tests` |
 | `services/web/chat-web-renderer/backend/` | `chat-web-renderer-api` | Rebuild si cambiaste codigo: `docker compose up -d --build chat-web-renderer-api` | `docker compose exec -T chat-web-renderer-api pytest -q tests` |
@@ -34,8 +32,8 @@ Reglas base:
 | `migrations/` | `postgres` | Cargar variables primero | `docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -f /ruta/al.sql` |
 | `tests/sandbox/realtor/` y `tests/sandbox/dentist/` | Host (`/srv/datasyncsa`) | Stack levantado | `python3 tests/sandbox/realtor/simulate_chat_realtor.py` |
 | `tests/system/` y `tests/smoke-stack/` | Host o runner dedicado | Stack levantado y endpoints accesibles | `pytest -q tests/system` |
-| `services/agent-core/` | No usar por defecto | Solo lectura salvo instruccion explicita | `N/A` |
-| `services/inference-stack-v2/` | No usar por defecto | Solo lectura salvo instruccion explicita | `N/A` |
+| `services/legacy/agent-core/` | Host | Solo lectura salvo instruccion explicita | `python3 -m py_compile services/legacy/agent-core/main.py` |
+| `services/legacy/inference-stack-v2/` | Host | Solo lectura salvo instruccion explicita | `python3 -m py_compile services/legacy/inference-stack-v2/inference-core-v2/main.py` |
 | `services/ai-agents/` | Host, solo exploracion | No es parte del compose activo | `python3 -m py_compile ...` si el usuario lo pide |
 
 ## Nota Critica de Montajes

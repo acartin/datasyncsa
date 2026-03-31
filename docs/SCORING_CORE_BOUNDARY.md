@@ -56,10 +56,10 @@ No debe emitir:
 
 La base funcional a extraer viene de:
 
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
-- `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
 
 ## Beneficio
 

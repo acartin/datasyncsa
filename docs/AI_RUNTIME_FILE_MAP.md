@@ -36,23 +36,15 @@ Mapa operativo del stack conversacional activo.
 - `repositories/property_repository.py`
 - `repositories/agent_repository.py`
 
-## Bridges
-
-`services/bridges/`
-
-- `generic-bridge/main.py`
-- `property-bridge/main.py`
-- `_shared/` reservado para tipos o utilidades comunes
-
 ## Canales consumidores
 
-- `services/web/chat-web-renderer/backend/app/core/inference_bridge.py`
+- `services/web/chat-web-renderer/backend/app/core/runtime_client.py`
 - `services/web/chat-web-renderer/backend/app/core/memory_reset.py`
 - `services/web/chat-web-renderer/backend/app/main.py`
 
 ## Boundaries
 
 - Conversacion y decision: `ai-runtime`
-- Adaptacion de contratos/canal: `bridges` y `chat-web-renderer`
+- Adaptacion de contratos/canal: `chat-web-renderer`
 - Scoring asincrono: `scoring-core`
 - Ingesta documental y reseteo best-effort: `etl-docs`

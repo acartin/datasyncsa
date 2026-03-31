@@ -172,6 +172,43 @@ Ejemplo de contrato alineado al runtime LLM-first:
 }
 ```
 
+#### `fields[].question`
+
+Cada item de `fields` puede incluir una llave opcional `question`.
+
+Uso recomendado:
+
+- `question` define el wording base por campo para el runtime.
+- No define por si solo el momento conversacional.
+- No reemplaza `slot_hints.question` cuando el prompt activo devuelve una pregunta contextual.
+
+Precedencia recomendada en runtime:
+
+1. `slot_hints.question`
+2. `fields[].question`
+3. fallback minimo en codigo
+
+Ejemplo:
+
+```json
+{
+  "fields": [
+    {
+      "key": "extracted_name",
+      "type": "string",
+      "description": "Nombre del lead",
+      "question": "¿Con quién tengo el gusto?"
+    },
+    {
+      "key": "extracted_budget",
+      "type": "string",
+      "description": "Presupuesto declarado",
+      "question": "¿En qué rango de presupuesto te sentís cómodo?"
+    }
+  ]
+}
+```
+
 ---
 
 ## Tablas runtime
@@ -418,14 +455,14 @@ LIMIT 1;
 
 ## Referencias de implementacion
 
-- `services/inference-stack-v2/inference-core-v2/app/api/chat_v2.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py`
-- `services/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py`
-- `services/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/api/chat_v2.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_orchestrator.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_worker.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_engine.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/scoring_job_service.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/prompt_builder.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/services/prompt_linter.py`
+- `services/legacy/inference-stack-v2/inference-core-v2/app/repositories/scoring_repository.py`
 - `migrations/2026-02-21_drop_lead_type_from_lead_leads.sql`
 - `migrations/2026-02-22_create_lead_scoring_jobs.sql`
 - `migrations/2026-02-26_add_generation_to_lead_scoring_jobs.sql`

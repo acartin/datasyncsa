@@ -10,23 +10,31 @@ logger = logging.getLogger("vertical_router")
 VERTICAL_CACHE_TTL_SECONDS = int(os.getenv("VERTICAL_CACHE_TTL_SECONDS", "300"))
 
 FALLBACK_VERTICAL = "generic"
-VALID_VERTICALS = ["realtor", "generic"]
-REALTOR_ALIASES = {"realtor", "real-estate", "real_estate", "inmobiliaria"}
-GENERIC_ALIASES = {"generic"}
+VALID_VERTICALS = ["realtor", "generic", "healthcare", "legal", "insurance"]
+GENERIC_RENDER_VERTICALS = ("generic", "healthcare", "legal", "insurance")
+VERTICAL_ALIASES = {
+    "realtor": "realtor",
+    "real-estate": "realtor",
+    "real_estate": "realtor",
+    "inmobiliaria": "realtor",
+    "generic": "generic",
+    "healthcare": "healthcare",
+    "health-care": "healthcare",
+    "health_care": "healthcare",
+    "legal": "legal",
+    "insurance": "insurance",
+    "seguros": "insurance",
+}
 
 
 def normalize_vertical_slug(vertical_slug: Optional[str]) -> str:
     raw = (vertical_slug or "").strip().lower()
-    if raw in REALTOR_ALIASES:
-        return "realtor"
-    if raw in GENERIC_ALIASES:
-        return "generic"
-    return FALLBACK_VERTICAL
+    return VERTICAL_ALIASES.get(raw, FALLBACK_VERTICAL)
 
 
 class VerticalResolver:
     """
-    Resuelve el vertical (realtor vs generic) para un client_id dado.
+    Resuelve el vertical operativo para un client_id dado.
     """
 
     def __init__(self):
@@ -62,7 +70,7 @@ class VerticalResolver:
             else:
                 source_slug = context.get("vertical_slug")
                 vertical = normalize_vertical_slug(source_slug)
-                if vertical == FALLBACK_VERTICAL and (source_slug or "").strip().lower() not in GENERIC_ALIASES:
+                if vertical == FALLBACK_VERTICAL and (source_slug or "").strip().lower() not in {"generic"}:
                     logger.warning(f"Invalid vertical '{source_slug}' for {client_id}, using fallback")
 
             self._set_cache(client_id, vertical)
@@ -91,7 +99,7 @@ class VerticalResolver:
             else:
                 source_slug = context.get("vertical_slug")
                 vertical = normalize_vertical_slug(source_slug)
-                if vertical == FALLBACK_VERTICAL and (source_slug or "").strip().lower() not in GENERIC_ALIASES:
+                if vertical == FALLBACK_VERTICAL and (source_slug or "").strip().lower() not in {"generic"}:
                     logger.warning(f"Invalid vertical '{source_slug}' for {client_id}, using fallback")
 
             self._set_cache(client_id, vertical)

@@ -19,29 +19,18 @@ class RuntimeMemoryResetError(RuntimeError):
 
 class MemoryResetClient:
     def __init__(self):
-        self.agent_core_reset_url = os.getenv(
+        self.ai_runtime_reset_url = os.getenv(
             "AI_RUNTIME_RESET_URL",
-            os.getenv(
-                "AGENT_CORE_RESET_URL",
-                os.getenv(
-                    "INFERENCE_RESET_URL",
-                    os.getenv(
-                        "INFERENCE_V2_RESET_URL",
-                        "http://ai-runtime:8000/api/v1/internal/memory/reset",
-                    ),
-                ),
-            ),
+            "http://ai-runtime:8000/api/v1/internal/memory/reset",
         ).rstrip("/")
         self.scoring_core_reset_url = self._resolve_scoring_reset_url()
         self.timeout = float(os.getenv("INFERENCE_TIMEOUT", 60))
         self.internal_token = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
-        self.version = "runtime"
 
         logger.info(
-            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s version=%s)",
-            self.agent_core_reset_url,
+            "MemoryResetClient configured (ai_runtime=%s scoring_core=%s)",
+            self.ai_runtime_reset_url,
             self.scoring_core_reset_url,
-            self.version,
         )
 
     @staticmethod
@@ -95,7 +84,7 @@ class MemoryResetClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             return await self._post_reset(
                 client=client,
-                url=self.agent_core_reset_url,
+                url=self.ai_runtime_reset_url,
                 payload=payload,
                 headers=headers,
             )
@@ -118,7 +107,7 @@ class MemoryResetClient:
         if self.internal_token:
             headers["X-Internal-Token"] = self.internal_token
 
-        session_reset_url = self.agent_core_reset_url.replace(
+        session_reset_url = self.ai_runtime_reset_url.replace(
             "/internal/memory/reset",
             "/internal/session/reset",
         )
@@ -144,7 +133,7 @@ class MemoryResetClient:
             agent_result, scoring_result = await asyncio.gather(
                 self._post_reset(
                     client=client,
-                    url=self.agent_core_reset_url,
+                    url=self.ai_runtime_reset_url,
                     payload=payload,
                     headers=headers,
                 ),
@@ -160,9 +149,9 @@ class MemoryResetClient:
         results: Dict[str, Any] = {}
         failures: Dict[str, str] = {}
         if isinstance(agent_result, Exception):
-            failures["agent_core"] = self._format_error(agent_result)
+            failures["ai_runtime"] = self._format_error(agent_result)
         else:
-            results["agent_core"] = agent_result
+            results["ai_runtime"] = agent_result
 
         if isinstance(scoring_result, Exception):
             failures["scoring_core"] = self._format_error(scoring_result)

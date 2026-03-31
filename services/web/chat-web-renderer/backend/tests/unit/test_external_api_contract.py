@@ -123,7 +123,7 @@ class TestExternalAPIContract:
         assert "intent" in resp.model_dump()
         assert "components" in resp.model_dump()
         assert "meta" in resp.model_dump()
-        assert resp.meta["vertical"] in ["realtor", "generic"]
+        assert resp.meta["vertical"] in ["realtor", "generic", "healthcare", "legal", "insurance"]
         assert resp.meta["channel"] == "api"
 
     def test_response_no_internal_details(self):

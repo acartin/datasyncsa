@@ -44,6 +44,65 @@ DEFAULT_RUNTIME_URL = os.getenv(
 ).rstrip("/")
 DEFAULT_INTERNAL_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 SUITE_TYPES = {"generated", "regression", "manual"}
+STRUCTURED_EXPECTATION_KEYS = {
+    "expected_should_ask",
+    "expected_capture_exposure_count",
+    "expected_field_to_ask",
+    "expected_field_to_ask_any",
+    "forbidden_field_to_ask_any",
+    "expected_question_contains_any",
+    "expected_completed_fields_all",
+    "expected_lead_extracted_contains",
+    "expected_criteria_min",
+    "expected_criteria_max",
+}
+FIELD_ALIASES = {
+    "extracted_name": "nombre",
+    "name": "nombre",
+    "correo": "email",
+    "mail": "email",
+    "extracted_email": "email",
+    "phone": "telefono",
+    "extracted_phone": "telefono",
+    "budget": "presupuesto",
+    "timeline": "fecha_preferida",
+    "date_preferred": "fecha_preferida",
+    "extracted_preferred_date": "fecha_preferida",
+    "extracted_approval": "aprobacion",
+    "extracted_budget": "presupuesto",
+    "extracted_preference": "preferencias",
+    "extracted_preferences": "preferencias",
+    "extracted_appointment_type": "tipo_cita",
+    "appointment_type": "tipo_cita",
+    "extracted_appointment_intent": "appointment_intent",
+}
+CRITERION_ALIASES = {
+    "intent": "intencion",
+    "purchase_intent": "intencion",
+    "urgencia": "plazo",
+    "timeline": "plazo",
+    "urgency": "plazo",
+    "emergencia": "plazo",
+    "fit": "match",
+    "solvency": "solvencia",
+    "finance": "solvencia",
+    "financial": "solvencia",
+}
+VALUE_ALIASES = {
+    "visita": "visit",
+    "visit": "visit",
+    "videollamada": "video_call",
+    "video call": "video_call",
+    "video_call": "video_call",
+    "llamada": "call",
+    "call": "call",
+    "positivo": "positive",
+    "positive": "positive",
+    "negativo": "negative",
+    "negative": "negative",
+    "incierto": "uncertain",
+    "uncertain": "uncertain",
+}
 
 
 @dataclass
@@ -70,6 +129,13 @@ class TurnResult:
     search_match_scope: str | None = None
     search_filters: dict[str, Any] | None = None
     effective_search_filters: dict[str, Any] | None = None
+    lead_should_ask: bool | None = None
+    lead_capture_exposure_count: int | None = None
+    lead_field_to_ask: str | None = None
+    lead_question_to_ask: str | None = None
+    lead_completed_fields: list[str] = field(default_factory=list)
+    lead_extracted: dict[str, Any] = field(default_factory=dict)
+    lead_criteria_scores: dict[str, Any] = field(default_factory=dict)
     passed: bool = True
     issues: list[str] = field(default_factory=list)
     manual_review_focus: list[str] = field(default_factory=list)
@@ -89,6 +155,59 @@ def _merge_expectations(defaults: dict[str, Any], overrides: dict[str, Any]) -> 
     merged = dict(defaults or {})
     merged.update(overrides or {})
     return merged
+
+
+def _normalize_field_key(value: Any) -> str:
+    normalized = _lower(value).replace(" ", "_")
+    return FIELD_ALIASES.get(normalized, normalized)
+
+
+def _normalize_criterion_key(value: Any) -> str:
+    normalized = _lower(value).replace(" ", "_")
+    return CRITERION_ALIASES.get(normalized, normalized)
+
+
+def _expect_requires_trace(expect: dict[str, Any]) -> bool:
+    return any(key in expect for key in STRUCTURED_EXPECTATION_KEYS)
+
+
+def _normalize_value_token(value: Any) -> Any:
+    if isinstance(value, str):
+        normalized = _lower(value).replace(" ", "_")
+        return VALUE_ALIASES.get(normalized, normalized)
+    return value
+
+
+def _value_matches(expected: Any, actual: Any) -> bool:
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        for key, expected_value in expected.items():
+            actual_key = _normalize_field_key(key)
+            if actual_key not in actual:
+                return False
+            if not _value_matches(expected_value, actual.get(actual_key)):
+                return False
+        return True
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        normalized_actual = [
+            _normalize_value_token(item)
+            for item in actual
+        ]
+        for item in expected:
+            if isinstance(item, str):
+                if _normalize_value_token(item) not in normalized_actual:
+                    return False
+            elif item not in actual:
+                return False
+        return True
+    if isinstance(expected, str):
+        return _normalize_value_token(expected) == _normalize_value_token(actual)
+    if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+        return abs(float(expected) - float(actual)) < 1e-6
+    return expected == actual
 
 
 def _infer_suite_type(suite: dict[str, Any], suite_path: str | None = None) -> str:
@@ -137,7 +256,7 @@ class GeneratedConversationSuiteRunner:
         payload = {
             "clientId": self.client_id,
             "userId": self.user_id,
-            "bridge": "property-bridge",
+            "flow": "realtor_flow",
             "message": user_text,
             "sessionId": session_id,
             "conversationId": conversation_id,
@@ -171,12 +290,20 @@ class GeneratedConversationSuiteRunner:
         if not trace_payload:
             return {}
         summary = trace_payload.get("final_state_summary") or {}
+        lead_advisor = summary.get("lead_advisor") or {}
         facts: dict[str, Any] = {
             "dialogue_act": (((summary.get("turn_analysis") or {}).get("dialogue_act"))),
             "turn_output_types": summary.get("turn_output_types") or [],
             "search_filters": (((summary.get("realtor") or {}).get("search_filters"))),
             "effective_search_filters": (((summary.get("realtor") or {}).get("effective_search_filters"))),
             "search_match_scope": None,
+            "lead_should_ask": lead_advisor.get("should_ask"),
+            "lead_capture_exposure_count": lead_advisor.get("capture_exposure_count"),
+            "lead_field_to_ask": lead_advisor.get("field_to_ask"),
+            "lead_question_to_ask": lead_advisor.get("question_to_ask"),
+            "lead_completed_fields": list(lead_advisor.get("completed_fields") or []),
+            "lead_extracted": dict(lead_advisor.get("lead_extracted") or {}),
+            "lead_criteria_scores": dict(lead_advisor.get("criteria_scores") or {}),
         }
         for event in reversed(trace_payload.get("events") or []):
             if event.get("kind") == "node_end" and event.get("name") == "search":
@@ -211,6 +338,13 @@ class GeneratedConversationSuiteRunner:
             search_match_scope=trace_facts.get("search_match_scope"),
             search_filters=trace_facts.get("search_filters"),
             effective_search_filters=trace_facts.get("effective_search_filters"),
+            lead_should_ask=trace_facts.get("lead_should_ask"),
+            lead_capture_exposure_count=trace_facts.get("lead_capture_exposure_count"),
+            lead_field_to_ask=trace_facts.get("lead_field_to_ask"),
+            lead_question_to_ask=trace_facts.get("lead_question_to_ask"),
+            lead_completed_fields=list(trace_facts.get("lead_completed_fields") or []),
+            lead_extracted=dict(trace_facts.get("lead_extracted") or {}),
+            lead_criteria_scores=dict(trace_facts.get("lead_criteria_scores") or {}),
             manual_review_focus=list(expect.get("manual_review_focus") or []),
         )
 
@@ -230,10 +364,13 @@ class GeneratedConversationSuiteRunner:
 
         min_components = expect.get("min_components")
         max_components = expect.get("max_components")
+        max_questions = expect.get("max_questions")
         if min_components is not None and result.components_count < int(min_components):
             result.issues.append(f"esperaba al menos {min_components} components y llegaron {result.components_count}")
         if max_components is not None and result.components_count > int(max_components):
             result.issues.append(f"esperaba como maximo {max_components} components y llegaron {result.components_count}")
+        if max_questions is not None and answer.count("?") > int(max_questions):
+            result.issues.append(f"esperaba como maximo {max_questions} preguntas y llegaron {answer.count('?')}")
 
         require_cards = expect.get("require_cards")
         if require_cards is True and result.components_count == 0:
@@ -264,6 +401,113 @@ class GeneratedConversationSuiteRunner:
             result.issues.append(
                 f"search_match_scope esperado en {sorted(expected_match_scopes)} real={result.search_match_scope}"
             )
+
+        if _expect_requires_trace(expect) and not trace_facts:
+            result.issues.append("faltan turn traces para validar expectativas estructuradas; usa --internal-token")
+        else:
+            if "expected_should_ask" in expect and result.lead_should_ask != expect.get("expected_should_ask"):
+                result.issues.append(
+                    f"lead_advisor.should_ask esperado={expect.get('expected_should_ask')} real={result.lead_should_ask}"
+                )
+
+            if "expected_capture_exposure_count" in expect:
+                expected_count = int(expect.get("expected_capture_exposure_count"))
+                if int(result.lead_capture_exposure_count or 0) != expected_count:
+                    result.issues.append(
+                        "lead_advisor.capture_exposure_count "
+                        f"esperado={expected_count} real={result.lead_capture_exposure_count}"
+                    )
+
+            if "expected_field_to_ask" in expect:
+                expected_field = expect.get("expected_field_to_ask")
+                actual_field = result.lead_field_to_ask
+                if expected_field is None:
+                    if actual_field is not None:
+                        result.issues.append(f"field_to_ask esperado=None real={actual_field}")
+                elif _normalize_field_key(actual_field) != _normalize_field_key(expected_field):
+                    result.issues.append(f"field_to_ask esperado={expected_field} real={actual_field}")
+
+            expected_fields_any = expect.get("expected_field_to_ask_any") or []
+            if expected_fields_any:
+                actual_field = result.lead_field_to_ask
+                normalized_expected = {_normalize_field_key(item) for item in expected_fields_any}
+                normalized_actual = None if actual_field is None else _normalize_field_key(actual_field)
+                if normalized_actual not in normalized_expected:
+                    result.issues.append(
+                        f"field_to_ask esperado en {sorted(normalized_expected)} real={actual_field}"
+                    )
+
+            forbidden_fields = expect.get("forbidden_field_to_ask_any") or []
+            if forbidden_fields and result.lead_field_to_ask is not None:
+                normalized_forbidden = {_normalize_field_key(item) for item in forbidden_fields}
+                if _normalize_field_key(result.lead_field_to_ask) in normalized_forbidden:
+                    result.issues.append(f"field_to_ask prohibido={result.lead_field_to_ask}")
+
+            expected_question_contains_any = [_lower(item) for item in expect.get("expected_question_contains_any", [])]
+            if expected_question_contains_any:
+                normalized_question = _lower(result.lead_question_to_ask)
+                if not any(item in normalized_question for item in expected_question_contains_any):
+                    result.issues.append(
+                        "question_to_ask no contiene ninguna pista esperada: "
+                        f"{expected_question_contains_any}"
+                    )
+
+            expected_completed_fields = expect.get("expected_completed_fields_all") or []
+            if expected_completed_fields:
+                normalized_completed = {_normalize_field_key(item) for item in result.lead_completed_fields}
+                missing_fields = [
+                    field for field in expected_completed_fields
+                    if _normalize_field_key(field) not in normalized_completed
+                ]
+                if missing_fields:
+                    result.issues.append(f"faltan completed_fields esperados: {missing_fields}")
+
+            expected_lead_extracted = expect.get("expected_lead_extracted_contains")
+            if expected_lead_extracted:
+                normalized_actual = {
+                    _normalize_field_key(key): value
+                    for key, value in result.lead_extracted.items()
+                }
+                normalized_expected = {
+                    _normalize_field_key(key): value
+                    for key, value in expected_lead_extracted.items()
+                }
+                if not _value_matches(normalized_expected, normalized_actual):
+                    result.issues.append(
+                        f"lead_extracted no contiene el parcial esperado: {expected_lead_extracted}"
+                    )
+
+            expected_criteria_min = expect.get("expected_criteria_min") or {}
+            for criterion_key, min_value in expected_criteria_min.items():
+                normalized_key = _normalize_criterion_key(criterion_key)
+                actual_value = None
+                for actual_key, score in result.lead_criteria_scores.items():
+                    if _normalize_criterion_key(actual_key) == normalized_key:
+                        actual_value = score
+                        break
+                if actual_value is None:
+                    result.issues.append(f"no existe criterio {criterion_key} en criteria_scores")
+                    continue
+                if float(actual_value) < float(min_value):
+                    result.issues.append(
+                        f"criteria_scores[{criterion_key}] esperado >= {min_value} real={actual_value}"
+                    )
+
+            expected_criteria_max = expect.get("expected_criteria_max") or {}
+            for criterion_key, max_value in expected_criteria_max.items():
+                normalized_key = _normalize_criterion_key(criterion_key)
+                actual_value = None
+                for actual_key, score in result.lead_criteria_scores.items():
+                    if _normalize_criterion_key(actual_key) == normalized_key:
+                        actual_value = score
+                        break
+                if actual_value is None:
+                    result.issues.append(f"no existe criterio {criterion_key} en criteria_scores")
+                    continue
+                if float(actual_value) > float(max_value):
+                    result.issues.append(
+                        f"criteria_scores[{criterion_key}] esperado <= {max_value} real={actual_value}"
+                    )
 
         result.passed = not result.issues
         return result
@@ -340,6 +584,13 @@ class GeneratedConversationSuiteRunner:
                         "search_match_scope": result.search_match_scope,
                         "search_filters": result.search_filters,
                         "effective_search_filters": result.effective_search_filters,
+                        "lead_should_ask": result.lead_should_ask,
+                        "lead_capture_exposure_count": result.lead_capture_exposure_count,
+                        "lead_field_to_ask": result.lead_field_to_ask,
+                        "lead_question_to_ask": result.lead_question_to_ask,
+                        "lead_completed_fields": result.lead_completed_fields,
+                        "lead_extracted": result.lead_extracted,
+                        "lead_criteria_scores": result.lead_criteria_scores,
                         "passed": result.passed,
                         "issues": result.issues,
                         "manual_review_focus": result.manual_review_focus,
@@ -383,6 +634,16 @@ def _print_report(report: dict[str, Any]) -> None:
             turn_status = "ok" if turn.get("passed") else "fail"
             print(f"  - turno {turn.get('turn_index')} [{turn_status}] user={turn.get('user_text')!r}")
             print(f"    answer={turn.get('answer')!r}")
+            lead_field = turn.get("lead_field_to_ask")
+            lead_should_ask = turn.get("lead_should_ask")
+            if lead_should_ask is not None or lead_field is not None:
+                print(
+                    "    lead_advisor="
+                    f"capture_exposure_count={turn.get('lead_capture_exposure_count')} "
+                    f"should_ask={lead_should_ask} "
+                    f"field_to_ask={lead_field!r} "
+                    f"question_to_ask={turn.get('lead_question_to_ask')!r}"
+                )
             if turn.get("issues"):
                 for issue in turn.get("issues") or []:
                     print(f"    issue: {issue}")

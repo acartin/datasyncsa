@@ -32,7 +32,7 @@ class TurnTraceContext:
     session_id: str
     conversation_id: str
     vertical: str
-    bridge: str
+    flow: str
     turn: int
     user_id: str
     user_message: str
@@ -146,6 +146,7 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
         "current_turn": state.get("current_turn"),
         "turn_analysis": _safe_serialize(state.get("turn_analysis")),
         "pending_clarification": state.get("pending_clarification"),
+        "pending_decision": _safe_serialize(state.get("pending_decision")),
         "clarification_attempts": state.get("clarification_attempts"),
         "resolved_references": _safe_serialize(state.get("resolved_references", [])),
         "active_intent": _summarize_intent(state.get("active_intent")),
@@ -155,9 +156,19 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
         "messages_tail": _summarize_messages(state.get("messages", [])),
         "final_response": _safe_text(state.get("final_response"), max_length=320),
         "lead_advisor": {
+            "capture_exposure_count": _item_get(state.get("lead_advisor"), "capture_exposure_count"),
             "should_ask": _item_get(state.get("lead_advisor"), "should_ask"),
             "field_to_ask": _item_get(state.get("lead_advisor"), "field_to_ask"),
+            "question_to_ask": _safe_text(_item_get(state.get("lead_advisor"), "question_to_ask"), max_length=240),
             "lead_completo": _item_get(state.get("lead_advisor"), "lead_completo"),
+            "target_criteria": _safe_serialize(_item_get(state.get("lead_advisor"), "target_criteria", [])),
+            "criteria_scores": _safe_serialize(_item_get(state.get("lead_advisor"), "criteria_scores", {})),
+            "criteria_reasons": _safe_serialize(_item_get(state.get("lead_advisor"), "criteria_reasons", {})),
+            "scoring_reasoning": _safe_text(_item_get(state.get("lead_advisor"), "scoring_reasoning"), max_length=320),
+            "scoring_confidence": _item_get(state.get("lead_advisor"), "scoring_confidence"),
+            "scoring_last_updated_turn": _item_get(state.get("lead_advisor"), "scoring_last_updated_turn"),
+            "required_fields": _safe_serialize(_item_get(state.get("lead_advisor"), "required_fields", [])),
+            "completed_fields": _safe_serialize(_item_get(state.get("lead_advisor"), "completed_fields", [])),
             "lead_extracted": _safe_serialize(_item_get(state.get("lead_advisor"), "lead_extracted", {})),
         },
         "memory": {
@@ -178,8 +189,9 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
             "agente_asignado": _item_get(state.get("escalacion"), "agente_asignado"),
         },
     }
-    if "search_attempts" in state:
-        summary["realtor"] = {
+    if state.get("vertical") == "realtor" and "search_attempts" in state:
+        summary["vertical_state"] = {
+            "vertical": "realtor",
             "search_attempts": state.get("search_attempts"),
             "search_filters": _safe_serialize(state.get("search_filters", {})),
             "effective_search_filters": _safe_serialize(state.get("effective_search_filters")),
@@ -339,7 +351,7 @@ class FileTurnTraceStore:
                     "session_id": session_dir.name,
                     "conversation_id": latest.get("conversation_id"),
                     "vertical": latest.get("vertical"),
-                    "bridge": latest.get("bridge"),
+                    "flow": latest.get("flow"),
                     "turn_count": len(turn_files),
                     "latest_turn": latest.get("turn"),
                     "latest_status": latest.get("status"),
@@ -370,7 +382,7 @@ class FileTurnTraceStore:
                     "latest_user_message": latest_session.get("latest_user_message"),
                     "latest_session_id": latest_session.get("session_id"),
                     "vertical": latest_session.get("vertical"),
-                    "bridge": latest_session.get("bridge"),
+                    "flow": latest_session.get("flow"),
                 }
             )
         clients.sort(key=lambda item: item.get("latest_updated_at") or "", reverse=True)
@@ -393,7 +405,7 @@ class FileTurnTraceStore:
                     "started_at": payload.get("started_at"),
                     "ended_at": payload.get("ended_at"),
                     "vertical": payload.get("vertical"),
-                    "bridge": payload.get("bridge"),
+                    "flow": payload.get("flow"),
                     "user_message": payload.get("user_message"),
                     "answer": ((payload.get("response_payload") or {}).get("answer")),
                     "event_count": len(payload.get("events", [])),

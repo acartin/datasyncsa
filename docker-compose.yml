@@ -333,50 +333,6 @@ services:
     networks:
       - internal_network
 
-  # Generic Bridge
-  generic-bridge:
-    build:
-      context: ./services/bridges/generic-bridge
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-generic-bridge
-    restart: unless-stopped
-    ports:
-      - "${GENERIC_BRIDGE_PORT:-8093}:8000"
-    environment:
-      - TZ=${TZ:-UTC}
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - REQUEST_TIMEOUT=30
-      - MAX_RETRIES=3
-      - HOST=0.0.0.0
-      - PORT=8000
-    depends_on:
-      - ai-runtime
-    networks:
-      - internal_network
-
-  # Property Bridge
-  property-bridge:
-    build:
-      context: ./services/bridges/property-bridge
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-property-bridge
-    restart: unless-stopped
-    ports:
-      - "${PROPERTY_BRIDGE_PORT:-8094}:8000"
-    environment:
-      - TZ=${TZ:-UTC}
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - REQUEST_TIMEOUT=30
-      - MAX_RETRIES=3
-      - HOST=0.0.0.0
-      - PORT=8000
-    depends_on:
-      - ai-runtime
-    networks:
-      - internal_network
-
   # Chat Web Renderer Frontend (Nginx)
   chat-web-renderer-ui:
     image: nginx:alpine

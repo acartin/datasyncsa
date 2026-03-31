@@ -17,7 +17,7 @@ def test_internal_memory_reset_orchestrates_session_and_runtime(monkeypatch):
         called["runtime_client_id"] = client_id
         called["reason"] = reason
         return {
-            "agent_core": {"status": "ok", "client_id": client_id, "conversations_deleted": 2},
+            "ai_runtime": {"status": "ok", "client_id": client_id, "conversations_deleted": 2},
             "scoring_core": {"status": "ok", "client_id": client_id, "conversations_deleted": 2},
         }
 
@@ -37,7 +37,7 @@ def test_internal_memory_reset_orchestrates_session_and_runtime(monkeypatch):
     assert body["status"] == "ok"
     assert body["session_deleted"] is True
     assert body["sessions_deleted"] == 3
-    assert body["resets"]["agent_core"]["conversations_deleted"] == 2
+    assert body["resets"]["ai_runtime"]["conversations_deleted"] == 2
     assert body["resets"]["scoring_core"]["conversations_deleted"] == 2
     assert body["inference"]["conversations_deleted"] == 2
     assert called["delete_sessions_client_id"] == "64f357a0-98eb-44f1-9f41-6e615ed26180"
@@ -55,7 +55,7 @@ def test_internal_memory_reset_returns_502_on_partial_runtime_failure(monkeypatc
     async def fake_reset_runtime_memory(client_id, reason=None):
         raise RuntimeMemoryResetError(
             failures={"scoring_core": "HTTP 500 (internal error)"},
-            partial_results={"agent_core": {"status": "ok", "client_id": client_id}},
+            partial_results={"ai_runtime": {"status": "ok", "client_id": client_id}},
         )
 
     monkeypatch.setenv("INTERNAL_API_TOKEN", token)
@@ -73,4 +73,4 @@ def test_internal_memory_reset_returns_502_on_partial_runtime_failure(monkeypatc
     body = res.json()
     assert body["detail"]["error"] == "runtime_memory_reset_failed"
     assert body["detail"]["failures"]["scoring_core"].startswith("HTTP 500")
-    assert body["detail"]["partial_results"]["agent_core"]["status"] == "ok"
+    assert body["detail"]["partial_results"]["ai_runtime"]["status"] == "ok"

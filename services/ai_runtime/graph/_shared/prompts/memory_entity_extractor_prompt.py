@@ -55,6 +55,9 @@ Few-shot:
 Usuario: "Me llamo Alvaro y mi correo es alvaro@ejemplo.com"
 Output: {"canonical_fields":{"nombre":"Alvaro","email":"alvaro@ejemplo.com","telefono":null,"presupuesto":null,"aprobacion":null,"preferencias":[],"fecha_preferida":null,"tipo_cita":null,"appointment_intent":null},"entities":[{"key":"nombre","value":"Alvaro","value_type":"string","confidence":0.98,"source_text":"Me llamo Alvaro","status":"explicit"}]}
 
+Usuario: "con Alvaro Cartin"
+Output: {"canonical_fields":{"nombre":"Alvaro Cartin","email":null,"telefono":null,"presupuesto":null,"aprobacion":null,"preferencias":[],"fecha_preferida":null,"tipo_cita":null,"appointment_intent":null},"entities":[{"key":"nombre","value":"Alvaro Cartin","value_type":"string","confidence":0.9,"source_text":"con Alvaro Cartin","status":"explicit"}]}
+
 Usuario: "Tengo 50 anos y trabajo en banca"
 Output: {"canonical_fields":{"nombre":null,"email":null,"telefono":null,"presupuesto":null,"aprobacion":null,"preferencias":[],"fecha_preferida":null,"tipo_cita":null,"appointment_intent":null},"entities":[{"key":"edad","value":50,"value_type":"number","confidence":0.96,"source_text":"Tengo 50 anos","status":"explicit"},{"key":"ocupacion","value":"banca","value_type":"string","confidence":0.9,"source_text":"trabajo en banca","status":"explicit"}]}
 

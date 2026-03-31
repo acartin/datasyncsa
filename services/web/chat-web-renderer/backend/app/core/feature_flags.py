@@ -1,4 +1,4 @@
-"""Feature flags del bridge."""
+"""Feature flags del renderer backend."""
 
 from typing import Optional
 import os

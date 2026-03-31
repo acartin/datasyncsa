@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Smoke E2E del camino activo:
-chat-web-renderer -> agent-core -> scoring-core
+chat-web-renderer -> ai-runtime -> scoring-core
 
 Valida:
 1) chat responde (HTTP 200 + contenido)
@@ -100,7 +100,7 @@ def _poll_scoring_job(job_id: str) -> dict[str, Any] | None:
 
 
 def main() -> int:
-    print("Smoke E2E activo chat-web-renderer -> agent-core -> scoring-core")
+    print("Smoke E2E activo chat-web-renderer -> ai-runtime -> scoring-core")
     print("=" * 72)
     print("CHAT_WEB_RENDERER_URL:", CHAT_WEB_RENDERER_URL)
     print("SCORING_BASE_URL:", _scoring_base_url())

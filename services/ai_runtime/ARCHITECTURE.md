@@ -5,7 +5,7 @@
 `services/ai_runtime` define el runtime conversacional multitenant nuevo de Datasyncsa AI con dos grafos LangGraph:
 
 - `grafo_realtor`
-- `grafo_generico`
+- `grafo_basico`
 
 El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`, toda sesion se hidrata con `tenant_config`, y Redis/PostgreSQL se consultan con scope tenant desde la base del runtime.
 
@@ -37,7 +37,7 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `runtime/bootstrap.py`: wiring por defecto.
 - `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
 - `runtime/turn_trace.py`: trazado por turno para nodos, routers y LLM.
-- `docs/graphs/**`: diagramas exportados del `grafo_generico` y `grafo_realtor`.
+- `docs/graphs/**`: diagramas exportados del `grafo_basico` y `grafo_realtor`.
 - `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
 - `graph/generic/**`: builder y nodos del vertical reducido.
@@ -47,27 +47,19 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 
 ## Flujo de Entrada
 
-### property-bridge
+### Entrada directa al runtime
 
-1. Valida `client_id`.
-2. Envía `bridge=property-bridge`.
-3. `ConversationRuntime` carga `tenant_config`.
-4. `GraphRegistry` exige `vertical=realtor`.
-5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor`.
-
-### generic-bridge
-
-1. Valida `client_id`.
-2. Envía `bridge=generic-bridge`.
-3. `ConversationRuntime` carga `tenant_config`.
-4. `GraphRegistry` exige `vertical in {healthcare, legal}`.
-5. Se hidrata o recupera sesion y se ejecuta `grafo_generico`.
+1. El cliente de canal llama directo a `ai-runtime`.
+2. Puede omitir `flow`; si lo hace, `ConversationRuntime` lo resuelve por vertical.
+3. Si envía `flow=realtor_flow`, `GraphRegistry` exige `vertical=realtor`.
+4. Si envía `flow=basic_flow`, `GraphRegistry` exige `vertical in {healthcare, legal, insurance}`.
+5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor` o `grafo_basico`.
 
 ## Estado Canonico
 
 El estado esta modelado en `domain/state.py` y contiene:
 
-- sesion: `session_id`, `conversation_id`, `user_id`, `client_id`, `vertical`, `bridge`, `current_turn`
+- sesion: `session_id`, `conversation_id`, `user_id`, `client_id`, `vertical`, `flow`, `current_turn`
 - prompts/config: `capabilities`, `tenant_config`
 - referencias: `resolved_references`, `pending_clarification`, `clarification_attempts`
 - cola: `intent_queue`, `active_intent`, `completed_intents`, `turn_outputs`
@@ -228,7 +220,7 @@ Lista en este scaffold:
 
 Lista en este scaffold:
 
-- `grafo_generico`
+- `grafo_basico`
 - nodos compartidos
 - `rag_agencia`
 - `captura_lead`

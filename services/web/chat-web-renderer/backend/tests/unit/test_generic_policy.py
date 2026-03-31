@@ -87,6 +87,15 @@ class TestGenericRendererPolicy:
         comp_types = [c["type"] for c in response["components"]]
         assert "chat" in comp_types
 
+    def test_build_response_can_preserve_non_generic_vertical_identity(self):
+        policy = GenericRendererPolicy(channel="web_html", vertical_slug="healthcare")
+        response = policy.build_response(
+            ai_text="Hola",
+            components=[],
+            session_id="sess-health",
+        )
+        assert response["meta"]["vertical"] == "healthcare"
+
     def test_validate_response_passes_for_valid(self):
         policy = GenericRendererPolicy(channel="web_html")
         response = {
@@ -139,6 +148,16 @@ class TestGenericPolicyMeta:
             session_id="sess-1",
         )
         assert "allowed_components" in response["meta"]
+        assert "agenda" in response["meta"]["allowed_components"]
+
+    def test_policy_loads_vertical_specific_components_with_generic_fallback(self):
+        policy = GenericRendererPolicy(channel="api", vertical_slug="insurance")
+        response = policy.build_response(
+            ai_text="Test",
+            components=[],
+            session_id="sess-2",
+        )
+        assert response["meta"]["vertical"] == "insurance"
         assert "agenda" in response["meta"]["allowed_components"]
 
 

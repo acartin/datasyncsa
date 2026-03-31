@@ -96,6 +96,9 @@ Output: {"dialogue_act":"confirm_previous","confidence":0.9,"needs_clarification
 Usuario: "¿Recordás cómo me llamo?"
 Output: {"dialogue_act":"memory_query","confidence":0.97,"needs_clarification":false,"clarification_target":null,"reference":{"kind":"NONE","confidence":0.99,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null},"intent_plan":[],"filters_delta":{"ubicacion":null,"habitaciones":null,"banos":null,"precio_max":null,"precio_min":null,"currency":null,"provincia":null,"amenidades":[],"tipo":null,"operacion":null},"memory_lookup_key":"nombre","reuse_current_filters":false}
 
+Usuario: "con Alvaro Cartin"
+Output: {"dialogue_act":"lead_capture","confidence":0.92,"needs_clarification":false,"clarification_target":null,"reference":{"kind":"NONE","confidence":0.99,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null},"intent_plan":[],"filters_delta":{"ubicacion":null,"habitaciones":null,"banos":null,"precio_max":null,"precio_min":null,"currency":null,"provincia":null,"amenidades":[],"tipo":null,"operacion":null},"memory_lookup_key":null,"reuse_current_filters":false}
+
 Usuario: "¿Cuáles son sus horarios?"
 Output: {"dialogue_act":"faq","confidence":0.94,"needs_clarification":false,"clarification_target":null,"reference":{"kind":"NONE","confidence":0.99,"ordinal_index":null,"attribute_key":null,"location_hint":null,"history_hint":null,"clarification_target":null},"intent_plan":[{"type":"rag_agencia","priority":1,"depends_on":[],"condition":null,"skip_if_failed":false}],"filters_delta":{"ubicacion":null,"habitaciones":null,"banos":null,"precio_max":null,"precio_min":null,"currency":null,"provincia":null,"amenidades":[],"tipo":null,"operacion":null},"memory_lookup_key":null,"reuse_current_filters":false}
 

@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState
+from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState, has_valid_lead_contact
 
 
 FIELD_QUESTIONS = {
     "nombre": "Antes de seguir, con quien tengo el gusto?",
+    "email": "Si te parece, compartime tu correo y te envio el resumen.",
+    "telefono": "Si te queda bien, compartime tu telefono y te contacto por ahi.",
+    "contacto": "Si queres, te dejo esto encaminado. Te queda mejor compartirme tu telefono o tu correo?",
     "presupuesto": "Para afinar mejor las opciones, en que rango de presupuesto te sentis comodo?",
     "aprobacion": "Ya tenes alguna aprobacion bancaria o prefieres que lo revisemos desde cero?",
+    "preferencias": "Para ayudarte mejor, que zona o caracteristicas priorizas?",
     "fecha": "Para cuando te gustaria mover esto?",
-    "contacto": "Si queres, te dejo esto encaminado. Te queda mejor compartirme tu telefono o tu correo?",
+    "fecha_preferida": "Para cuando te gustaria mover esto?",
+    "tipo_cita": "Prefieres visita presencial, videollamada o una llamada rapida?",
+    "appointment_intent": "Te gustaria que dejemos una cita coordinada para avanzar?",
     "cita": "Si te sirve, tambien te ayudo a dejar la cita encaminada. Te gustaria que la coordinemos?",
 }
 
@@ -24,6 +31,17 @@ POLICY_RESPONSES = {
         "Si queres, con gusto te ayudo a encontrar opciones segun zona, presupuesto o tipo de propiedad."
     ),
 }
+_APPOINTMENT_CONFIRMATION_HINTS = (
+    "agendada",
+    "agendado",
+    "confirmada",
+    "confirmado",
+    "queda agendada",
+    "queda confirmada",
+    "visita confirmada",
+)
+_TRAILING_INVERTED_QUESTION_BLOCK = re.compile(r"\s*¿[^?]*\?\s*$")
+_TRAILING_PLAIN_QUESTION_BLOCK = re.compile(r"\s*[^¿?!.][^?]*\?\s*$")
 
 
 def _serialize_messages(messages: list[Any], *, limit: int = 8) -> list[dict[str, Any]]:
@@ -141,6 +159,42 @@ def _build_context(graph_state: BaseGraphState) -> dict[str, Any]:
     return context
 
 
+def _turn_has_appointment_output(graph_state: BaseGraphState) -> bool:
+    for item in graph_state.turn_outputs[-3:]:
+        if str(item.get("type") or "").strip().lower() == "appointment":
+            return True
+    return False
+
+
+def _looks_like_appointment_confirmation(answer: str) -> bool:
+    lowered = re.sub(r"\s+", " ", (answer or "").strip().lower())
+    return any(hint in lowered for hint in _APPOINTMENT_CONFIRMATION_HINTS)
+
+
+def _strip_trailing_question_blocks(answer: str) -> str:
+    text = str(answer or "").strip()
+    while True:
+        updated = re.sub(_TRAILING_INVERTED_QUESTION_BLOCK, "", text).strip()
+        if updated == text:
+            break
+        text = updated
+    while text.endswith("?"):
+        updated = re.sub(_TRAILING_PLAIN_QUESTION_BLOCK, "", text).strip()
+        if updated == text:
+            break
+        text = updated
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def _ensure_sentence_ending(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    if cleaned[-1] in ".!?":
+        return cleaned
+    return f"{cleaned}."
+
+
 async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     """Render the final user-facing answer from structured turn context."""
 
@@ -162,10 +216,43 @@ async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str
         )
         answer = await deps.llm.synthesize_response(prompt)
 
+    contact_ok = has_valid_lead_contact(graph_state.lead_advisor.lead_extracted)
+    appointment_context = (
+        _turn_has_appointment_output(graph_state)
+        or bool(graph_state.cita.tipo or graph_state.cita.fecha or graph_state.cita.hora or graph_state.cita.propiedad_id)
+        or dialogue_act == "schedule"
+    )
+    appointment_pending_contact = (
+        appointment_context
+        and not bool(graph_state.cita.confirmada)
+        and not contact_ok
+    )
+    forced_field_to_ask: str | None = None
+    lead_name_known = bool(str(graph_state.lead_advisor.lead_extracted.nombre or "").strip())
+    if appointment_pending_contact and lead_name_known:
+        forced_field_to_ask = "contacto"
+        if _looks_like_appointment_confirmation(answer):
+            answer = "Perfecto, ya tengo la fecha y la hora. Para dejar la cita confirmada, compartime tu telefono o tu correo."
+    elif appointment_pending_contact and not lead_name_known and _looks_like_appointment_confirmation(answer):
+        answer = "Perfecto, puedo ayudarte a coordinar la visita de esa opcion."
+
+    field_to_ask = None
     if graph_state.lead_advisor.should_ask and graph_state.lead_advisor.field_to_ask:
-        question = FIELD_QUESTIONS.get(graph_state.lead_advisor.field_to_ask)
-        if question and question not in answer:
-            answer = f"{answer} {question}".strip()
+        field_to_ask = graph_state.lead_advisor.field_to_ask
+    if forced_field_to_ask:
+        field_to_ask = forced_field_to_ask
+
+    if field_to_ask:
+        question = (
+            str(graph_state.lead_advisor.question_to_ask or "").strip()
+            or FIELD_QUESTIONS.get(field_to_ask)
+        )
+        if question:
+            answer_body = _strip_trailing_question_blocks(answer)
+            if answer_body:
+                answer = f"{_ensure_sentence_ending(answer_body)} {question}".strip()
+            else:
+                answer = question
 
     messages = [*graph_state.messages, {"role": "assistant", "content": answer}]
     await deps.worker_dispatcher.fire_and_forget(

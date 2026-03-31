@@ -8,8 +8,8 @@ from typing import Any, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
-Vertical = Literal["realtor", "healthcare", "legal"]
-BridgeName = Literal["property-bridge", "generic-bridge"]
+Vertical = Literal["realtor", "healthcare", "legal", "insurance"]
+FlowName = Literal["realtor_flow", "basic_flow"]
 DialogueAct = Literal[
     "new_search",
     "refine_search",
@@ -72,6 +72,46 @@ class TenantBusinessProfile(BaseModel):
     schedules: dict[str, Any] = Field(default_factory=dict)
 
 
+class ScoringCriterionConfig(BaseModel):
+    """One scoring dimension configured for a tenant model."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    key: str
+    label: str | None = None
+    weight: float = 1.0
+    min_score: float = 0
+    max_score: float = 10
+    display_order: int = 0
+
+
+class ScoringFieldConfig(BaseModel):
+    """One extraction/capture field expected by the active scoring prompt."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    key: str
+    value_type: str = "string"
+    required: bool = False
+    question: str | None = None
+
+
+class ScoringProfile(BaseModel):
+    """Tenant scoring profile resolved from scoring model + prompt metadata."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    vertical_id: int | None = None
+    model_id: str | None = None
+    model_version: int | None = None
+    prompt_id: str | None = None
+    prompt_version: int | None = None
+    prompt_template: str | None = None
+    criteria: list[ScoringCriterionConfig] = Field(default_factory=list)
+    extraction_fields: list[ScoringFieldConfig] = Field(default_factory=list)
+    scoring_contract: dict[str, Any] = Field(default_factory=dict)
+
+
 class TenantConfig(BaseModel):
     """Runtime tenant configuration cached for the full session."""
 
@@ -85,6 +125,7 @@ class TenantConfig(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     redis_ttl_seconds: int = 3600
     business: TenantBusinessProfile
+    scoring_profile: ScoringProfile | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -205,7 +246,7 @@ class SessionRecord(BaseModel):
     session_id: str
     user_id: str
     vertical: Vertical
-    bridge: BridgeName
+    flow: FlowName
     created_at: datetime | None = None
     last_active: datetime | None = None
     turno_actual: int = 0
@@ -282,6 +323,18 @@ class TurnAnalysis(BaseModel):
     detail_attribute_key: DetailAttributeKey | None = None
 
 
+class PendingDecision(BaseModel):
+    """Structured decision the user still needs to make before the flow can continue."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    reason: str | None = None
+    question: str | None = None
+    options: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class TextToSQLResult(BaseModel):
     sql: str
     params: dict[str, Any] = Field(default_factory=dict)
@@ -313,7 +366,7 @@ class MailDispatchResult(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Canonical request that bridges send to the AI runtime."""
+    """Canonical request sent to the AI runtime."""
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -322,7 +375,7 @@ class ChatRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("user_id", "userId"),
     )
-    bridge: BridgeName | None = None
+    flow: FlowName | None = None
     message: str = Field(validation_alias=AliasChoices("message", "query_text", "queryText", "text"))
     session_id: str | None = Field(default=None, validation_alias=AliasChoices("session_id", "sessionId"))
     conversation_id: str | None = Field(

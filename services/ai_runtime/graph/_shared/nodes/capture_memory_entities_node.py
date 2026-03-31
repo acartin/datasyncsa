@@ -37,6 +37,16 @@ _MEMORY_SIGNAL_PATTERNS = (
 
 _PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s-]{6,}\d)")
 _EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", flags=re.IGNORECASE)
+_NUMBER_PATTERN = re.compile(r"-?\d+(?:[.,]\d+)?")
+_NAME_PREFIX_PATTERN = re.compile(
+    r"\b(?:me llamo|mi nombre es|mi nombre)\s+"
+    r"(?P<name>[A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+){0,3})\b",
+    flags=re.IGNORECASE,
+)
+_SHORT_NAME_PATTERN = re.compile(
+    r"^\s*(?:con|soy)\s+"
+    r"(?P<name>[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+){0,3})\s*[\.\!\?]?\s*$"
+)
 
 
 def _should_extract_memory(message: str) -> bool:
@@ -44,6 +54,8 @@ def _should_extract_memory(message: str) -> bool:
     if not normalized:
         return False
     if _EMAIL_PATTERN.search(normalized) or _PHONE_PATTERN.search(normalized):
+        return True
+    if _SHORT_NAME_PATTERN.search(normalized):
         return True
     lowered = normalized.lower()
     return any(re.search(pattern, lowered) for pattern in _MEMORY_SIGNAL_PATTERNS)
@@ -66,10 +78,64 @@ def _infer_value_type(value: Any) -> str:
     return "string"
 
 
+def _coerce_budget_value(value: Any) -> float | None:
+    if value in (None, "", []):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        match = _NUMBER_PATTERN.search(value.replace(",", ""))
+        if not match:
+            return None
+        try:
+            return float(match.group(0).replace(",", "."))
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in ("max", "min", "value", "amount"):
+            candidate = _coerce_budget_value(value.get(key))
+            if candidate is not None:
+                return candidate
+        lower = _coerce_budget_value(value.get("desde"))
+        upper = _coerce_budget_value(value.get("hasta"))
+        if lower is not None and upper is not None:
+            return (lower + upper) / 2
+    return None
+
+
+def _normalize_person_name(value: str | None) -> str | None:
+    cleaned = re.sub(r"\s+", " ", (value or "").strip(" .,!?:;"))
+    if not cleaned:
+        return None
+    if len(cleaned) > 80:
+        return None
+    if any(char.isdigit() for char in cleaned):
+        return None
+    return cleaned
+
+
+def _extract_name_fallback(message: str) -> str | None:
+    text = (message or "").strip()
+    if not text:
+        return None
+    prefixed = _NAME_PREFIX_PATTERN.search(text)
+    if prefixed:
+        return _normalize_person_name(prefixed.group("name"))
+    short = _SHORT_NAME_PATTERN.search(text)
+    if short:
+        return _normalize_person_name(short.group("name"))
+    return None
+
+
 def _merge_canonical_fields(current: LeadExtracted, payload: dict[str, Any]) -> LeadExtracted:
     merged = current.model_dump(mode="json")
     for key, value in payload.items():
         if key not in merged or value in (None, "", []):
+            continue
+        if key == "presupuesto":
+            coerced = _coerce_budget_value(value)
+            if coerced is not None:
+                merged[key] = coerced
             continue
         if key == "preferencias":
             merged[key] = list(dict.fromkeys([*merged.get(key, []), *[item for item in value if item]]))
@@ -144,6 +210,10 @@ async def capture_memory_entities(state: dict[str, Any], deps: GraphDependencies
         canonical_payload = {}
     if not isinstance(entities_payload, list):
         entities_payload = []
+    if not canonical_payload.get("nombre"):
+        fallback_name = _extract_name_fallback(latest_message)
+        if fallback_name:
+            canonical_payload["nombre"] = fallback_name
 
     merged_lead = _merge_canonical_fields(graph_state.lead_advisor.lead_extracted, canonical_payload)
 

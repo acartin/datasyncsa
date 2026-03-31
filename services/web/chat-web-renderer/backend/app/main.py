@@ -42,20 +42,8 @@ async def dependencies_health():
     Lightweight dependency health for frontend status indicator.
     """
     timeout = float(os.getenv("HEALTHCHECK_TIMEOUT", "3"))
-    inference_base = os.getenv(
-        "AI_RUNTIME_API",
-        os.getenv(
-            "AGENT_CORE_API",
-            os.getenv("INFERENCE_API_URL", os.getenv("INFERENCE_V2_URL", "http://ai-runtime:8000")),
-        ),
-    ).rstrip("/")
-    inference_prefix = os.getenv(
-        "AI_RUNTIME_API_PREFIX",
-        os.getenv(
-            "AGENT_CORE_API_PREFIX",
-            os.getenv("INFERENCE_API_PREFIX", os.getenv("INFERENCE_V2_API_PREFIX", "/api/v1")),
-        ),
-    )
+    inference_base = os.getenv("AI_RUNTIME_API", "http://ai-runtime:8000").rstrip("/")
+    inference_prefix = os.getenv("AI_RUNTIME_API_PREFIX", "/api/v1")
     inference_url = f"{inference_base}{inference_prefix}/health"
 
     result = {
@@ -85,9 +73,14 @@ async def dependencies_health():
     result["status"] = "operational" if all_ok else "degraded"
     return result
 
-from app.core.inference_bridge import InferenceClient
+from app.core.runtime_client import InferenceClient
 from app.core.memory_reset import MemoryResetClient, RuntimeMemoryResetError
-from app.core.vertical_router import vertical_router
+from app.core.session_identity import (
+    normalize_session_id,
+    resolve_effective_session_id,
+    resolve_request_session_id,
+)
+from app.core.vertical_router import GENERIC_RENDER_VERTICALS, vertical_router
 from app.transformer.core import SDUITransformer
 from app.transformer.realtor_policy import RealtorRendererPolicy
 from app.transformer.generic_policy import GenericRendererPolicy
@@ -99,7 +92,12 @@ transformer = SDUITransformer()
 session_manager = SessionManager()
 
 vertical_router.register_strategy("realtor", "web_html", RealtorRendererPolicy(channel="web_html"))
-vertical_router.register_strategy("generic", "web_html", GenericRendererPolicy(channel="web_html"))
+for vertical_slug in GENERIC_RENDER_VERTICALS:
+    vertical_router.register_strategy(
+        vertical_slug,
+        "web_html",
+        GenericRendererPolicy(channel="web_html", vertical_slug=vertical_slug),
+    )
 
 @app.post("/chat/init", response_model=SDUIResponse)
 async def chat_init(req: InitRequest):
@@ -167,7 +165,7 @@ async def chat_interaction(req: InternalChatRequest):
     channel_user_id = req.channel_user_id
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
-    incoming_session_id = str(req.session_id).strip() if req.session_id else None
+    incoming_session_id = normalize_session_id(req.session_id)
     incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
     request_started = time.perf_counter()
 
@@ -179,7 +177,12 @@ async def chat_interaction(req: InternalChatRequest):
     
     session_context = {
         "client_id": client_id,
-        "session_id": incoming_session_id or session_data.get("session_id"),
+        "session_id": resolve_request_session_id(
+            incoming_session_id=incoming_session_id,
+            stored_session_id=session_data.get("session_id"),
+            incoming_conversation_id=incoming_conversation_id,
+            stored_conversation_id=session_data.get("conversation_id"),
+        ),
         "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
         "lead_id": session_data.get("lead_id"),
         "brand_project": req.brand_project or session_data.get("brand_project"),
@@ -227,8 +230,14 @@ async def chat_interaction(req: InternalChatRequest):
     try:
         ai_response = await inference_client.chat(user_query=req.message_text, session=session_context)
         
-        new_session_id = ai_response.get("session_id") or session_context.get("session_id")
+        new_session_id = normalize_session_id(ai_response.get("session_id")) or session_context.get("session_id")
         new_conversation_id = ai_response.get("conversation_id") or session_context.get("conversation_id")
+        effective_session_id = resolve_effective_session_id(
+            runtime_session_id=new_session_id,
+            runtime_conversation_id=new_conversation_id,
+            request_session_id=session_context.get("session_id"),
+            request_conversation_id=session_context.get("conversation_id"),
+        )
         resolved_lead_id = ai_response.get("lead_id") or session_context.get("lead_id")
         if new_session_id or new_conversation_id:
             await session_manager.upsert_session(
@@ -236,7 +245,7 @@ async def chat_interaction(req: InternalChatRequest):
                 channel=channel,
                 channel_user_id=channel_user_id,
                 data={
-                    "session_id": str(new_session_id) if new_session_id else None,
+                    "session_id": effective_session_id if effective_session_id != "init" else None,
                     "conversation_id": new_conversation_id,
                     "lead_id": str(resolved_lead_id) if resolved_lead_id else None,
                     "brand_project": session_context.get("brand_project"),
@@ -256,11 +265,11 @@ async def chat_interaction(req: InternalChatRequest):
             channel_user_id,
             incoming_session_id or "-",
             session_context.get("session_id") or "-",
-            new_session_id or "-",
+            effective_session_id,
             incoming_conversation_id or "-",
             session_context.get("conversation_id") or "-",
             new_conversation_id or "-",
-            bool(incoming_session_id and str(incoming_session_id) == str(new_session_id)),
+            bool(incoming_session_id and str(incoming_session_id) == str(effective_session_id)),
             bool(incoming_conversation_id and str(incoming_conversation_id) == str(new_conversation_id)),
             bool(((not incoming_session_id) and session_data.get("session_id")) or ((not incoming_conversation_id) and session_data.get("conversation_id"))),
             len(ai_response.get("components") or []),
@@ -314,7 +323,7 @@ async def chat_interaction(req: InternalChatRequest):
         policy_response = policy_handler.build_response(
             ai_text=ai_text,
             components=extracted_components,
-            session_id=str(new_session_id or "init"),
+            session_id=effective_session_id,
         )
         
         from app.schemas.ui import BaseComponent
@@ -335,7 +344,7 @@ async def chat_interaction(req: InternalChatRequest):
                 final_components.append(ChatMessage(text=comp_data.get("text", ""), sender="bot"))
 
         response_meta = {
-            "session_id": str(new_session_id or ""),
+            "session_id": "" if effective_session_id == "init" else effective_session_id,
             "conversation_id": str(new_conversation_id or ""),
             "lead_id": ai_response.get("lead_id"),
             "intent": ai_response.get("intent"),
@@ -348,7 +357,7 @@ async def chat_interaction(req: InternalChatRequest):
         response_meta = {k: v for k, v in response_meta.items() if v is not None}
 
         return SDUIResponse(
-            session_id=str(new_session_id or "init"),
+            session_id=effective_session_id,
             branding=branding,
             components=final_components,
             meta=response_meta,
@@ -363,7 +372,7 @@ async def chat_interaction(req: InternalChatRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Error interno del bridge") from e
+        raise HTTPException(status_code=500, detail="Error interno del runtime") from e
 
 
 @app.get("/")
@@ -384,7 +393,7 @@ def _assert_internal_token(request: Request):
 async def internal_memory_reset(payload: InternalMemoryResetRequest, request: Request):
     """
     Internal endpoint: resets chat memory for a client.
-    Clears bridge session (Redis) and runtime memory in ai + scoring-core.
+    Clears renderer session (Redis) and runtime memory in ai + scoring-core.
     """
     _assert_internal_token(request)
 
@@ -413,5 +422,5 @@ async def internal_memory_reset(payload: InternalMemoryResetRequest, request: Re
         "session_deleted": sessions_deleted > 0,
         "sessions_deleted": sessions_deleted,
         "resets": runtime_results,
-        "inference": runtime_results.get("agent_core"),  # Backward compatibility.
+        "inference": runtime_results.get("ai_runtime"),  # Backward compatibility.
     }

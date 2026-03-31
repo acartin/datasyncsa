@@ -11,7 +11,6 @@ Usos:
   python tests/sandbox/realtor/simulate_chat_realtor.py
   python tests/sandbox/realtor/simulate_chat_realtor.py --query "Busco casa en Heredia"
   python tests/sandbox/realtor/simulate_chat_realtor.py --interactive
-  python tests/sandbox/realtor/simulate_chat_realtor.py --target bridge
   python tests/sandbox/realtor/simulate_chat_realtor.py --full-trace
 """
 
@@ -37,10 +36,6 @@ DEFAULT_RUNTIME_URL = os.getenv(
     "AI_RUNTIME_SANDBOX_API",
     f"http://127.0.0.1:{os.getenv('AI_RUNTIME_PORT', '8096')}/api/v1",
 ).rstrip("/")
-DEFAULT_BRIDGE_URL = os.getenv(
-    "PROPERTY_BRIDGE_SANDBOX_API",
-    f"http://127.0.0.1:{os.getenv('PROPERTY_BRIDGE_PORT', '8094')}",
-).rstrip("/")
 DEFAULT_INTERNAL_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 
 
@@ -51,14 +46,12 @@ class RealtorGraphProbe:
         client_id: str,
         user_id: str,
         runtime_url: str,
-        bridge_url: str,
         internal_token: str | None = None,
         timeout_seconds: int = 30,
     ):
         self.client_id = client_id
         self.user_id = user_id
         self.runtime_url = runtime_url
-        self.bridge_url = bridge_url
         self.internal_token = (internal_token or "").strip() or None
         self.timeout_seconds = timeout_seconds
         self.session = requests.Session()
@@ -71,7 +64,7 @@ class RealtorGraphProbe:
         return {"X-Internal-Token": self.internal_token}
 
     def check_health(self, target: str) -> bool:
-        base_url = self.runtime_url if target == "runtime" else self.bridge_url
+        base_url = self.runtime_url
         try:
             response = self.session.get(f"{base_url}/health", timeout=10)
             if response.status_code != 200:
@@ -88,34 +81,21 @@ class RealtorGraphProbe:
             return False
 
     def send_turn(self, query: str, target: str) -> dict[str, Any] | None:
-        if target == "runtime":
-            payload: dict[str, Any] = {
-                "clientId": self.client_id,
-                "userId": self.user_id,
-                "bridge": "property-bridge",
-                "message": query,
-                "metadata": {
-                    "sandbox": "realtor",
-                    "purpose": "first-node-probe",
-                },
-            }
-            if self.session_id:
-                payload["sessionId"] = self.session_id
-            if self.conversation_id:
-                payload["conversationId"] = self.conversation_id
-            endpoint = f"{self.runtime_url}/chat"
-        else:
-            payload = {
-                "queryText": query,
-                "clientId": self.client_id,
-                "conversationId": self.conversation_id,
-                "userMetadata": {
-                    "userId": self.user_id,
-                    "sandbox": "realtor",
-                    "purpose": "first-node-probe",
-                },
-            }
-            endpoint = f"{self.bridge_url}/chat"
+        payload: dict[str, Any] = {
+            "clientId": self.client_id,
+            "userId": self.user_id,
+            "flow": "realtor_flow",
+            "message": query,
+            "metadata": {
+                "sandbox": "realtor",
+                "purpose": "first-node-probe",
+            },
+        }
+        if self.session_id:
+            payload["sessionId"] = self.session_id
+        if self.conversation_id:
+            payload["conversationId"] = self.conversation_id
+        endpoint = f"{self.runtime_url}/chat"
 
         try:
             response = self.session.post(endpoint, json=payload, timeout=self.timeout_seconds)
@@ -233,12 +213,6 @@ class RealtorGraphProbe:
         self.print_chat_response(response, target)
         if not show_trace:
             return 0
-        if target != "runtime":
-            print()
-            print("Aviso: el modo bridge no devuelve session_id, asi que no puedo pedir la traza del turno.")
-            print("Usa --target runtime para inspeccionar el primer nodo.")
-            return 0
-
         turn = ((response.get("metadata") or {}).get("turn")) or 1
         trace_payload = self.fetch_turn_trace(int(turn))
         if trace_payload:
@@ -279,14 +253,13 @@ def main() -> int:
     parser.add_argument("--interactive", action="store_true", help="Modo interactivo.")
     parser.add_argument(
         "--target",
-        choices=("runtime", "bridge"),
+        choices=("runtime",),
         default="runtime",
-        help="runtime = ai-runtime directo con trazas; bridge = property-bridge.",
+        help="runtime = ai-runtime directo con trazas.",
     )
     parser.add_argument("--client-id", default=DEFAULT_CLIENT_ID, help=f"Tenant realtor (default: {DEFAULT_CLIENT_ID})")
     parser.add_argument("--user-id", default=DEFAULT_USER_ID, help=f"User ID del sandbox (default: {DEFAULT_USER_ID})")
     parser.add_argument("--runtime-url", default=DEFAULT_RUNTIME_URL, help=f"Base URL de ai-runtime (default: {DEFAULT_RUNTIME_URL})")
-    parser.add_argument("--bridge-url", default=DEFAULT_BRIDGE_URL, help=f"Base URL de property-bridge (default: {DEFAULT_BRIDGE_URL})")
     parser.add_argument(
         "--internal-token",
         default=DEFAULT_INTERNAL_TOKEN,
@@ -300,7 +273,6 @@ def main() -> int:
         client_id=args.client_id,
         user_id=args.user_id,
         runtime_url=args.runtime_url,
-        bridge_url=args.bridge_url,
         internal_token=args.internal_token,
     )
 

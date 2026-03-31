@@ -2,8 +2,8 @@
 
 Archivos generados desde los builders reales de LangGraph del servicio `ai-runtime`.
 
-- `generic-graph.mmd`
-- `generic-graph.svg`
+- `basic-graph.mmd`
+- `basic-graph.svg`
 - `realtor-graph.mmd`
 - `realtor-graph.svg`
 

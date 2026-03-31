@@ -8,6 +8,10 @@ from services.ai_runtime.domain.state import BaseGraphState
 
 def after_analyze_turn(state: dict[str, object]) -> str:
     graph_state = BaseGraphState.model_validate(state)
+    if graph_state.pending_decision and graph_state.clarification_attempts < 3:
+        return "ask_clarification"
+    if graph_state.pending_decision and graph_state.clarification_attempts >= 3:
+        return "collect_lead_data"
     if graph_state.pending_clarification and graph_state.clarification_attempts < 3:
         return "ask_clarification"
     if graph_state.pending_clarification and graph_state.clarification_attempts >= 3:

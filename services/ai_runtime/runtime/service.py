@@ -15,9 +15,9 @@ from services.ai_runtime.domain.contracts import (
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
-    GenericGraphState,
     MemoryLookupState,
     RealtorGraphState,
+    build_lead_advisor_state,
     build_base_state,
 )
 from services.ai_runtime.graph.registry import GraphRegistry
@@ -30,31 +30,7 @@ from services.ai_runtime.runtime.turn_trace import (
     summarize_state,
     utc_now_iso,
 )
-
-
-def _resolve_bridge(vertical: str, bridge: str | None) -> str:
-    if bridge:
-        return bridge
-    return "property-bridge" if vertical == "realtor" else "generic-bridge"
-
-
-def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
-    components: list[dict[str, object]] = []
-    ui_payload = getattr(final_state, "ui_payload", None) or {}
-    for card in ui_payload.get("property_cards", []):
-        components.append(
-            {
-                "type": "property-card",
-                "listing_id": card.get("property_id_internal"),
-                "title": card.get("title"),
-                "price": card.get("price"),
-                "image_url": card.get("primary_image_url"),
-                "public_url": card.get("public_url"),
-                "city": card.get("province"),
-                "neighborhood": card.get("province"),
-            }
-        )
-    return components
+from services.ai_runtime.verticals import get_vertical_spec
 
 
 def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
@@ -62,6 +38,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
 
     base_state.final_response = None
     base_state.pending_clarification = None
+    base_state.pending_decision = None
     base_state.clarification_attempts = 0
     base_state.resolved_references = []
     base_state.intent_queue = []
@@ -71,6 +48,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     base_state.turn_analysis = None
     base_state.lead_advisor.should_ask = False
     base_state.lead_advisor.field_to_ask = None
+    base_state.lead_advisor.question_to_ask = None
     base_state.memory.last_lookup = MemoryLookupState()
 
     if isinstance(base_state, RealtorGraphState):
@@ -97,7 +75,8 @@ class ConversationRuntime:
 
     async def handle_turn(self, request: ChatRequest) -> ChatResponse:
         tenant_config = await self.tenant_loader.load(request.client_id)
-        bridge = _resolve_bridge(tenant_config.vertical, request.bridge)
+        vertical_spec = get_vertical_spec(tenant_config.vertical)
+        flow = request.flow or vertical_spec.default_flow
         user_id = (
             request.user_id
             or str(request.metadata.get("channel_user_id") or "")
@@ -110,13 +89,13 @@ class ConversationRuntime:
         existing_payload = await self.dependencies.session_store.get_state(request.client_id, session_id)
 
         if existing_payload:
-            state_cls = RealtorGraphState if tenant_config.vertical == "realtor" else GenericGraphState
-            base_state = state_cls.model_validate(existing_payload)
+            base_state = vertical_spec.state_model.model_validate(existing_payload)
             base_state.tenant_config = tenant_config
             base_state.capabilities = list(tenant_config.capabilities)
             base_state.vertical = tenant_config.vertical
-            base_state.bridge = bridge
+            base_state.flow = flow
             base_state.user_id = user_id
+            base_state.lead_advisor = build_lead_advisor_state(tenant_config, base_state.lead_advisor)
             _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
             base_state.messages.append(ChatMessage(role="user", content=request.message))
@@ -128,14 +107,11 @@ class ConversationRuntime:
                 user_id=user_id,
                 client_id=request.client_id,
                 vertical=tenant_config.vertical,
-                bridge=bridge,
+                flow=flow,
                 tenant_config=tenant_config,
                 initial_message=request.message,
             )
-            if tenant_config.vertical == "realtor":
-                base_state = RealtorGraphState.model_validate(state.model_dump())
-            else:
-                base_state = GenericGraphState.model_validate(state.model_dump())
+            base_state = vertical_spec.state_model.model_validate(state.model_dump())
             _reset_turn_scoped_state(base_state)
             conversation_id = base_state.conversation_id
 
@@ -145,7 +121,7 @@ class ConversationRuntime:
             session_id=session_id,
             conversation_id=conversation_id,
             vertical=tenant_config.vertical,
-            bridge=bridge,
+            flow=flow,
             turn=base_state.current_turn,
             user_id=user_id,
             user_message=request.message,
@@ -158,15 +134,11 @@ class ConversationRuntime:
             request_metadata=request.metadata,
             state_summary=summarize_state(base_state.model_dump(mode="json")),
         )
-        graph = self.graph_registry.get_graph(tenant_config.vertical, bridge, self.dependencies)
+        graph = self.graph_registry.get_graph(vertical_spec.slug, flow, self.dependencies)
         try:
             final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
-            final_state = (
-                RealtorGraphState.model_validate(final_payload)
-                if tenant_config.vertical == "realtor"
-                else GenericGraphState.model_validate(final_payload)
-            )
-            components = _build_components(final_state)
+            final_state = vertical_spec.state_model.model_validate(final_payload)
+            components = vertical_spec.component_builder(final_state)
             rag_outputs = [
                 item
                 for item in final_state.turn_outputs
@@ -192,7 +164,7 @@ class ConversationRuntime:
                 cards_mode=getattr(final_state, "cards_mode", None),
                 escalated=final_state.escalacion.solicitada,
                 scoring_status="disabled",
-                metadata={"bridge": bridge, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
+                metadata={"flow": flow, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
             )
             self.dependencies.trace_store.finish_turn(
                 status="completed",

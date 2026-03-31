@@ -44,6 +44,17 @@ class TestPolicyLoader:
         assert "agenda" in components
         assert "image" in components
 
+    def test_get_allowed_components_healthcare_web_html(self):
+        components = get_allowed_components("healthcare", "web_html")
+        assert "chat_text" in components
+        assert "agenda" in components
+        assert "image" in components
+
+    def test_unknown_vertical_falls_back_to_generic_policy(self):
+        components = get_allowed_components("unknown_vertical", "web_html")
+        assert "chat_text" in components
+        assert "agenda" in components
+
     def test_fallback_for_unknown_channel(self):
         components = get_allowed_components("realtor", "unknown_channel")
         assert "chat_text" in components

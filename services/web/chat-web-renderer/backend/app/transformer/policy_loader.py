@@ -43,7 +43,8 @@ class PolicyLoader:
     def get_allowed_components(cls, vertical: str, channel: str) -> List[str]:
         policy = cls.load_policy()
         verticals = policy.get("verticals", {})
-        vertical_config = verticals.get(vertical, {})
+        fallback_vertical = policy.get("fallback", {}).get("unknown_vertical", "generic")
+        vertical_config = verticals.get(vertical, {}) or verticals.get(fallback_vertical, {})
         channels = vertical_config.get("channels", {})
 
         if channel in channels:

@@ -169,7 +169,7 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "collect_appointment_data",
         build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
-        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+        {"assign_agent": "assign_agent", "lead_advisor": "lead_advisor"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")

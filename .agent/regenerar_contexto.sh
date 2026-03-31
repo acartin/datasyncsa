@@ -99,7 +99,6 @@ compose_services() {
 active_entrypoints() {
   rg -n --no-heading 'FastAPI\(|app\.include_router|if __name__ == "__main__"|uvicorn\.run\(' \
     services/ai_runtime \
-    services/bridges \
     services/scoring-core \
     services/web/chat-web-renderer/backend \
     services/web/admin-console/backend \
@@ -111,7 +110,6 @@ active_entrypoints() {
 active_routes() {
   rg -n --no-heading '^@router\.(get|post|put|patch|delete)\(|^@app\.(get|post|put|patch|delete)\(' \
     services/ai_runtime \
-    services/bridges \
     services/scoring-core \
     services/web/chat-web-renderer/backend \
     services/web/admin-console/backend \
@@ -134,8 +132,6 @@ cat > "$BRAIN_FILE" <<EOF
 |---|---|---:|
 | \`docker-compose.yml\` | Orquestacion oficial del stack local. | 5 |
 | \`services/ai_runtime\` | Runtime conversacional LangGraph multitenant; autoridad principal de chat. | 5 |
-| \`services/bridges/generic-bridge\` | Adapter fino para verticales no realtor hacia \`ai-runtime\`. | 4 |
-| \`services/bridges/property-bridge\` | Adapter fino del vertical realtor hacia \`ai-runtime\`. | 4 |
 | \`services/scoring-core\` | Dominio separado de scoring asincrono con API y worker propios. | 5 |
 | \`services/web/chat-web-renderer\` | Canal web y renderer SDUI que consume \`ai-runtime\`. | 5 |
 | \`services/web/admin-console\` | Consola operativa multi-tenant. | 4 |
@@ -148,16 +144,13 @@ cat > "$BRAIN_FILE" <<EOF
 
 | Carpeta | Estado |
 |---|---|
-| \`services/agent-core\` | Legacy; no es el cerebro activo del compose actual. |
-| \`services/inference-stack-v2\` | Legacy archivado o compatibilidad historica. |
 | \`services/etl-processor\` | Deprecado. |
 | \`services/ai-agents\` | Exploracion; no participa en el runtime operativo. |
 
 ## 3. ARQUITECTURA CORE
 
-- \`ai-runtime\` resuelve tenant, vertical, bridge y estado de sesion.
-- \`property-bridge\` solo aplica a vertical \`realtor\`.
-- \`generic-bridge\` aplica a \`healthcare\` y \`legal\`.
+- \`ai-runtime\` resuelve tenant, vertical, flow y estado de sesion.
+- \`realtor_flow\` y \`generic_flow\` son selectores logicos internos.
 - \`scoring-core\` permanece separado y no debe absorber decisiones conversacionales.
 - \`chat-web-renderer\` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por \`client_id\`.
@@ -172,8 +165,6 @@ $(compose_services)
 
 - \`services/ai_runtime/main.py\`
 - \`services/scoring-core/main.py\`
-- \`services/bridges/generic-bridge/main.py\`
-- \`services/bridges/property-bridge/main.py\`
 - \`services/web/chat-web-renderer/backend/app/main.py\`
 - \`services/web/admin-console/backend/app/main.py\`
 - \`services/etl-docs/main.py\`
@@ -209,12 +200,12 @@ append "### Servicios activos del compose"
 append ""
 append_codeblock text "$(compose_services)"
 append_range_excerpt "docker-compose.yml" 1 220
-append_range_excerpt "docker-compose.yml" 300 390
+append_range_excerpt "docker-compose.yml" 300 360
 append_range_excerpt ".env.example" 50 120
 
 append_section "Topologia Relevante"
 append_codeblock text \
-"$(find services/ai_runtime services/bridges services/scoring-core services/data services/web/chat-web-renderer services/web/admin-console services/etl-docs schemas tests -maxdepth 3 -type d 2>/dev/null | sort | sed 's|^\./||')"
+"$(find services/ai_runtime services/scoring-core services/data services/web/chat-web-renderer services/web/admin-console services/etl-docs schemas tests -maxdepth 3 -type d 2>/dev/null | sort | sed 's|^\./||')"
 
 append_section "Entry Points Detectados"
 append_codeblock text "$(active_entrypoints)"
@@ -234,10 +225,8 @@ append_file_excerpt "services/ai_runtime/graph/registry.py"
 append_file_excerpt "services/ai_runtime/graph/generic/graph.py"
 append_file_excerpt "services/ai_runtime/graph/realtor/graph.py"
 
-append_section "Bridges y Canal Web"
-append_file_excerpt "services/bridges/generic-bridge/main.py"
-append_file_excerpt "services/bridges/property-bridge/main.py"
-append_file_excerpt "services/web/chat-web-renderer/backend/app/core/inference_bridge.py"
+append_section "Canal Web"
+append_file_excerpt "services/web/chat-web-renderer/backend/app/core/runtime_client.py"
 append_file_excerpt "services/web/chat-web-renderer/backend/app/core/memory_reset.py"
 append_file_excerpt "services/web/chat-web-renderer/backend/app/main.py"
 
@@ -255,14 +244,6 @@ append_file_excerpt "services/scoring-core/worker.py"
 append_section "Pruebas y Sandboxes"
 append_codeblock text \
 "$(find tests -maxdepth 3 -type f 2>/dev/null | sort | sed 's|^\./||' | sed -n '1,400p')"
-
-append_section "Legacy y Zonas de Referencia"
-append_codeblock text \
-"$(printf '%s\n' \
-  'services/agent-core -> legacy, fuera del runtime principal' \
-  'services/inference-stack-v2 -> legacy, no autoridad actual' \
-  'services/etl-processor -> deprecado' \
-  'services/ai-agents -> exploracion no operativa')"
 
 mv "$tmp_file" "$OUT_FILE"
 

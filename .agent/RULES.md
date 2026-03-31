@@ -33,8 +33,25 @@ Orden recomendado de lectura:
 Para tareas del stack conversacional actual:
 
 5. `.agent/AI_RUNTIME_BOOTSTRAP.md`
-6. `services/ai_runtime/ARCHITECTURE.md`
-7. `docs/AI_RUNTIME_INDEX.md`
+6. `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
+7. `services/ai_runtime/ARCHITECTURE.md`
+8. `docs/AI_RUNTIME_INDEX.md`
+
+Para tareas que toquen logica conversacional, planner, synthesizer, lead capture, scoring o recomendaciones de arquitectura en `ai-runtime`:
+
+- No basta con leer donde viven los prompts.
+- Es obligatorio leer los prompts activos del tenant en BD o en trazas equivalentes y mantenerlos presentes en el contexto de trabajo antes de recomendar cambios.
+- Minimo obligatorio:
+  - `lead_ai_prompts.slug = 'primary_chat'`
+  - `planner_system`
+  - `synthesizer_system`
+  - si la tarea toca scoring o lead capture: `lead_scoring_prompts.prompt_template` y `extraction_schema`
+- Si no se pudieron leer los prompts activos, no proponer cambios de politica conversacional como si fueran hechos; reportar el bloqueo y limitarse a bugs/guardrails duros.
+- Precedencia obligatoria para phrasing de captura:
+  - `slot_hints.question` del prompt activo
+  - luego `lead_scoring_prompts.extraction_schema.fields[].question`
+  - luego fallback minimo en Python
+- `fields[].question` es wording base configurable por tenant/modelo; no sustituye la decision semantica del LLM sobre si conviene preguntar o no.
 
 Regla de precedencia:
 
@@ -49,8 +66,6 @@ Regla de precedencia:
 Servicios activos principales:
 
 - `services/ai_runtime`
-- `services/bridges/generic-bridge`
-- `services/bridges/property-bridge`
 - `services/scoring-core`
 - `services/web/chat-web-renderer`
 - `services/web/admin-console`
@@ -64,20 +79,19 @@ Servicios de apoyo o exploracion:
 
 Servicios legacy o deprecados:
 
-- `services/agent-core`
-- `services/inference-stack-v2`
+- `services/legacy/agent-core`
+- `services/legacy/inference-stack-v2`
 - `services/etl-processor`
 
 Reglas:
 
 - No implementar features nuevas en servicios legacy salvo instruccion explicita
 - No copiar patrones legacy a `ai-runtime`
-- Usar `services/agent-core` e `inference-stack-v2` solo como referencia historica cuando sea necesario
+- Usar `services/legacy/agent-core` y `services/legacy/inference-stack-v2` solo como referencia historica cuando sea necesario
 
 ## 3. Arquitectura Innegociable
 
 - `ai-runtime` es el unico cerebro conversacional operativo
-- `generic-bridge` y `property-bridge` son adapters delgados; no deben concentrar logica de negocio
 - `chat-web-renderer` transforma la respuesta del runtime a SDUI para el canal web
 - `scoring-core` es un bounded context separado; no absorbe decision conversacional
 - `main.py` de cada API debe ser minimo: app init, middleware, `include_router`
@@ -108,12 +122,11 @@ Reglas:
 
 ## 7. Runtime Conversacional
 
-- `ai-runtime` resuelve tenant, vertical y bridge efectivo
-- `property-bridge` solo aplica a tenants `realtor`
-- `generic-bridge` aplica a `healthcare` y `legal`
+- `ai-runtime` resuelve tenant, vertical y flow efectivo
+- `realtor_flow` y `basic_flow` son selectores internos del runtime
 - El estado se hidrata desde Redis y se persiste por sesion
-- `tenant_config` se carga una vez por sesion y se cachea
-- La composicion de prompts ocurre en runtime: tone del tenant + prompt vertical + contexto
+- `tenant_config` se resuelve al inicio del turno, se reinyecta al estado y se cachea por `client_id`
+- La composicion de prompts ocurre en runtime: tone opcional del tenant + prompt vertical + contexto
 - `services/data` y `services/ai_runtime/rag/**` deben respetar aislamiento por `client_id`
 - Mutaciones de conocimiento deben disparar reset de memoria best-effort contra `ai-runtime`
 
@@ -149,12 +162,6 @@ Minimos por area:
 - `services/data/**`
   - `docker compose up -d --build ai-runtime`
   - `docker compose exec -T ai-runtime /bin/bash -lc "cd /app && find services/ai_runtime services/data -type f -name '*.py' -print0 | xargs -0 python -m py_compile"`
-- `services/bridges/generic-bridge/**`
-  - `docker compose up -d --build generic-bridge`
-  - `docker compose exec -T generic-bridge python -m py_compile main.py`
-- `services/bridges/property-bridge/**`
-  - `docker compose up -d --build property-bridge`
-  - `docker compose exec -T property-bridge python -m py_compile main.py`
 - `services/web/chat-web-renderer/backend/**`
   - `docker compose up -d --build chat-web-renderer-api`
   - `docker compose exec -T chat-web-renderer-api pytest -q tests`
@@ -188,7 +195,7 @@ Rechazar cambios que:
 - introducen features nuevas en servicios legacy
 - eliminan validaciones de seguridad
 - dejan `.agent` o `.env.example` desalineados despues de cambiar compose/naming
-- mezclan scoring conversacional dentro de bridges o frontend
+- mezclan scoring conversacional dentro de frontend o componentes legacy
 
 ## 11. Convencion de Trabajo con IA
 

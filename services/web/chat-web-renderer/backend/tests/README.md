@@ -16,16 +16,16 @@ docker compose exec -T chat-web-renderer-api pytest -q tests
 ## Reusable Smoke Test
 Script:
 
-`services/web/chat-web-renderer/backend/tests/smoke/test_smoke_bridge.py`
+`services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py`
 
-Proxy smoke (UI nginx -> /api -> bridge):
+Proxy smoke (UI nginx -> /api -> runtime):
 
 `services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py`
 
 Run:
 
 ```bash
-docker compose exec -T chat-web-renderer-api python tests/smoke/test_smoke_bridge.py
+docker compose exec -T chat-web-renderer-api python tests/smoke/test_smoke_runtime.py
 docker compose exec -T chat-web-renderer-api python tests/smoke/test_smoke_web_proxy.py
 ```
 

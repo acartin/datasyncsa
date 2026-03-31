@@ -14,7 +14,6 @@ from app.schemas.ui import (
 
 logger = logging.getLogger("generic_policy")
 
-REALTOR_VERTICAL = "realtor"
 GENERIC_VERTICAL = "generic"
 
 SDUI_TO_POLICY_TYPES = {
@@ -31,14 +30,19 @@ SDUI_TO_POLICY_TYPES = {
 
 class GenericRendererPolicy:
     """
-    Política de renderizado para el vertical 'generic'.
-    Salida limitada a: agenda, image, chat_text.
+    Política de renderizado restringida para verticales no-realtor.
     """
 
-    def __init__(self, channel: str = "web_html"):
+    def __init__(self, channel: str = "web_html", *, vertical_slug: str = GENERIC_VERTICAL):
         self.channel = channel
-        self.allowed_components: List[str] = get_allowed_components(GENERIC_VERTICAL, channel)
-        logger.info(f"GenericRendererPolicy initialized for channel '{channel}' with allowed: {self.allowed_components}")
+        self.vertical_slug = vertical_slug
+        self.allowed_components: List[str] = get_allowed_components(self.vertical_slug, channel)
+        logger.info(
+            "GenericRendererPolicy initialized for vertical '%s' channel '%s' with allowed: %s",
+            self.vertical_slug,
+            channel,
+            self.allowed_components,
+        )
 
     def filter_components(
         self,
@@ -56,7 +60,12 @@ class GenericRendererPolicy:
             if comp_type in self.allowed_components:
                 filtered.append(component)
             else:
-                logger.info(f"Component type '{comp_type}' not allowed for channel '{self.channel}' (generic), converting to chat_text")
+                logger.info(
+                    "Component type '%s' not allowed for channel '%s' vertical '%s', converting to chat_text",
+                    comp_type,
+                    self.channel,
+                    self.vertical_slug,
+                )
                 filtered.extend(self._degrade_to_text(component))
 
         return filtered
@@ -118,7 +127,7 @@ class GenericRendererPolicy:
             "session_id": session_id,
             "components": [c.model_dump() for c in filtered],
             "meta": {
-                "vertical": GENERIC_VERTICAL,
+                "vertical": self.vertical_slug,
                 "channel": self.channel,
                 "allowed_components": self.allowed_components,
             },
@@ -135,11 +144,11 @@ class GenericRendererPolicy:
             
             allowed = any(pt in self.allowed_components for pt in policy_types)
             if not allowed:
-                logger.warning(f"Invalid component {comp_type} in final response (generic)")
+                logger.warning("Invalid component %s in final response for vertical %s", comp_type, self.vertical_slug)
                 return False
 
         return True
 
 
-def create_generic_policy(channel: str) -> GenericRendererPolicy:
-    return GenericRendererPolicy(channel=channel)
+def create_generic_policy(channel: str, *, vertical_slug: str = GENERIC_VERTICAL) -> GenericRendererPolicy:
+    return GenericRendererPolicy(channel=channel, vertical_slug=vertical_slug)

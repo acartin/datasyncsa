@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 class ScoreConversationRequest(BaseModel):
     """
-    Minimal cross-service contract from agent-core to scoring-core.
+    Minimal cross-service contract from the active conversational runtime to scoring-core.
     """
 
     client_id: UUID = Field(

@@ -15,7 +15,7 @@ Contrato activo del runtime conversacional `ai-runtime`.
   "conversationId": "uuid-opcional",
   "sessionId": "uuid-opcional",
   "userId": "uuid-opcional",
-  "bridge": "generic-bridge|property-bridge-opcional",
+  "flow": "basic_flow|realtor_flow-opcional",
   "userMetadata": {}
 }
 ```
@@ -24,7 +24,8 @@ Campos relevantes:
 
 - `clientId` es obligatorio
 - `queryText` es obligatorio
-- `bridge` puede omitirse; el runtime lo resuelve por vertical cuando aplique
+- `flow` puede omitirse; el runtime lo resuelve por vertical cuando aplique
+- `flow` selecciona el grafo interno y no implica servicios HTTP intermedios
 - `userMetadata` se usa para contexto de canal, tracking y continuidad
 
 ## Response canonico
@@ -34,7 +35,7 @@ Campos relevantes:
   "sessionId": "uuid",
   "conversationId": "uuid",
   "clientId": "tenant-id",
-  "vertical": "realtor|healthcare|legal",
+  "vertical": "realtor|healthcare|legal|insurance",
   "answer": "string",
   "components": [],
   "sources": [],
@@ -44,7 +45,7 @@ Campos relevantes:
   "escalated": false,
   "scoringStatus": "disabled",
   "metadata": {
-    "bridge": "generic-bridge|property-bridge",
+    "flow": "basic_flow|realtor_flow",
     "turn": 1
   }
 }
@@ -91,6 +92,7 @@ Response:
 
 1. Ninguna operacion conversacional ocurre sin `client_id`.
 2. El runtime es multitenant-first: estado, cache y RAG se resuelven por tenant.
-3. `property-bridge` solo debe usarse con vertical `realtor`.
-4. `generic-bridge` solo debe usarse con verticales no realtor.
-5. El contrato externo no expone detalles internos del grafo ni IDs de referencia intermedios.
+3. `realtor_flow` solo debe usarse con vertical `realtor`.
+4. `basic_flow` solo debe usarse con verticales no realtor.
+5. Los bridges HTTP legacy fueron retirados del compose activo; el cliente recomendado llama directo a `ai-runtime`.
+6. El contrato externo no expone detalles internos del grafo ni IDs de referencia intermedios.

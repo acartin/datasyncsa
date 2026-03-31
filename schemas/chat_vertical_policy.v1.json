@@ -135,6 +135,114 @@
         "meta_ig": "generic_meta_ig_v1",
         "api": "generic_api_v1"
       }
+    },
+    "healthcare": {
+      "description": "Flujo healthcare con respuestas controladas",
+      "allowed_components": [
+        "chat_text",
+        "agenda",
+        "image"
+      ],
+      "channels": {
+        "web_html": [
+          "chat_text",
+          "agenda",
+          "image"
+        ],
+        "meta_whatsapp": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "meta_ig": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "api": [
+          "chat_text",
+          "agenda",
+          "image"
+        ]
+      },
+      "prompt_profile_by_channel": {
+        "web_html": "generic_web_v1",
+        "meta_whatsapp": "generic_meta_whatsapp_v1",
+        "meta_ig": "generic_meta_ig_v1",
+        "api": "generic_api_v1"
+      }
+    },
+    "legal": {
+      "description": "Flujo legal con respuestas controladas",
+      "allowed_components": [
+        "chat_text",
+        "agenda",
+        "image"
+      ],
+      "channels": {
+        "web_html": [
+          "chat_text",
+          "agenda",
+          "image"
+        ],
+        "meta_whatsapp": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "meta_ig": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "api": [
+          "chat_text",
+          "agenda",
+          "image"
+        ]
+      },
+      "prompt_profile_by_channel": {
+        "web_html": "generic_web_v1",
+        "meta_whatsapp": "generic_meta_whatsapp_v1",
+        "meta_ig": "generic_meta_ig_v1",
+        "api": "generic_api_v1"
+      }
+    },
+    "insurance": {
+      "description": "Flujo insurance con respuestas controladas",
+      "allowed_components": [
+        "chat_text",
+        "agenda",
+        "image"
+      ],
+      "channels": {
+        "web_html": [
+          "chat_text",
+          "agenda",
+          "image"
+        ],
+        "meta_whatsapp": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "meta_ig": [
+          "chat_text",
+          "image",
+          "quick_replies"
+        ],
+        "api": [
+          "chat_text",
+          "agenda",
+          "image"
+        ]
+      },
+      "prompt_profile_by_channel": {
+        "web_html": "generic_web_v1",
+        "meta_whatsapp": "generic_meta_whatsapp_v1",
+        "meta_ig": "generic_meta_ig_v1",
+        "api": "generic_api_v1"
+      }
     }
   },
   "fallback": {

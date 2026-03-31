@@ -57,6 +57,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "max_questions": {
+          "type": "integer",
+          "minimum": 0
+        },
         "require_cards": {
           "type": "boolean"
         },
@@ -69,6 +73,43 @@
         "expected_dialogue_act_any": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "expected_should_ask": {
+          "type": "boolean"
+        },
+        "expected_capture_exposure_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_field_to_ask": {
+          "type": ["string", "null"]
+        },
+        "expected_field_to_ask_any": {
+          "type": "array",
+          "items": { "type": ["string", "null"] }
+        },
+        "forbidden_field_to_ask_any": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_question_contains_any": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_completed_fields_all": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_lead_extracted_contains": {
+          "type": "object"
+        },
+        "expected_criteria_min": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "expected_criteria_max": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
         },
         "expected_turn_output_types_any": {
           "type": "array",
