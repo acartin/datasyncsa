@@ -24,15 +24,7 @@ _MEMORY_SIGNAL_PATTERNS = (
     r"\bwhatsapp\b",
     r"\bpresupuesto\b",
     r"\baprobaci[oó]n\b",
-    r"\btengo \d{1,3} a(?:ñ|n)os\b",
-    r"\btrabajo en\b",
-    r"\bsoy\b",
     r"\bprefiero\b",
-    r"\bmi esposa\b",
-    r"\bmi esposo\b",
-    r"\bmis hijos\b",
-    r"\btengo hijos\b",
-    r"\bmi edad\b",
 )
 
 _PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s-]{6,}\d)")
@@ -47,6 +39,25 @@ _SHORT_NAME_PATTERN = re.compile(
     r"^\s*(?:con|soy)\s+"
     r"(?P<name>[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+){0,3})\s*[\.\!\?]?\s*$"
 )
+
+_BASE_STRUCTURED_MEMORY_KEYS = {
+    "nombre",
+    "email",
+    "correo",
+    "telefono",
+    "telefono_principal",
+    "numero",
+    "presupuesto",
+    "presupuesto_minimo",
+    "presupuesto_maximo",
+    "presupuesto_rango",
+    "aprobacion",
+    "fecha_preferida",
+    "tipo_cita",
+    "appointment_intent",
+    "preferencia",
+    "preferencias",
+}
 
 
 def _should_extract_memory(message: str) -> bool:
@@ -64,6 +75,10 @@ def _should_extract_memory(message: str) -> bool:
 def _normalize_entity_key(value: str) -> str:
     cleaned = re.sub(r"\s+", "_", (value or "").strip().lower())
     return re.sub(r"[^a-z0-9_]+", "", cleaned)
+
+
+def _allowed_structured_memory_keys(_: BaseGraphState) -> set[str]:
+    return set(_BASE_STRUCTURED_MEMORY_KEYS)
 
 
 def _infer_value_type(value: Any) -> str:
@@ -216,6 +231,7 @@ async def capture_memory_entities(state: dict[str, Any], deps: GraphDependencies
             canonical_payload["nombre"] = fallback_name
 
     merged_lead = _merge_canonical_fields(graph_state.lead_advisor.lead_extracted, canonical_payload)
+    allowed_keys = _allowed_structured_memory_keys(graph_state)
 
     parsed_entities: list[ConversationEntity] = []
     for item in entities_payload:
@@ -223,7 +239,7 @@ async def capture_memory_entities(state: dict[str, Any], deps: GraphDependencies
             continue
         key = _normalize_entity_key(str(item.get("key") or ""))
         value = item.get("value")
-        if not key or value in (None, "", []):
+        if not key or key not in allowed_keys or value in (None, "", []):
             continue
         try:
             parsed_entities.append(

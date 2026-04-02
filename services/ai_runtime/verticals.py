@@ -29,7 +29,7 @@ def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, obj
         components.append(
             {
                 "type": "property-card",
-                "listing_id": card.get("property_id_internal"),
+                "id": card.get("id"),
                 "title": card.get("title"),
                 "price": card.get("price"),
                 "image_url": card.get("primary_image_url"),

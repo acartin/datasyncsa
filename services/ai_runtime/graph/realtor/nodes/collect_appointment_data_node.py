@@ -26,7 +26,7 @@ async def collect_appointment_data(state: dict[str, Any], deps: GraphDependencie
     extracted = await deps.llm.extract_appointment_fields(prompt)
     updates = {key: value for key, value in extracted.items() if value not in (None, "", [])}
     if "propiedad_id" not in updates and graph_state.last_mentioned:
-        updates["propiedad_id"] = graph_state.last_mentioned.property_id_internal
+        updates["propiedad_id"] = graph_state.last_mentioned.id
     cita = graph_state.cita.model_copy(update={**graph_state.cita.model_dump(mode="json"), **updates})
     contact_ok = has_valid_lead_contact(graph_state.lead_advisor.lead_extracted)
     cita.datos_completos = bool(cita.tipo and cita.propiedad_id and cita.fecha and cita.hora and contact_ok)

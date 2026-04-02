@@ -13,7 +13,7 @@ from services.ai_runtime.graph._shared.nodes.helpers import complete_active_inte
 def build_card_payload(properties: list[Property]) -> list[dict[str, Any]]:
     return [
         CardPayload(
-            property_id_internal=item.property_id_internal,
+            id=item.id,
             title=item.title,
             price=item.price,
             currency=item.currency,
@@ -43,7 +43,7 @@ async def render_cards(state: dict[str, Any], deps: GraphDependencies) -> dict[s
     payload = build_card_payload(selected)
     output = {"type": "render_cards", "mode": mode, "count": len(payload)}
     updates = {
-        "cards_shown": [item["property_id_internal"] for item in payload],
+        "cards_shown": [item["id"] for item in payload],
         "cards_mode": mode,
         "render_mode": "cards",
         "ui_payload": {"property_cards": payload},

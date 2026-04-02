@@ -8,6 +8,7 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     LeadAdvisorState,
+    RealtorGraphState,
     SCORING_FIELD_ALIASES,
     build_lead_advisor_state,
 )
@@ -39,6 +40,72 @@ FIELD_QUESTION_HINTS = {
 def _normalize_field_key(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     return SCORING_FIELD_ALIASES.get(normalized, normalized)
+
+
+def _coerce_budget_hint(value: Any) -> float | None:
+    if value in (None, "", []):
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", ".")
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in ("max", "hasta", "value", "amount"):
+            candidate = _coerce_budget_hint(value.get(key))
+            if candidate is not None:
+                return candidate
+        for key in ("min", "desde"):
+            candidate = _coerce_budget_hint(value.get(key))
+            if candidate is not None:
+                return candidate
+    return None
+
+
+def _sync_lead_extracted_from_state(graph_state: BaseGraphState, advisor_state: LeadAdvisorState) -> LeadAdvisorState:
+    payload = advisor_state.lead_extracted.model_dump(mode="json")
+
+    latest_entities: dict[str, Any] = {}
+    for entity in reversed(graph_state.memory.entities):
+        key = _normalize_field_key(getattr(entity, "key", None))
+        if not key or key in latest_entities:
+            continue
+        latest_entities[key] = entity.value
+
+    if not payload.get("nombre") and latest_entities.get("nombre"):
+        payload["nombre"] = latest_entities["nombre"]
+    if not payload.get("email") and latest_entities.get("email"):
+        payload["email"] = latest_entities["email"]
+    if not payload.get("telefono") and latest_entities.get("telefono"):
+        payload["telefono"] = latest_entities["telefono"]
+    if not payload.get("aprobacion") and latest_entities.get("aprobacion"):
+        payload["aprobacion"] = latest_entities["aprobacion"]
+    if not payload.get("fecha_preferida") and latest_entities.get("fecha_preferida"):
+        payload["fecha_preferida"] = latest_entities["fecha_preferida"]
+    if not payload.get("tipo_cita") and latest_entities.get("tipo_cita"):
+        payload["tipo_cita"] = latest_entities["tipo_cita"]
+
+    if payload.get("presupuesto") is None:
+        for key in ("presupuesto", "presupuesto_maximo", "presupuesto_rango", "presupuesto_minimo"):
+            candidate = _coerce_budget_hint(latest_entities.get(key))
+            if candidate is not None:
+                payload["presupuesto"] = candidate
+                break
+
+    if isinstance(graph_state, RealtorGraphState) and payload.get("presupuesto") is None:
+        candidate = graph_state.search_filters.precio_max or graph_state.search_filters.precio_min
+        if candidate is not None:
+            payload["presupuesto"] = float(candidate)
+
+    synchronized = advisor_state.model_copy(
+        update={
+            "lead_extracted": advisor_state.lead_extracted.model_validate(payload),
+        }
+    )
+    return build_lead_advisor_state(graph_state.tenant_config, synchronized)
 
 
 def _pending_fields(advisor_state: LeadAdvisorState) -> list[str]:
@@ -163,6 +230,7 @@ async def lead_advisor(state: dict[str, Any], deps: GraphDependencies) -> dict[s
 
     graph_state = BaseGraphState.model_validate(state)
     advisor_state = build_lead_advisor_state(graph_state.tenant_config, graph_state.lead_advisor)
+    advisor_state = _sync_lead_extracted_from_state(graph_state, advisor_state)
     capture_exposure_count = int(advisor_state.capture_exposure_count or 0)
     if _turn_counts_as_case_exposure(graph_state):
         capture_exposure_count += 1

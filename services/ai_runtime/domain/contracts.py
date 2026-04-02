@@ -160,7 +160,6 @@ class PropertyLocation(BaseModel):
 
 class PropertyMeta(BaseModel):
     source_system: str | None = None
-    source_property_ref: str | None = None
     public_url: str | None = None
     ingested_at: datetime | None = None
     updated_at: datetime | None = None
@@ -171,7 +170,7 @@ class Property(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    property_id_internal: str
+    id: str
     client_id: str
     title: str
     description_html: str
@@ -341,13 +340,13 @@ class TextToSQLResult(BaseModel):
 
 
 class PropertyComparisonScore(BaseModel):
-    property_id_internal: str
+    property_id: str
     score_total: float
     dimensions: dict[str, float] = Field(default_factory=dict)
 
 
 class CardPayload(BaseModel):
-    property_id_internal: str
+    id: str
     title: str
     price: float
     currency: str

@@ -327,11 +327,13 @@ La validacion conductual canonica del vertical realtor no vive solo en unit test
 
 Script de referencia:
 
-- `tests/sandbox/realtor/realtor_v3_regression_battery.py`
+- `tests/sandbox/realtor/run_realtor_conversation_suite.py`
+- suites canonicas:
+  - `tests/sandbox/realtor/realtor_regression_suite.json`
 
 Objetivo:
 
-- detectar regresiones en contratos de conversacion del flujo realtor en `inference-core-v3`
+- detectar regresiones en contratos de conversacion del flujo realtor en `ai-runtime`
 
 Cobertura principal:
 
@@ -347,9 +349,9 @@ Cobertura principal:
 Uso operativo:
 
 ```bash
-python3 tests/sandbox/realtor/realtor_v3_regression_battery.py \
-  --request-timeout 45 \
-  --json-out /tmp/realtor_v3_battery.json
+python3 tests/sandbox/realtor/run_realtor_conversation_suite.py \
+  --suite tests/sandbox/realtor/realtor_regression_suite.json \
+  --json-out /tmp/realtor_suite_report.json
 ```
 
 Salida esperada:

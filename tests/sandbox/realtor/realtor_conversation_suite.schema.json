@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://datasyncsa.local/realtor/generated_conversation_suite.schema.json",
-  "title": "Generated Realtor Conversation Suite",
+  "$id": "https://datasyncsa.local/realtor/realtor_conversation_suite.schema.json",
+  "title": "Realtor Conversation Suite",
   "type": "object",
   "required": ["suite_id", "conversations"],
   "properties": {
@@ -118,6 +118,9 @@
         "expected_search_match_scope_any": {
           "type": "array",
           "items": { "type": "string", "enum": ["exact", "relaxed", "none"] }
+        },
+        "expected_resolved_references_within_cards_shown": {
+          "type": "boolean"
         },
         "manual_review_focus": {
           "type": "array",

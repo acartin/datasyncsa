@@ -184,13 +184,29 @@ Donde:
 
 ### DB-backed indirectos
 
-- `analyze_turn` -> `planner_system` + `graph/_shared/prompts/analyze_turn_prompt.py`
-- `intent_detector` -> `planner_system` + `graph/_shared/prompts/intent_detector_prompt.py`
+- ninguno activo en el runtime actual para nodos de analisis semantico
 
-Esto significa que cambios en `planner_system` afectan tambien la clasificacion/planeacion de:
+### Locales por vertical
 
-- `analyze_turn`
-- `intent_detector`
+- `analyze_turn` ya no sale de `_shared`.
+- `intent_detector` ya no sale de `_shared`.
+- Cada vertical resuelve su propio prompt:
+  - `realtor` -> `graph/realtor/prompts/analyze_turn_prompt.py`
+  - `healthcare` -> `graph/healthcare/prompts/analyze_turn_prompt.py`
+  - `legal` -> `graph/legal/prompts/analyze_turn_prompt.py`
+  - `insurance` -> `graph/insurance/prompts/analyze_turn_prompt.py`
+  - `realtor` -> `graph/realtor/prompts/intent_detector_prompt.py`
+  - `healthcare` -> `graph/healthcare/prompts/intent_detector_prompt.py`
+  - `legal` -> `graph/legal/prompts/intent_detector_prompt.py`
+  - `insurance` -> `graph/insurance/prompts/intent_detector_prompt.py`
+
+Importante:
+
+- cambios en `planner_system` ya no alteran directamente `analyze_turn`
+- cambios en `planner_system` ya no alteran directamente `intent_detector`
+- `analyze_turn` queda como responsabilidad semantica por vertical
+- `intent_detector` queda como responsabilidad semantica por vertical
+- `_shared` no debe contener prompts de analisis de turno con semantica de dominio
 
 ### Locales compartidos
 

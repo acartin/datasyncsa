@@ -14,9 +14,9 @@ async def mutate_comparison_set(state: dict[str, Any], deps: GraphDependencies) 
     graph_state = RealtorGraphState.model_validate(state)
     operation = (graph_state.active_intent.output or {}).get("operation", "REPLACE") if graph_state.active_intent else "REPLACE"
     property_ids = [
-        reference["property_id_internal"]
+        reference["property_id"]
         for reference in graph_state.resolved_references
-        if reference.get("kind") == "property" and reference.get("property_id_internal")
+        if reference.get("kind") == "property" and reference.get("property_id")
     ]
     current = list(graph_state.active_comparison)
     if operation == "ADD":

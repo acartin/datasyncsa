@@ -145,8 +145,8 @@ class SDUITransformer:
         for source in sources:
             metadata = source.get("metadata", {})
             
-            # Buscamos el ID de la propiedad (puede venir como 'id' o 'external_prop_id')
-            prop_id = metadata.get("id") or metadata.get("id_propiedad")
+            # El runtime y el contrato canonico operan solo con el UUID interno.
+            prop_id = metadata.get("id")
             if prop_id and prop_id not in seen_ids:
                 seen_ids.add(prop_id)
                 prop_ids.append(prop_id)
@@ -221,7 +221,7 @@ class SDUITransformer:
     def _map_agent_core_property_card(self, payload: Dict[str, Any]) -> Union[PropertyCard, None]:
         try:
             title = str(payload.get("title") or "Propiedad sugerida").replace("&#8211;", "-")
-            listing_id = str(payload.get("listing_id") or payload.get("id") or "").strip()
+            property_id = str(payload.get("id") or "").strip()
             location = str(payload.get("neighborhood") or payload.get("city") or "").strip()
             rooms = payload.get("rooms")
             area_display = str(payload.get("area_display") or "").strip()
@@ -231,7 +231,7 @@ class SDUITransformer:
             if area_display:
                 tags.append(area_display)
             return PropertyCard(
-                id=listing_id or None,
+                id=property_id or None,
                 title=title,
                 price=self._parse_price_value(payload),
                 location=location or None,

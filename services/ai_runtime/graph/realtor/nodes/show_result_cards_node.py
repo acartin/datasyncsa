@@ -13,14 +13,14 @@ from services.ai_runtime.graph.realtor.nodes.render_cards_node import build_card
 
 def _select_properties(graph_state: RealtorGraphState) -> list[Property]:
     property_map = {
-        item.property_id_internal: item
+        item.id: item
         for item in [*graph_state.last_search_results, *graph_state.inventory]
     }
     if graph_state.cards_shown:
         selected: list[Property] = []
         for property_id in graph_state.cards_shown:
             item = property_map.get(property_id)
-            if item and item.property_id_internal not in {current.property_id_internal for current in selected}:
+            if item and item.id not in {current.id for current in selected}:
                 selected.append(item)
         if selected:
             return selected
@@ -64,7 +64,7 @@ async def show_result_cards(state: dict[str, Any], deps: GraphDependencies) -> d
         "render_mode": "cards" if payload else "text",
         "cards_mode": mode if payload else None,
         "ui_payload": {"property_cards": payload} if payload else None,
-        "cards_shown": [item["property_id_internal"] for item in payload],
+        "cards_shown": [item["id"] for item in payload],
         **complete_active_intent(graph_state, output),
     }
     if len(properties) == 1 and analysis.detail_attribute_key == "foto":

@@ -158,6 +158,9 @@ class BaseGraphState(BaseModel):
     completed_intents: list[IntentDefinition] = Field(default_factory=list)
     turn_outputs: list[dict[str, Any]] = Field(default_factory=list)
     turn_analysis: TurnAnalysis | None = None
+    last_turn_dialogue_act: str | None = None
+    last_turn_output_types: list[str] = Field(default_factory=list)
+    last_turn_search_summary: dict[str, Any] | None = None
     cita: Appointment
     escalacion: EscalationState = Field(default_factory=EscalationState)
     lead_advisor: LeadAdvisorState = Field(default_factory=LeadAdvisorState)

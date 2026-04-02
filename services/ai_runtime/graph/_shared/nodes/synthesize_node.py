@@ -86,16 +86,16 @@ def _last_assistant_message(messages: list[Any]) -> dict[str, Any] | None:
 def _serialize_displayed_cards(graph_state: RealtorGraphState) -> list[dict[str, Any]]:
     property_map: dict[str, Any] = {}
     for item in [*graph_state.last_search_results, *graph_state.inventory]:
-        property_map[item.property_id_internal] = item
+        property_map[item.id] = item
 
     selected: list[dict[str, Any]] = []
     seen: set[str] = set()
     for property_id in graph_state.cards_shown:
         item = property_map.get(property_id)
-        if not item or item.property_id_internal in seen:
+        if not item or item.id in seen:
             continue
         selected.append(item.model_dump(mode="json"))
-        seen.add(item.property_id_internal)
+        seen.add(item.id)
     return selected
 
 

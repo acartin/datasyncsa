@@ -1,4 +1,8 @@
-"""Fast-path node for conversational memory questions."""
+"""Fast-path node for conversational memory questions.
+
+Business facts come from structured state.
+Casual self-referential facts should fall back to transcript recall only.
+"""
 
 from __future__ import annotations
 
@@ -181,10 +185,9 @@ async def memory_lookup(state: dict[str, Any], deps: GraphDependencies) -> dict[
     elif lookup_key == "telefono" and canonical_fields.telefono:
         value, source = canonical_fields.telefono, "lead_advisor.lead_extracted"
 
-    if value in (None, ""):
+    if value in (None, "") and lookup_key != "edad":
         entity_keys = {
             "nombre": ("nombre",),
-            "edad": ("edad",),
             "presupuesto": ("presupuesto", "presupuesto_maximo"),
             "email": ("email", "correo"),
             "telefono": ("telefono", "telefono_principal", "numero"),

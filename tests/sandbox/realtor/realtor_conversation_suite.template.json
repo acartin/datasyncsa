@@ -1,7 +1,7 @@
 {
-  "suite_id": "realtor_generated_edge_suite_v1",
+  "suite_id": "realtor_suite_candidate_v1",
   "suite_type": "generated",
-  "generator_notes": "Template base para generar conversaciones variadas contra el runtime realtor.",
+  "generator_notes": "Template base para crear una suite conversacional realtor contra el runtime actual.",
   "defaults": {
     "expect": {
       "answer_excludes": [

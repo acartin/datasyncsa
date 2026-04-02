@@ -150,7 +150,8 @@ cat > "$BRAIN_FILE" <<EOF
 ## 3. ARQUITECTURA CORE
 
 - \`ai-runtime\` resuelve tenant, vertical, flow y estado de sesion.
-- \`realtor_flow\` y \`generic_flow\` son selectores logicos internos.
+- \`realtor_flow\` y \`basic_flow\` son selectores logicos internos.
+- \`analyze_turn\` e \`intent_detector\` son prompts semanticos por vertical; \`shared\` solo debe contener piezas tecnicas neutrales.
 - \`scoring-core\` permanece separado y no debe absorber decisiones conversacionales.
 - \`chat-web-renderer\` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por \`client_id\`.
@@ -214,6 +215,8 @@ append_section "Rutas API Detectadas"
 append_codeblock text "$(active_routes)"
 
 append_section "AI Runtime"
+append_file_excerpt ".agent/AI_RUNTIME_BOOTSTRAP.md"
+append_file_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md"
 append_file_excerpt "services/ai_runtime/ARCHITECTURE.md"
 append_file_excerpt "services/ai_runtime/main.py"
 append_file_excerpt "services/ai_runtime/api.py"

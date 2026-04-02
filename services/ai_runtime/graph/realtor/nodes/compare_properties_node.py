@@ -37,7 +37,7 @@ def _build_selection_narrative(property_item: Property) -> str:
 async def compare_properties(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
     property_ids = graph_state.active_comparison or [
-        reference["property_id_internal"]
+        reference["property_id"]
         for reference in graph_state.resolved_references
         if reference.get("kind") == "property"
     ]

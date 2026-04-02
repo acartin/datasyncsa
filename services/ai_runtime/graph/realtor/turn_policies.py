@@ -359,12 +359,14 @@ def _ordered_compare_candidates(graph_state: RealtorGraphState) -> list[str]:
     for property_id in graph_state.cards_shown:
         if property_id not in candidates:
             candidates.append(property_id)
+    if candidates:
+        return candidates
     for item in graph_state.last_search_results:
-        if item.property_id_internal not in candidates:
-            candidates.append(item.property_id_internal)
+        if item.id not in candidates:
+            candidates.append(item.id)
     for item in graph_state.inventory:
-        if item.property_id_internal not in candidates:
-            candidates.append(item.property_id_internal)
+        if item.id not in candidates:
+            candidates.append(item.id)
     return candidates
 
 
@@ -449,7 +451,7 @@ def _coerce_result_set_detail(
     analysis: TurnAnalysis,
 ) -> TurnAnalysis:
     latest_message = graph_state.messages[-1].content
-    if analysis.dialogue_act not in {"ask_detail", "unknown"}:
+    if analysis.dialogue_act not in {"ask_detail", "unknown", "inventory_probe"}:
         return analysis
     if analysis.dialogue_act == "unknown" and not DETAIL_QUERY_PATTERN.search(latest_message):
         return analysis

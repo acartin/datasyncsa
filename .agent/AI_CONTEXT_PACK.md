@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-03-30T17:01:54Z`
+- Generated UTC: `2026-04-01T20:09:03Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-28`
-- Git commit: `e88b29f`
+- Git branch: `HETZNER-LOCAL-2026-03-31`
+- Git commit: `5705281`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-30T17:01:54Z`
+- Generated UTC: `2026-04-01T20:09:03Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-28`
-- Git commit: `e88b29f`
+- Git branch: `HETZNER-LOCAL-2026-03-31`
+- Git commit: `5705281`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -42,7 +42,8 @@
 ## 3. ARQUITECTURA CORE
 
 - `ai-runtime` resuelve tenant, vertical, flow y estado de sesion.
-- `realtor_flow` y `generic_flow` son selectores logicos internos.
+- `realtor_flow` y `basic_flow` son selectores logicos internos.
+- `analyze_turn` e `intent_detector` son prompts semanticos por vertical; `shared` solo debe contener piezas tecnicas neutrales.
 - `scoring-core` permanece separado y no debe absorber decisiones conversacionales.
 - `chat-web-renderer` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por `client_id`.
@@ -53,17 +54,17 @@
 postgres
 redis
 ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
 datasyncsa-web
-etl-docs
 portainer
+admin-console-api
+admin-console-web
+etl-docs
+etl-docs-worker
 scoring-core
 scoring-core-worker
 test-ui
-admin-console-api
-admin-console-web
-chat-web-renderer-api
-chat-web-renderer-ui
-etl-docs-worker
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -95,18 +96,18 @@ etl-docs-worker
 
 ```text
 postgres
+admin-console-api
 redis
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
 datasyncsa-web
 etl-docs
-etl-docs-worker
 portainer
-admin-console-api
-admin-console-web
 scoring-core
 scoring-core-worker
+admin-console-web
+etl-docs-worker
 test-ui
 ```
 ### `docker-compose.yml:1-220`
@@ -488,6 +489,12 @@ services/ai_runtime/graph/generic/nodes
 services/ai_runtime/graph/generic/routers
 services/ai_runtime/graph/generic/state
 services/ai_runtime/graph/generic/tools
+services/ai_runtime/graph/healthcare
+services/ai_runtime/graph/healthcare/prompts
+services/ai_runtime/graph/insurance
+services/ai_runtime/graph/insurance/prompts
+services/ai_runtime/graph/legal
+services/ai_runtime/graph/legal/prompts
 services/ai_runtime/graph/realtor
 services/ai_runtime/graph/realtor/__pycache__
 services/ai_runtime/graph/realtor/nodes
@@ -505,6 +512,9 @@ services/ai_runtime/runtime
 services/ai_runtime/runtime/__pycache__
 services/ai_runtime/scripts
 services/ai_runtime/scripts/__pycache__
+services/ai_runtime/tests
+services/ai_runtime/tests/unit
+services/ai_runtime/tests/unit/__pycache__
 services/ai_runtime/web
 services/ai_runtime/web/conversation_suites
 services/ai_runtime/web/turn_trace
@@ -619,6 +629,11 @@ services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
+services/ai_runtime/tests/unit/test_prompt_composer.py:49:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:107:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
@@ -627,12 +642,7 @@ services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:16
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -651,6 +661,8 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
@@ -705,25 +717,6 @@ services/web/admin-console/backend/app/modules/clients/router.py:517:@router.get
 services/web/admin-console/backend/app/modules/clients/router.py:545:@router.delete("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:567:@router.post("/brand-config/{client_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:568:@router.put("/brand-config/{client_id}/item")  # Support PUT for edit action
-services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
-services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
-services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
-services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
-services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
-services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/grid_presets/router.py:13:@router.post("", response_model=GridPresetResponse)
 services/web/admin-console/backend/app/modules/grid_presets/router.py:29:@router.get("/{grid_id}", response_model=List[GridPresetResponse])
 services/web/admin-console/backend/app/modules/grid_presets/router.py:41:@router.delete("/{preset_id}")
@@ -746,6 +739,25 @@ services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:151:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:529:@router.get("/lookups/verticals")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:534:@router.get("/lookups/models")
@@ -810,25 +822,270 @@ services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/chat-web-renderer/backend/app/api/external.py:56:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:263:@router.get("/health")
+services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
+services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
+services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
-services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
-services/web/chat-web-renderer/backend/app/main.py:92:@app.post("/chat/init", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:104:@app.post("/chat/session/reset")
-services/web/chat-web-renderer/backend/app/main.py:141:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:357:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:371:@app.post("/internal/memory/reset")
 ```
 
 ## AI Runtime
 
+### `.agent/AI_RUNTIME_BOOTSTRAP.md`
+
+```
+# AI Runtime Bootstrap
+
+Usar este archivo cuando la tarea toque:
+
+- `services/ai_runtime/**`
+- `services/data/**` consumido por el runtime
+- `services/web/chat-web-renderer/backend/**`
+- contratos conversacionales, memoria, tenant loading o routing entre verticales
+
+No tomar como autoridad principal salvo instruccion explicita:
+
+- `services/legacy/agent-core`
+- `services/legacy/inference-stack-v2`
+- `services/ai-agents`
+
+`services/scoring-core` se considera un bounded context separado. Solo entrar ahi si la tarea toca scoring de forma directa.
+
+## Lectura minima obligatoria
+
+1. `services/ai_runtime/ARCHITECTURE.md`
+2. `docs/AI_RUNTIME_INDEX.md`
+3. `services/ai_runtime/main.py`
+4. `services/ai_runtime/api.py`
+5. `services/ai_runtime/runtime/settings.py`
+6. `services/ai_runtime/runtime/bootstrap.py`
+7. `services/ai_runtime/runtime/service.py`
+8. `services/ai_runtime/domain/contracts.py`
+9. `services/ai_runtime/domain/state.py`
+10. `services/ai_runtime/graph/registry.py`
+Lectura adicional segun el caso:
+
+- `services/data/repositories/base.py`
+- `services/data/cache/session_store.py`
+- `services/web/chat-web-renderer/backend/app/core/runtime_client.py`
+- `services/web/chat-web-renderer/backend/app/core/memory_reset.py`
+
+## Supuestos Operativos
+
+- `ai-runtime` es la unica autoridad conversacional del compose actual
+- `client_id` entra desde el primer turno y nunca se pierde
+- `tenant_config` se hidrata al inicio de la sesion y se cachea
+- el estado del grafo vive en Redis y se persiste por sesion
+- el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
+- `shared` solo contiene infraestructura y piezas tecnicas neutrales
+- `analyze_turn` e `intent_detector` son responsabilidad semantica del vertical
+- `planner_system`, `synthesizer_system` y `lead_scoring_prompts` tienen ownership separado y no deben invadir responsabilidades ajenas
+- `scoring-core` corre aparte y no debe bloquear decisiones de chat
+
+## Restricciones de Cambio
+
+- no mover logica de negocio desde `ai-runtime` hacia frontend o componentes legacy
+- no reintroducir dependencias hacia componentes legacy como `services/legacy/agent-core` o `services/legacy/inference-stack-v2`
+- no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
+- no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
+- no colgar `analyze_turn` ni `intent_detector` de `planner_system` ni de prompts shared
+- no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
+- si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`
+```
+### `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
+
+```
+# AI Runtime Prompt Runtime
+
+## Objetivo
+
+Documentar la ruta real de carga y composicion de prompts en `ai-runtime` para evitar asumir tablas, fallbacks o carpetas que el codigo activo no usa.
+
+Este documento no reemplaza leer los prompts activos. Para tareas que toquen logica conversacional, planner, synthesizer, lead capture o scoring, hay que leer los textos activos en BD o en la traza del turno. Saber la ruta de carga no alcanza.
+
+## Resumen ejecutivo
+
+El runtime actual separa los prompts en dos grupos:
+
+1. Prompts DB-backed del sistema
+- `planner_system`
+- `synthesizer_system`
+
+2. Prompts locales en codigo
+- prompts compartidos bajo `services/ai_runtime/graph/_shared/prompts/*.py`
+- prompts realtor especificos bajo `services/ai_runtime/graph/realtor/prompts/*.py`
+
+3. Prompt de scoring por modelo (DB-backed, in-memory)
+- `lead_scoring_prompts.prompt_template`
+- `lead_scoring_prompts.extraction_schema`
+- `lead_scoring_criteria` (criterios activos del modelo)
+
+Ademas existe un overlay de tono por tenant:
+
+- `lead_ai_prompts.slug = 'primary_chat'`
+
+Ese overlay no reemplaza `planner_system` ni `synthesizer_system`; solo alimenta `tone_prompt`.
+
+## Fuente canonica por tipo de prompt
+
+### 1. `planner_system` y `synthesizer_system`
+
+Codigo:
+
+- `services/data/repositories/tenant_repository.py`
+- `services/ai_runtime/config/prompt_composer.py`
+
+Tabla usada:
+
+- ruta soportada por codigo: `system_prompts` si existe
+- fallback de compatibilidad: `ai_system_prompts`
+- en la BD actual validada para este repo: existe `ai_system_prompts` y no existe `system_prompts`
+
+Resolucion:
+
+1. `TenantRepository._resolve_system_prompts_table()` detecta si existe `public.system_prompts`.
+2. Si no existe, intenta `public.ai_system_prompts`.
+3. Si no existe ninguna, deja ambos prompts vacios.
+4. `load_tenant_config()` busca:
+   - `node_slug = 'planner_system'`
+   - `node_slug = 'synthesizer_system'`
+5. La busqueda se hace por `vertical_slug = v.slug` del tenant.
+6. Solo toma registros activos: `COALESCE(is_active, true) = true`.
+7. Elige la version mas reciente con este orden:
+   - `version DESC`
+   - `updated_at DESC NULLS LAST`
+   - `created_at DESC NULLS LAST`
+
+Importante:
+
+- No hay fallback global por `node_slug` sin `vertical_slug`.
+- No hay lookup por `client_id`.
+- Si la tabla existe pero no hay fila para ese `vertical_slug`, el prompt queda vacio.
+- Cuando luego se intenta usar, `prompt_composer.load_vertical_prompt()` lanza error si el prompt sigue vacio.
+
+### 2. `tone_prompt`
+
+Codigo:
+
+- `services/data/repositories/tenant_repository.py`
+
+Tabla usada:
+
+- `lead_ai_prompts`
+
+Resolucion:
+
+1. Se busca por `client_id = c.id`.
+2. Se filtra `slug = 'primary_chat'`.
+3. Solo toma registros activos:
+   - `COALESCE(is_active, true) = true`
+   - `deleted_at IS NULL`
+4. Elige la version mas reciente con este orden:
+   - `version DESC NULLS LAST`
+   - `updated_at DESC NULLS LAST`
+   - `created_at DESC NULLS LAST`
+
+Resultado:
+
+- ese valor se guarda como `TenantConfig.tone_prompt`
+- no entra en `TenantConfig.system_prompts`
+- no sustituye planner ni synthesizer
+
+### 3. `lead_scoring` (evaluacion LLM en memoria)
+
+Codigo:
+
+- `services/data/repositories/tenant_repository.py`
+- `services/ai_runtime/graph/_shared/scoring_hybrid.py`
+
+Tablas usadas:
+
+- `lead_scoring_models`
+- `lead_scoring_criteria`
+- `lead_scoring_prompts`
+
+Resolucion:
+
+1. `TenantRepository._load_scoring_profile()` resuelve modelo activo por `vertical_id` + `scoring_model_id`.
+2. Carga criterios activos (`lead_scoring_criteria`).
+3. Carga prompt activo del modelo (`prompt_template`, `extraction_schema`).
+4. Se inyecta en `TenantConfig.scoring_profile`.
+5. `lead_advisor` ejecuta `score_turn` con ese prompt en memoria (sin persistencia realtime).
+
+## Cadena real de carga
+
+### Paso 1. Carga del tenant
+
+Codigo:
+
+- `services/ai_runtime/runtime/service.py`
+- `services/ai_runtime/config/tenant_loader.py`
+- `services/data/repositories/tenant_repository.py`
+
+Flujo:
+
+1. `ConversationRuntime.handle_turn()` llama `tenant_loader.load(client_id)`.
+2. `TenantLoader` intenta primero cache en `TenantCache`.
+3. Si no existe cache, llama `TenantRepository.load_tenant_config(client_id)`.
+4. `TenantRepository` devuelve un `TenantConfig` con:
+   - `vertical`
+   - `tone_prompt`
+   - `system_prompts['planner_system']`
+   - `system_prompts['synthesizer_system']`
+5. `TenantLoader` cachea ese `TenantConfig` por `client_id` en `TenantCache`.
+
+Consecuencia operativa:
+
+- si se cambia el prompt en DB, el runtime puede seguir usando la version cacheada para ese tenant hasta que expire el TTL o se limpie `TenantCache`
+
+### Paso 2. Normalizacion del texto
+
+Codigo:
+
+- `services/data/repositories/tenant_repository.py`
+
+Funcion:
+
+- `_normalize_prompt_text(prompt_text)`
+
+Que hace:
+
+- si el valor viene como modulo Python del estilo `PROMPT = \"\"\"...\"\"\"`, extrae solo el cuerpo
+- si viene como string triple quoted, extrae solo el cuerpo
+- si viene como texto plano, lo deja tal cual
+
+Esto existe para tolerar datos heredados en DB que fueron guardados con wrapper tipo archivo Python.
+
+## Composicion final del prompt
+
+Codigo:
+
+- `services/ai_runtime/config/prompt_composer.py`
+
+Formula canonica:
+
+`prompt_final = [tone_prompt si include_tone=True] + base_prompt + dynamic_context`
+
+Donde:
+
+- `tone_prompt` es opcional, sale de `lead_ai_prompts` y solo entra cuando el nodo llama `compose(..., include_tone=True)`
+- `base_prompt` sale de DB o de builders locales segun el nodo
+- `dynamic_context` es un JSON serializado con estado/contexto del turno
+
+## Mapa de nodos y su fuente
+
+### DB-backed directos
+```
 ### `services/ai_runtime/ARCHITECTURE.md`
 
 ```
@@ -839,7 +1096,7 @@ services/web/chat-web-renderer/backend/app/main.py:371:@app.post("/internal/memo
 `services/ai_runtime` define el runtime conversacional multitenant nuevo de Datasyncsa AI con dos grafos LangGraph:
 
 - `grafo_realtor`
-- `grafo_generico`
+- `grafo_basico`
 
 El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`, toda sesion se hidrata con `tenant_config`, y Redis/PostgreSQL se consultan con scope tenant desde la base del runtime.
 
@@ -871,10 +1128,11 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `runtime/bootstrap.py`: wiring por defecto.
 - `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
 - `runtime/turn_trace.py`: trazado por turno para nodos, routers y LLM.
-- `docs/graphs/**`: diagramas exportados del `grafo_generico` y `grafo_realtor`.
+- `docs/graphs/**`: diagramas exportados del `grafo_basico` y `grafo_realtor`.
 - `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
 - `graph/generic/**`: builder y nodos del vertical reducido.
+- `graph/healthcare/**`, `graph/legal/**`, `graph/insurance/**`: prompts semanticos propietarios por vertical.
 - `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
 - `rag/**`: repositorios pgvector aislados por tenant.
 - `workers/lead_worker.py`: worker fire-and-forget placeholder v1.
@@ -886,8 +1144,8 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 1. El cliente de canal llama directo a `ai-runtime`.
 2. Puede omitir `flow`; si lo hace, `ConversationRuntime` lo resuelve por vertical.
 3. Si envía `flow=realtor_flow`, `GraphRegistry` exige `vertical=realtor`.
-4. Si envía `flow=generic_flow`, `GraphRegistry` exige `vertical in {healthcare, legal}`.
-5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor` o `grafo_generico`.
+4. Si envía `flow=basic_flow`, `GraphRegistry` exige `vertical in {healthcare, legal, insurance}`.
+5. Se hidrata o recupera sesion y se ejecuta `grafo_realtor` o `grafo_basico`.
 
 ## Estado Canonico
 
@@ -924,17 +1182,22 @@ Cada turno registra:
 
 ### Shared flow
 
-`START -> resolve_references -> classify_intent -> route_next_intent`
+`START -> analyze_turn`
 
 Routers compartidos:
 
-- `after_resolve_references`
+- `after_analyze_turn`
   - `ask_clarification`
   - `collect_lead_data`
-  - `classify_intent`
-- `after_classify_intent`
+  - `capture_memory_entities`
+- `after_capture_memory`
+  - `memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+- `after_memory_lookup`
+  - `route_next_intent`
+  - `lead_advisor`
+  - `end`
 - `after_check_queue`
   - `route_next_intent`
   - `lead_advisor`
@@ -948,7 +1211,7 @@ Routers compartidos:
 
 ### Intent queue
 
-- `classify_intent` genera hasta 4 intents
+- `analyze_turn` interpreta el turno y puede proponer hasta 4 intents iniciales
 - `route_next_intent` elige el siguiente intent ejecutable
 - cada nodo de capacidad cierra explicitamente `running -> done`
 - `check_queue` decide si quedan intents pendientes
@@ -964,9 +1227,10 @@ Routers compartidos:
 
 ### LLM
 
-- `resolve_references`: clasifica tipo de referencia
-- `classify_intent`: detecta intenciones
+- `analyze_turn`: interpreta el turno; es responsabilidad semantica del vertical
 - `route_next_intent`: solo condiciones lazy
+- `capture_memory_entities`: extrae memoria canonica del turno
+- `lead_advisor`: scoring y estrategia de captura
 - `synthesize`: respuesta final
 - `compare_properties`: solo redaccion
 - `llm_recommend`: solo redaccion
@@ -994,24 +1258,17 @@ Routers compartidos:
 
 Prompts incluidos:
 
-- base:
+- DB-backed por vertical:
+  - `planner_system`
+  - `synthesizer_system`
+- shared tecnicos:
   - `reference_classifier_prompt.py`
-  - `intent_detector_prompt.py`
   - `lazy_condition_evaluator_prompt.py`
   - `clarification_prompt.py`
   - `lead_data_collector_prompt.py`
-- vertical:
-  - `vertical/realtor/{plan,synthesis}_prompt.py`
-  - `vertical/healthcare/{plan,synthesis}_prompt.py`
-  - `vertical/legal/{plan,synthesis}_prompt.py`
-- realtor:
-  - `text_to_sql_prompt.py`
-  - `comparison_synthesizer_prompt.py`
-  - `recommendation_prompt.py`
-  - `appointment_data_collector_prompt.py`
-
-## Persistencia y Caches
-
+  - `memory_entity_extractor_prompt.py`
+- analyze_turn por vertical:
+  - `graph/realtor/prompts/analyze_turn_prompt.py`
 ```
 ### `services/ai_runtime/main.py`
 
@@ -1336,9 +1593,9 @@ from services.ai_runtime.domain.contracts import (
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
-    GenericGraphState,
     MemoryLookupState,
     RealtorGraphState,
+    build_lead_advisor_state,
     build_base_state,
 )
 from services.ai_runtime.graph.registry import GraphRegistry
@@ -1351,31 +1608,7 @@ from services.ai_runtime.runtime.turn_trace import (
     summarize_state,
     utc_now_iso,
 )
-
-
-def _resolve_flow(vertical: str, flow: str | None) -> str:
-    if flow:
-        return flow
-    return "realtor_flow" if vertical == "realtor" else "generic_flow"
-
-
-def _build_components(final_state: BaseGraphState) -> list[dict[str, object]]:
-    components: list[dict[str, object]] = []
-    ui_payload = getattr(final_state, "ui_payload", None) or {}
-    for card in ui_payload.get("property_cards", []):
-        components.append(
-            {
-                "type": "property-card",
-                "listing_id": card.get("property_id_internal"),
-                "title": card.get("title"),
-                "price": card.get("price"),
-                "image_url": card.get("primary_image_url"),
-                "public_url": card.get("public_url"),
-                "city": card.get("province"),
-                "neighborhood": card.get("province"),
-            }
-        )
-    return components
+from services.ai_runtime.verticals import get_vertical_spec
 
 
 def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
@@ -1383,6 +1616,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
 
     base_state.final_response = None
     base_state.pending_clarification = None
+    base_state.pending_decision = None
     base_state.clarification_attempts = 0
     base_state.resolved_references = []
     base_state.intent_queue = []
@@ -1392,6 +1626,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     base_state.turn_analysis = None
     base_state.lead_advisor.should_ask = False
     base_state.lead_advisor.field_to_ask = None
+    base_state.lead_advisor.question_to_ask = None
     base_state.memory.last_lookup = MemoryLookupState()
 
     if isinstance(base_state, RealtorGraphState):
@@ -1418,7 +1653,8 @@ class ConversationRuntime:
 
     async def handle_turn(self, request: ChatRequest) -> ChatResponse:
         tenant_config = await self.tenant_loader.load(request.client_id)
-        flow = _resolve_flow(tenant_config.vertical, request.flow)
+        vertical_spec = get_vertical_spec(tenant_config.vertical)
+        flow = request.flow or vertical_spec.default_flow
         user_id = (
             request.user_id
             or str(request.metadata.get("channel_user_id") or "")
@@ -1431,13 +1667,13 @@ class ConversationRuntime:
         existing_payload = await self.dependencies.session_store.get_state(request.client_id, session_id)
 
         if existing_payload:
-            state_cls = RealtorGraphState if tenant_config.vertical == "realtor" else GenericGraphState
-            base_state = state_cls.model_validate(existing_payload)
+            base_state = vertical_spec.state_model.model_validate(existing_payload)
             base_state.tenant_config = tenant_config
             base_state.capabilities = list(tenant_config.capabilities)
             base_state.vertical = tenant_config.vertical
             base_state.flow = flow
             base_state.user_id = user_id
+            base_state.lead_advisor = build_lead_advisor_state(tenant_config, base_state.lead_advisor)
             _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
             base_state.messages.append(ChatMessage(role="user", content=request.message))
@@ -1453,10 +1689,7 @@ class ConversationRuntime:
                 tenant_config=tenant_config,
                 initial_message=request.message,
             )
-            if tenant_config.vertical == "realtor":
-                base_state = RealtorGraphState.model_validate(state.model_dump())
-            else:
-                base_state = GenericGraphState.model_validate(state.model_dump())
+            base_state = vertical_spec.state_model.model_validate(state.model_dump())
             _reset_turn_scoped_state(base_state)
             conversation_id = base_state.conversation_id
 
@@ -1479,15 +1712,11 @@ class ConversationRuntime:
             request_metadata=request.metadata,
             state_summary=summarize_state(base_state.model_dump(mode="json")),
         )
-        graph = self.graph_registry.get_graph(tenant_config.vertical, flow, self.dependencies)
+        graph = self.graph_registry.get_graph(vertical_spec.slug, flow, self.dependencies)
         try:
             final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
-            final_state = (
-                RealtorGraphState.model_validate(final_payload)
-                if tenant_config.vertical == "realtor"
-                else GenericGraphState.model_validate(final_payload)
-            )
-            components = _build_components(final_state)
+            final_state = vertical_spec.state_model.model_validate(final_payload)
+            components = vertical_spec.component_builder(final_state)
             rag_outputs = [
                 item
                 for item in final_state.turn_outputs
@@ -1499,6 +1728,34 @@ class ConversationRuntime:
                 session_id,
                 final_state.model_dump(mode="json"),
                 tenant_config.redis_ttl_seconds,
+            )
+            response = ChatResponse(
+                session_id=session_id,
+                conversation_id=conversation_id,
+                client_id=request.client_id,
+                vertical=tenant_config.vertical,
+                answer=final_state.final_response or "",
+                components=components,
+                sources=sources,
+                ui_payload=getattr(final_state, "ui_payload", None),
+                render_mode=getattr(final_state, "render_mode", None),
+                cards_mode=getattr(final_state, "cards_mode", None),
+                escalated=final_state.escalacion.solicitada,
+                scoring_status="disabled",
+                metadata={"flow": flow, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
+            )
+            self.dependencies.trace_store.finish_turn(
+                status="completed",
+                final_state_summary=summarize_state(final_state.model_dump(mode="json")),
+                response_payload=response.model_dump(mode="json"),
+            )
+            return response
+        except Exception as exc:
+            self.dependencies.trace_store.finish_turn(
+                status="failed",
+                final_state_summary=summarize_state(base_state.model_dump(mode="json")),
+                error=repr(exc),
+            )
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1507,6 +1764,7 @@ class ConversationRuntime:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -1520,11 +1778,59 @@ from services.ai_runtime.domain.contracts import (
     LeadExtracted,
     LeadPlaceholder,
     LeadScores,
+    PendingDecision,
     Property,
+    ScoringProfile,
     TenantConfig,
     TurnAnalysis,
     Vertical,
 )
+
+
+DEFAULT_SCORING_CRITERIA_BY_VERTICAL: dict[str, list[str]] = {
+    "realtor": ["apertura", "intencion", "urgencia", "match", "solvencia"],
+    "healthcare": ["apertura", "intencion", "emergencia", "match", "solvencia"],
+    "legal": ["apertura", "intencion", "urgencia", "match", "solvencia"],
+    "insurance": ["apertura", "intencion", "urgencia", "match", "solvencia"],
+}
+DEFAULT_REQUIRED_FIELDS_BY_VERTICAL: dict[str, list[str]] = {
+    "realtor": ["nombre", "contacto", "presupuesto", "aprobacion", "fecha_preferida", "appointment_intent"],
+    "healthcare": ["nombre", "contacto", "appointment_intent"],
+    "legal": ["nombre", "contacto", "appointment_intent"],
+    "insurance": ["nombre", "contacto", "presupuesto", "appointment_intent"],
+}
+SCORING_CRITERION_ALIASES: dict[str, tuple[str, ...]] = {
+    "apertura": ("apertura", "engagement", "engage", "openness"),
+    "intencion": ("intencion", "intent", "purchase_intent"),
+    "urgencia": ("urgencia", "timeline", "urgency", "emergencia", "plazo"),
+    "match": ("match", "fit"),
+    "solvencia": ("solvencia", "finance", "financial", "affordability"),
+}
+SCORING_FIELD_ALIASES: dict[str, str] = {
+    "extracted_name": "nombre",
+    "name": "nombre",
+    "full_name": "nombre",
+    "extracted_email": "email",
+    "correo": "email",
+    "mail": "email",
+    "extracted_phone": "telefono",
+    "phone": "telefono",
+    "telefono_principal": "telefono",
+    "budget": "presupuesto",
+    "timeline": "fecha_preferida",
+    "date_preferred": "fecha_preferida",
+    "extracted_preferred_date": "fecha_preferida",
+    "appointment_date": "fecha_preferida",
+    "extracted_approval": "aprobacion",
+    "extracted_budget": "presupuesto",
+    "extracted_preference": "preferencias",
+    "extracted_preferences": "preferencias",
+    "extracted_appointment_type": "tipo_cita",
+    "extracted_appointment_intent": "appointment_intent",
+    "appointment_type": "tipo_cita",
+    "schedule_intent": "appointment_intent",
+}
+_EMAIL_CONTACT_PATTERN = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", flags=re.IGNORECASE)
 
 
 class SearchFilters(BaseModel):
@@ -1562,8 +1868,20 @@ class LeadAdvisorState(BaseModel):
     lead_scores: LeadScores = Field(default_factory=LeadScores)
     lead_extracted: LeadExtracted = Field(default_factory=LeadExtracted)
     lead_completo: bool = False
+    capture_exposure_count: int = 0
     should_ask: bool = False
     field_to_ask: str | None = None
+    question_to_ask: str | None = None
+    scoring_profile: ScoringProfile | None = None
+    criteria_scores: dict[str, float] = Field(default_factory=dict)
+    criteria_reasons: dict[str, str] = Field(default_factory=dict)
+    scoring_reasoning: str | None = None
+    scoring_confidence: float | None = None
+    scoring_last_updated_turn: int | None = None
+    target_criteria: list[str] = Field(default_factory=list)
+    required_fields: list[str] = Field(default_factory=list)
+    target_fields: list[str] = Field(default_factory=list)
+    completed_fields: list[str] = Field(default_factory=list)
 
 
 class MemoryLookupState(BaseModel):
@@ -1595,6 +1913,7 @@ class BaseGraphState(BaseModel):
     tenant_config: TenantConfig
     resolved_references: list[dict[str, Any]] = Field(default_factory=list)
     pending_clarification: str | None = None
+    pending_decision: PendingDecision | None = None
     clarification_attempts: int = 0
     intent_queue: list[IntentDefinition] = Field(default_factory=list)
     active_intent: IntentDefinition | None = None
@@ -1610,7 +1929,7 @@ class BaseGraphState(BaseModel):
 
 
 class GenericGraphState(BaseGraphState):
-    """State for healthcare and legal tenants."""
+    """State shared today by healthcare, legal, and insurance tenants."""
 
     pass
 
@@ -1621,43 +1940,6 @@ class RealtorGraphState(BaseGraphState):
     search_filters: SearchFilters = Field(default_factory=SearchFilters)
     effective_search_filters: SearchFilters | None = None
     inventory: list[Property] = Field(default_factory=list)
-    last_search_results: list[Property] = Field(default_factory=list)
-    last_mentioned: Property | None = None
-    active_comparison: list[str] = Field(default_factory=list)
-    focus_scope: str | None = None
-    search_attempts: int = 0
-    cards_shown: list[str] = Field(default_factory=list)
-    cards_mode: str | None = None
-    render_mode: str | None = None
-    ui_payload: dict[str, Any] | None = None
-    financial_context: FinancialContext = Field(default_factory=FinancialContext)
-
-
-def build_base_state(
-    *,
-    session_id: str,
-    conversation_id: str,
-    user_id: str,
-    client_id: str,
-    vertical: Vertical,
-    flow: FlowName,
-    tenant_config: TenantConfig,
-    initial_message: str,
-) -> BaseGraphState:
-    """Bootstrap the canonical base state for a new session."""
-
-    return BaseGraphState(
-        session_id=session_id,
-        conversation_id=conversation_id,
-        user_id=user_id,
-        client_id=client_id,
-        vertical=vertical,
-        flow=flow,
-        capabilities=list(tenant_config.capabilities),
-        tenant_config=tenant_config,
-        messages=[ChatMessage(role="user", content=initial_message)],
-        cita=Appointment(client_id=client_id),
-    )
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -1668,21 +1950,19 @@ from __future__ import annotations
 
 from services.ai_runtime.domain.contracts import FlowName, Vertical
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.graph.generic.graph import build_generic_graph
-from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+from services.ai_runtime.verticals import get_vertical_spec
 
 
 class GraphRegistry:
     """Select the correct LangGraph builder for the resolved tenant vertical."""
 
     def get_graph(self, vertical: Vertical, flow: FlowName, deps: GraphDependencies):
-        if flow == "realtor_flow" and vertical != "realtor":
-            raise ValueError("realtor_flow solo puede usarse con vertical realtor")
-        if flow == "generic_flow" and vertical == "realtor":
-            raise ValueError("generic_flow no puede usarse con vertical realtor")
-        if vertical == "realtor":
-            return build_realtor_graph(deps)
-        return build_generic_graph(deps)
+        spec = get_vertical_spec(vertical)
+        if flow != spec.default_flow:
+            raise ValueError(
+                f"{flow} no puede usarse con vertical {vertical}; flow esperado={spec.default_flow}"
+            )
+        return spec.graph_builder(deps)
 ```
 ### `services/ai_runtime/graph/generic/graph.py`
 
@@ -1989,7 +2269,7 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "collect_appointment_data",
         build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
-        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+        {"assign_agent": "assign_agent", "lead_advisor": "lead_advisor"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")
@@ -2411,7 +2691,12 @@ async def dependencies_health():
 
 from app.core.runtime_client import InferenceClient
 from app.core.memory_reset import MemoryResetClient, RuntimeMemoryResetError
-from app.core.vertical_router import vertical_router
+from app.core.session_identity import (
+    normalize_session_id,
+    resolve_effective_session_id,
+    resolve_request_session_id,
+)
+from app.core.vertical_router import GENERIC_RENDER_VERTICALS, vertical_router
 from app.transformer.core import SDUITransformer
 from app.transformer.realtor_policy import RealtorRendererPolicy
 from app.transformer.generic_policy import GenericRendererPolicy
@@ -2423,7 +2708,12 @@ transformer = SDUITransformer()
 session_manager = SessionManager()
 
 vertical_router.register_strategy("realtor", "web_html", RealtorRendererPolicy(channel="web_html"))
-vertical_router.register_strategy("generic", "web_html", GenericRendererPolicy(channel="web_html"))
+for vertical_slug in GENERIC_RENDER_VERTICALS:
+    vertical_router.register_strategy(
+        vertical_slug,
+        "web_html",
+        GenericRendererPolicy(channel="web_html", vertical_slug=vertical_slug),
+    )
 
 @app.post("/chat/init", response_model=SDUIResponse)
 async def chat_init(req: InitRequest):
@@ -2491,7 +2781,7 @@ async def chat_interaction(req: InternalChatRequest):
     channel_user_id = req.channel_user_id
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
-    incoming_session_id = str(req.session_id).strip() if req.session_id else None
+    incoming_session_id = normalize_session_id(req.session_id)
     incoming_conversation_id = str(req.conversation_id) if req.conversation_id else None
     request_started = time.perf_counter()
 
@@ -2503,17 +2793,7 @@ async def chat_interaction(req: InternalChatRequest):
     
     session_context = {
         "client_id": client_id,
-        "session_id": incoming_session_id or session_data.get("session_id"),
-        "conversation_id": incoming_conversation_id or session_data.get("conversation_id"),
-        "lead_id": session_data.get("lead_id"),
-        "brand_project": req.brand_project or session_data.get("brand_project"),
-        "channel": channel,
-        "channel_user_id": channel_user_id,
-        "auth_user_id": req.auth_user_id or session_data.get("auth_user_id"),
-    }
-    
-    if metadata:
-        session_context.update(metadata)
+        "session_id": resolve_request_session_id(
 ```
 
 ## Data Layer Compartida
@@ -2650,9 +2930,7 @@ from typing import Any
 
 from services.ai_runtime.domain.contracts import TenantConfig, Vertical
 from services.ai_runtime.domain.prompts import PromptPayload
-from services.ai_runtime.graph._shared.prompts.analyze_turn_prompt import build_prompt as analyze_turn_prompt
 from services.ai_runtime.graph._shared.prompts.clarification_prompt import build_prompt as clarification_prompt
-from services.ai_runtime.graph._shared.prompts.intent_detector_prompt import build_prompt as intent_detector_prompt
 from services.ai_runtime.graph._shared.prompts.lazy_condition_evaluator_prompt import (
     build_prompt as lazy_condition_prompt,
 )
@@ -2661,8 +2939,26 @@ from services.ai_runtime.graph._shared.prompts.memory_entity_extractor_prompt im
     build_prompt as memory_entity_extractor_prompt,
 )
 from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
+from services.ai_runtime.graph.healthcare.prompts.analyze_turn_prompt import (
+    build_prompt as healthcare_analyze_turn_prompt,
+)
+from services.ai_runtime.graph.healthcare.prompts.intent_detector_prompt import (
+    build_prompt as healthcare_intent_detector_prompt,
+)
+from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
+    build_prompt as insurance_analyze_turn_prompt,
+)
+from services.ai_runtime.graph.insurance.prompts.intent_detector_prompt import (
+    build_prompt as insurance_intent_detector_prompt,
+)
+from services.ai_runtime.graph.legal.prompts.analyze_turn_prompt import build_prompt as legal_analyze_turn_prompt
+from services.ai_runtime.graph.legal.prompts.intent_detector_prompt import build_prompt as legal_intent_detector_prompt
 from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
     build_prompt as appointment_collector_prompt,
+)
+from services.ai_runtime.graph.realtor.prompts.analyze_turn_prompt import build_prompt as realtor_analyze_turn_prompt
+from services.ai_runtime.graph.realtor.prompts.intent_detector_prompt import (
+    build_prompt as realtor_intent_detector_prompt,
 )
 from services.ai_runtime.graph.realtor.prompts.comparison_synthesizer_prompt import (
     build_prompt as comparison_synthesizer_prompt,
@@ -2708,6 +3004,30 @@ def _render_context(context: dict[str, Any]) -> str:
     return json.dumps(context, ensure_ascii=True, indent=2, default=str)
 
 
+def load_analyze_turn_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_analyze_turn_prompt()
+    if vertical == "healthcare":
+        return healthcare_analyze_turn_prompt()
+    if vertical == "legal":
+        return legal_analyze_turn_prompt()
+    if vertical == "insurance":
+        return insurance_analyze_turn_prompt()
+    raise ValueError(f"Unsupported analyze_turn vertical={vertical!r}")
+
+
+def load_intent_detector_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_intent_detector_prompt()
+    if vertical == "healthcare":
+        return healthcare_intent_detector_prompt()
+    if vertical == "legal":
+        return legal_intent_detector_prompt()
+    if vertical == "insurance":
+        return insurance_intent_detector_prompt()
+    raise ValueError(f"Unsupported intent_detector vertical={vertical!r}")
+
+
 def compose(
     node_type: str,
     tenant_config: TenantConfig,
@@ -2722,21 +3042,11 @@ def compose(
     if node_type in {"plan_prompt", "synthesis_prompt"}:
         base = load_vertical_prompt(tenant_config, vertical, node_type)
     elif node_type == "analyze_turn":
-        base = "\n\n".join(
-            [
-                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
-                analyze_turn_prompt(),
-            ]
-        )
+        base = load_analyze_turn_prompt(vertical)
     elif node_type == "reference_classifier":
         base = reference_classifier_prompt()
     elif node_type == "intent_detector":
-        base = "\n\n".join(
-            [
-                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
-                intent_detector_prompt(),
-            ]
-        )
+        base = load_intent_detector_prompt(vertical)
     elif node_type == "lazy_condition_evaluator":
         base = lazy_condition_prompt()
     elif node_type == "clarification":
@@ -2937,17 +3247,13 @@ tests/sandbox/__pycache__/simulate_multichat_realtor.cpython-312.pyc
 tests/sandbox/__pycache__/test_gemini_latency_realtor_contract.cpython-312.pyc
 tests/sandbox/dentist/simulate_chat_dentist.py
 tests/sandbox/dentist/simulate_multichat_dentist.py
-tests/sandbox/realtor/generated_conversation_suite.schema.json
-tests/sandbox/realtor/generated_conversation_suite.template.json
-tests/sandbox/realtor/generated_conversation_suite_prompt.md
-tests/sandbox/realtor/generated_suite_01.json
 tests/sandbox/realtor/manual_suite_01.json
-tests/sandbox/realtor/realtor_v3_regression_battery.py
-tests/sandbox/realtor/regression_suite_01.json
-tests/sandbox/realtor/run_generated_conversation_suite.py
+tests/sandbox/realtor/realtor_conversation_suite.schema.json
+tests/sandbox/realtor/realtor_conversation_suite.template.json
+tests/sandbox/realtor/realtor_conversation_suite_prompt.md
+tests/sandbox/realtor/realtor_regression_suite.json
+tests/sandbox/realtor/run_realtor_conversation_suite.py
 tests/sandbox/realtor/simulate_chat_realtor.py
-tests/sandbox/realtor/simulate_multichat_realtor.py
-tests/sandbox/realtor/test_gemini_latency_realtor_contract.py
 tests/scripts/check_no_hardcoded_realtor_copy.sh
 tests/system/__pycache__/test_active_chat_scoring_e2e.cpython-312.pyc
 tests/system/__pycache__/test_chat_e2e.cpython-312.pyc

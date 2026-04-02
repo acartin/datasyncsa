@@ -33,9 +33,27 @@ from services.ai_runtime.runtime.turn_trace import (
 from services.ai_runtime.verticals import get_vertical_spec
 
 
+def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
+    if not isinstance(base_state, RealtorGraphState):
+        return None
+    search_outputs = [item for item in base_state.turn_outputs if str(item.get("type") or "").strip().lower() == "search"]
+    if not search_outputs:
+        return None
+    latest = search_outputs[-1]
+    return {
+        "count": latest.get("count"),
+        "match_scope": latest.get("match_scope"),
+        "relaxation_applied": bool(latest.get("relaxation_applied")),
+        "effective_filters": latest.get("effective_filters"),
+    }
+
+
 def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     """Clear fields that belong to a single turn while keeping session memory alive."""
 
+    base_state.last_turn_dialogue_act = base_state.turn_analysis.dialogue_act if base_state.turn_analysis else None
+    base_state.last_turn_output_types = [str(item.get("type") or "") for item in base_state.turn_outputs]
+    base_state.last_turn_search_summary = _build_last_turn_search_summary(base_state)
     base_state.final_response = None
     base_state.pending_clarification = None
     base_state.pending_decision = None

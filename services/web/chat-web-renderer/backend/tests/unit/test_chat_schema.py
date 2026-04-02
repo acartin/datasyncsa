@@ -33,7 +33,7 @@ def test_chat_request_maps_property_alias():
         client_id="64f357a0-98eb-44f1-9f41-6e615ed26180",
         propertyId="prop-123",
     )
-    assert req.source_property_ref == "prop-123"
+    assert req.property_id == "prop-123"
 
 
 def test_chat_request_accepts_attribution_fields():

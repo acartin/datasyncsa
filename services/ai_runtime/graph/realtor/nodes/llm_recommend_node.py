@@ -14,7 +14,7 @@ from services.ai_runtime.graph.realtor.nodes.comparison_helpers import score_pro
 
 def _select_visible_properties(graph_state: RealtorGraphState) -> list[Property]:
     property_map = {
-        item.property_id_internal: item
+        item.id: item
         for item in [*graph_state.last_search_results, *graph_state.inventory]
     }
     if graph_state.cards_shown:
@@ -22,10 +22,10 @@ def _select_visible_properties(graph_state: RealtorGraphState) -> list[Property]
         seen: set[str] = set()
         for property_id in graph_state.cards_shown:
             item = property_map.get(property_id)
-            if not item or item.property_id_internal in seen:
+            if not item or item.id in seen:
                 continue
             selected.append(item)
-            seen.add(item.property_id_internal)
+            seen.add(item.id)
         if selected:
             return selected
     return [Property.model_validate(item.model_dump(mode="json")) for item in graph_state.last_search_results[:4]]
@@ -67,7 +67,7 @@ async def llm_recommend(state: dict[str, Any], deps: GraphDependencies) -> dict[
     scores = [score_property(item) for item in properties]
     recommended_score = max(scores, key=lambda item: item.score_total)
     recommended_property = next(
-        item for item in properties if item.property_id_internal == recommended_score.property_id_internal
+        item for item in properties if item.id == recommended_score.property_id
     )
     prompt = compose(
         "recommendation",

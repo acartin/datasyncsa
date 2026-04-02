@@ -40,7 +40,10 @@ Lectura adicional segun el caso:
 - `client_id` entra desde el primer turno y nunca se pierde
 - `tenant_config` se hidrata al inicio de la sesion y se cachea
 - el estado del grafo vive en Redis y se persiste por sesion
-- el runtime selecciona `grafo_realtor` o `grafo_generico` segun vertical/flow
+- el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
+- `shared` solo contiene infraestructura y piezas tecnicas neutrales
+- `analyze_turn` e `intent_detector` son responsabilidad semantica del vertical
+- `planner_system`, `synthesizer_system` y `lead_scoring_prompts` tienen ownership separado y no deben invadir responsabilidades ajenas
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
 ## Restricciones de Cambio
@@ -48,4 +51,7 @@ Lectura adicional segun el caso:
 - no mover logica de negocio desde `ai-runtime` hacia frontend o componentes legacy
 - no reintroducir dependencias hacia componentes legacy como `services/legacy/agent-core` o `services/legacy/inference-stack-v2`
 - no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
+- no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
+- no colgar `analyze_turn` ni `intent_detector` de `planner_system` ni de prompts shared
+- no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
 - si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`

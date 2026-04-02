@@ -3,7 +3,7 @@
   "contract": "canonical_property",
   "description": "Contrato canónico de propiedad para ETL, búsqueda y render SDUI.",
   "fields": {
-    "property_id_internal": "string",
+    "id": "uuid",
     "client_id": "string",
     "title": "string",
     "description_html": "string",
@@ -41,13 +41,13 @@
     },
     "meta": {
       "source_system": "string",
-      "source_property_ref": "string",
+      "public_url": "string",
       "ingested_at": "iso8601",
       "updated_at": "iso8601"
     }
   },
   "required": [
-    "property_id_internal",
+    "id",
     "client_id",
     "title",
     "description_html",

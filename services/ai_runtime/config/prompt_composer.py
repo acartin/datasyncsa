@@ -8,9 +8,7 @@ from typing import Any
 
 from services.ai_runtime.domain.contracts import TenantConfig, Vertical
 from services.ai_runtime.domain.prompts import PromptPayload
-from services.ai_runtime.graph._shared.prompts.analyze_turn_prompt import build_prompt as analyze_turn_prompt
 from services.ai_runtime.graph._shared.prompts.clarification_prompt import build_prompt as clarification_prompt
-from services.ai_runtime.graph._shared.prompts.intent_detector_prompt import build_prompt as intent_detector_prompt
 from services.ai_runtime.graph._shared.prompts.lazy_condition_evaluator_prompt import (
     build_prompt as lazy_condition_prompt,
 )
@@ -19,8 +17,26 @@ from services.ai_runtime.graph._shared.prompts.memory_entity_extractor_prompt im
     build_prompt as memory_entity_extractor_prompt,
 )
 from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
+from services.ai_runtime.graph.healthcare.prompts.analyze_turn_prompt import (
+    build_prompt as healthcare_analyze_turn_prompt,
+)
+from services.ai_runtime.graph.healthcare.prompts.intent_detector_prompt import (
+    build_prompt as healthcare_intent_detector_prompt,
+)
+from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
+    build_prompt as insurance_analyze_turn_prompt,
+)
+from services.ai_runtime.graph.insurance.prompts.intent_detector_prompt import (
+    build_prompt as insurance_intent_detector_prompt,
+)
+from services.ai_runtime.graph.legal.prompts.analyze_turn_prompt import build_prompt as legal_analyze_turn_prompt
+from services.ai_runtime.graph.legal.prompts.intent_detector_prompt import build_prompt as legal_intent_detector_prompt
 from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
     build_prompt as appointment_collector_prompt,
+)
+from services.ai_runtime.graph.realtor.prompts.analyze_turn_prompt import build_prompt as realtor_analyze_turn_prompt
+from services.ai_runtime.graph.realtor.prompts.intent_detector_prompt import (
+    build_prompt as realtor_intent_detector_prompt,
 )
 from services.ai_runtime.graph.realtor.prompts.comparison_synthesizer_prompt import (
     build_prompt as comparison_synthesizer_prompt,
@@ -66,6 +82,30 @@ def _render_context(context: dict[str, Any]) -> str:
     return json.dumps(context, ensure_ascii=True, indent=2, default=str)
 
 
+def load_analyze_turn_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_analyze_turn_prompt()
+    if vertical == "healthcare":
+        return healthcare_analyze_turn_prompt()
+    if vertical == "legal":
+        return legal_analyze_turn_prompt()
+    if vertical == "insurance":
+        return insurance_analyze_turn_prompt()
+    raise ValueError(f"Unsupported analyze_turn vertical={vertical!r}")
+
+
+def load_intent_detector_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_intent_detector_prompt()
+    if vertical == "healthcare":
+        return healthcare_intent_detector_prompt()
+    if vertical == "legal":
+        return legal_intent_detector_prompt()
+    if vertical == "insurance":
+        return insurance_intent_detector_prompt()
+    raise ValueError(f"Unsupported intent_detector vertical={vertical!r}")
+
+
 def compose(
     node_type: str,
     tenant_config: TenantConfig,
@@ -80,21 +120,11 @@ def compose(
     if node_type in {"plan_prompt", "synthesis_prompt"}:
         base = load_vertical_prompt(tenant_config, vertical, node_type)
     elif node_type == "analyze_turn":
-        base = "\n\n".join(
-            [
-                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
-                analyze_turn_prompt(),
-            ]
-        )
+        base = load_analyze_turn_prompt(vertical)
     elif node_type == "reference_classifier":
         base = reference_classifier_prompt()
     elif node_type == "intent_detector":
-        base = "\n\n".join(
-            [
-                load_vertical_prompt(tenant_config, vertical, "plan_prompt"),
-                intent_detector_prompt(),
-            ]
-        )
+        base = load_intent_detector_prompt(vertical)
     elif node_type == "lazy_condition_evaluator":
         base = lazy_condition_prompt()
     elif node_type == "clarification":

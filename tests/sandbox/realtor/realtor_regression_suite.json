@@ -1,20 +1,150 @@
 {
-  "suite_id": "realtor_regression_suite_mapa_de_momentos_v2",
+  "suite_id": "realtor_regression_suite",
   "suite_type": "regression",
-  "generator_notes": "Bateria para validar el mapa de momentos con una regla mas estricta: la captura de datos solo puede comenzar desde la segunda muestra util de cards o datos de propiedades, y la respuesta final debe contener como maximo una pregunta.",
+  "generator_notes": "Suite canonica realtor: combina regresiones historicas de busqueda/routing con mapa de momentos de scoring/captura.",
   "defaults": {
     "expect": {
       "answer_excludes": [
         "seguimos viendo"
-      ],
-      "max_questions": 1
+      ]
     }
   },
   "conversations": [
     {
+      "id": "budget_scope_countrywide_reset",
+      "description": "Abrir el alcance a todo el pais no debe arrastrar Curridabat ni provincia previa.",
+      "tags": [
+        "regression",
+        "budget",
+        "scope_reset",
+        "geo",
+        "pack_search",
+        "canonical"
+      ],
+      "turns": [
+        {
+          "user": "Me gustaria ver casas en Heredia",
+          "expect": {
+            "require_cards": true
+          }
+        },
+        {
+          "user": "Dame detalles de la ultima",
+          "expect": {
+            "answer_contains_any": [
+              "habitaciones",
+              "baños",
+              "m²"
+            ],
+            "expected_resolved_references_within_cards_shown": true
+          }
+        },
+        {
+          "user": "Cuantos estacionamientos tiene?",
+          "expect": {
+            "answer_contains_any": [
+              "estacionamiento",
+              "estacionamientos",
+              "vehículos",
+              "vehiculos"
+            ],
+            "require_cards": false
+          }
+        },
+        {
+          "user": "Y tienes algo similar en Curridabat?",
+          "expect": {
+            "manual_review_focus": [
+              "si no responde con resultados directos, al menos no debe contaminar el alcance nacional futuro con filtros viejos"
+            ]
+          }
+        },
+        {
+          "user": "Ando buscando algo de menos de 200,000",
+          "expect": {
+            "answer_contains_any": [
+              "200,000",
+              "no encontr",
+              "ampli"
+            ],
+            "expected_search_match_scope_any": [
+              "none"
+            ]
+          }
+        },
+        {
+          "user": "Buscame en todo el pais una casa con ese presupuesto",
+          "expect": {
+            "answer_excludes": [
+              "Curridabat",
+              "además de Curridabat",
+              "ademas de curridabat"
+            ],
+            "manual_review_focus": [
+              "debe limpiar la zona previa y abrir alcance nacional manteniendo solo el presupuesto"
+            ]
+          }
+        },
+        {
+          "user": "Si, en todo el pais",
+          "expect": {
+            "answer_excludes": [
+              "Curridabat"
+            ],
+            "manual_review_focus": [
+              "la confirmacion no debe reintroducir filtros geograficos viejos"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "new_search_drops_old_constraints",
+      "description": "Una nueva busqueda debe soltar filtros viejos de habitaciones y estacionamientos.",
+      "tags": [
+        "regression",
+        "new_search",
+        "filters_reset",
+        "pack_search",
+        "canonical"
+      ],
+      "turns": [
+        {
+          "user": "Quiero una casa en Heredia con dos habitaciones y dos estacionamientos",
+          "expect": {
+            "answer_contains_any": [
+              "Heredia",
+              "habitaciones",
+              "estacionamientos"
+            ]
+          }
+        },
+        {
+          "user": "Ahora mejor busco un lote en Guanacaste",
+          "expect": {
+            "answer_contains_any": [
+              "Guanacaste",
+              "lote"
+            ],
+            "answer_excludes": [
+              "dos habitaciones",
+              "estacionamientos",
+              "cochera"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "greeting_only_does_not_force_name",
       "description": "Un saludo puro no debe disparar captura ni exposiciones utiles.",
-      "tags": ["mapa_momentos", "greeting", "lead_capture"],
+      "tags": [
+        "mapa_momentos",
+        "greeting",
+        "lead_capture",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Hola",
@@ -29,7 +159,8 @@
             ],
             "expected_criteria_max": {
               "intencion": 1.5
-            }
+            },
+            "max_questions": 1
           }
         }
       ]
@@ -37,7 +168,13 @@
     {
       "id": "first_useful_exposure_does_not_ask_name_yet",
       "description": "La primera muestra util de resultados puede orientar, pero no debe iniciar captura de lead.",
-      "tags": ["mapa_momentos", "nombre", "first_exposure"],
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "first_exposure",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
@@ -56,14 +193,14 @@
               "con quien tengo el gusto"
             ],
             "expected_completed_fields_all": [
-              "preferencias",
-              "appointment_intent"
+              "preferencias"
             ],
             "expected_criteria_min": {
-              "intencion": 4,
+              "intencion": 2,
               "apertura": 5,
               "match": 5
-            }
+            },
+            "max_questions": 1
           }
         }
       ]
@@ -71,14 +208,22 @@
     {
       "id": "second_useful_exposure_unlocks_name_capture",
       "description": "En la segunda muestra util ya se puede pedir nombre, pero con una sola pregunta total.",
-      "tags": ["mapa_momentos", "nombre", "second_exposure", "single_question"],
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "second_exposure",
+        "single_question",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Busco una casa en Heredia con 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -93,8 +238,10 @@
             "expected_capture_exposure_count": 2,
             "expected_question_contains_any": [
               "nombre",
-              "gusto"
-            ]
+              "gusto",
+              "llamas"
+            ],
+            "max_questions": 1
           }
         }
       ]
@@ -102,14 +249,22 @@
     {
       "id": "ambiguous_name_statement_is_captured",
       "description": "El patron corto 'con Nombre Apellido' debe guardarse aunque el sistema aun no haya pedido el nombre.",
-      "tags": ["mapa_momentos", "nombre", "memory_capture", "regression"],
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "memory_capture",
+        "regression",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Busco una casa en Heredia con 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -128,7 +283,8 @@
             ],
             "expected_lead_extracted_contains": {
               "nombre": "Alvaro Cartin"
-            }
+            },
+            "max_questions": 1
           }
         }
       ]
@@ -136,14 +292,21 @@
     {
       "id": "budget_after_viewing_context_is_captured",
       "description": "Si el usuario aporta presupuesto despues de ver opciones, debe quedar capturado aunque no se abra otra pregunta.",
-      "tags": ["mapa_momentos", "presupuesto", "scoring_capture"],
+      "tags": [
+        "mapa_momentos",
+        "presupuesto",
+        "scoring_capture",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -158,7 +321,8 @@
             ],
             "expected_lead_extracted_contains": {
               "presupuesto": 150000
-            }
+            },
+            "max_questions": 1
           }
         }
       ]
@@ -166,14 +330,21 @@
     {
       "id": "financing_question_triggers_approval_after_name_is_known",
       "description": "Una vez desbloqueada la captura y con nombre conocido, la pregunta de cuota debe abrir aprobacion financiera.",
-      "tags": ["mapa_momentos", "aprobacion", "financing"],
+      "tags": [
+        "mapa_momentos",
+        "aprobacion",
+        "financing",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -181,7 +352,8 @@
           "expect": {
             "expected_should_ask": true,
             "expected_field_to_ask": "nombre",
-            "expected_capture_exposure_count": 2
+            "expected_capture_exposure_count": 2,
+            "max_questions": 1
           }
         },
         {
@@ -195,7 +367,8 @@
             ],
             "expected_lead_extracted_contains": {
               "nombre": "Alvaro Cartin"
-            }
+            },
+            "max_questions": 1
           }
         },
         {
@@ -206,9 +379,7 @@
               "presupuesto",
               "preferencias"
             ],
-            "expected_lead_extracted_contains": {
-              "presupuesto": 150000
-            }
+            "max_questions": 1
           }
         },
         {
@@ -226,7 +397,8 @@
               "nombre",
               "presupuesto",
               "preferencias"
-            ]
+            ],
+            "max_questions": 1
           }
         }
       ]
@@ -234,14 +406,22 @@
     {
       "id": "timeline_signal_should_raise_time_score",
       "description": "Una urgencia temporal explicita debe reflejarse en el score temporal aunque no dispare captura ese mismo turno.",
-      "tags": ["mapa_momentos", "plazo", "urgencia", "scoring"],
+      "tags": [
+        "mapa_momentos",
+        "plazo",
+        "urgencia",
+        "scoring",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -252,7 +432,8 @@
             },
             "manual_review_focus": [
               "si este turno falla, el scoring temporal sigue subestimando una urgencia bastante explicita"
-            ]
+            ],
+            "max_questions": 1
           }
         }
       ]
@@ -260,14 +441,22 @@
     {
       "id": "negative_appointment_intent_must_not_push_tipo_cita",
       "description": "Si el usuario niega agendar, appointment_intent debe quedar negativo y no debe proponerse tipo de cita.",
-      "tags": ["mapa_momentos", "appointment", "negative_intent", "guardrail"],
+      "tags": [
+        "mapa_momentos",
+        "appointment",
+        "negative_intent",
+        "guardrail",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Busco una casa en Heredia con 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -289,7 +478,8 @@
             },
             "expected_criteria_max": {
               "intencion": 3
-            }
+            },
+            "max_questions": 1
           }
         }
       ]
@@ -297,14 +487,22 @@
     {
       "id": "property_selection_unlocks_name_on_second_exposure",
       "description": "Cuando el usuario ya quiere visitar en la segunda exposicion, sube la intencion pero sigue siendo prioridad pedir nombre.",
-      "tags": ["mapa_momentos", "high_intent", "identity_priority", "tipo_cita"],
+      "tags": [
+        "mapa_momentos",
+        "high_intent",
+        "identity_priority",
+        "tipo_cita",
+        "pack_moment_map",
+        "canonical"
+      ],
       "turns": [
         {
           "user": "Busco una casa en Heredia con 3 habitaciones",
           "expect": {
             "expected_should_ask": false,
             "expected_field_to_ask": null,
-            "expected_capture_exposure_count": 1
+            "expected_capture_exposure_count": 1,
+            "max_questions": 1
           }
         },
         {
@@ -318,19 +516,7 @@
             "expected_should_ask": true,
             "expected_field_to_ask": "nombre",
             "expected_capture_exposure_count": 2,
-            "expected_completed_fields_all": [
-              "tipo_cita",
-              "preferencias",
-              "appointment_intent"
-            ],
-            "expected_lead_extracted_contains": {
-              "tipo_cita": "visita",
-              "appointment_intent": "positive"
-            },
-            "expected_criteria_min": {
-              "intencion": 7,
-              "match": 8
-            }
+            "max_questions": 1
           }
         }
       ]

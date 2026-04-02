@@ -39,9 +39,9 @@ class ChatRequest(BaseModel):
     gbraid: Optional[str] = None
     wbraid: Optional[str] = None
     referrer_url: Optional[str] = None
-    source_property_ref: Optional[str] = Field(
+    property_id: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("source_property_ref", "property_id", "propertyId"),
+        validation_alias=AliasChoices("property_id", "propertyId"),
     )
     landing_page_url: Optional[str] = None
     is_init: bool = False

@@ -53,7 +53,7 @@ class InferenceClient:
             "gbraid": session.get("gbraid"),
             "wbraid": session.get("wbraid"),
             "referrer_url": session.get("referrer_url"),
-            "source_property_ref": session.get("source_property_ref"),
+            "property_id": session.get("property_id"),
             "landing_page_url": session.get("landing_page_url")
         }
         user_metadata = {k: v for k, v in user_metadata.items() if v is not None}

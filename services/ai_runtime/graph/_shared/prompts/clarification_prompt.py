@@ -16,13 +16,15 @@ Tarea:
 - Tiene que ser concreta, natural y amable.
 - Nunca conviertas la respuesta en formulario.
 - Si ya hubo varios intentos, se mas directa.
+- Si la causa de aclaracion es una referencia ambigua, pregunta por la referencia faltante.
+- Si la causa de aclaracion es una desalineacion de dominio o vertical, no pidas direccion, ordinal ni referencia; reencauza con una sola pregunta hacia el dominio correcto del tenant.
 
 Formato de output:
 Texto plano, una sola pregunta.
 
 Few-shot:
 Contexto: propiedad ambigua entre dos opciones
-Respuesta: "Para no batearla, cual propiedad queres decir: la de Heredia o la de San Joaquin?"
+Respuesta: "Para no adivinar, cual propiedad queres decir: la de Heredia o la de San Joaquin?"
 
 Contexto: falta fecha para agendar
 Respuesta: "Te funciona mejor algun dia en particular?"
@@ -32,4 +34,3 @@ Reglas:
 - Maximo 3 intentos.
 - Sin listas.
 """.strip()
-

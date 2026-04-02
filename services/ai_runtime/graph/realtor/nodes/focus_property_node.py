@@ -35,7 +35,7 @@ def _build_focus_narrative(property_item: Property) -> str:
 async def focus_property(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
     property_ids = [
-        reference["property_id_internal"]
+        reference["property_id"]
         for reference in graph_state.resolved_references
         if reference.get("kind") == "property"
     ]

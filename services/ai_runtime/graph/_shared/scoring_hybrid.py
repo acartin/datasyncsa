@@ -12,6 +12,7 @@ from services.ai_runtime.domain.prompts import PromptPayload
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     LeadAdvisorState,
+    RealtorGraphState,
     SCORING_CRITERION_ALIASES,
     SCORING_FIELD_ALIASES,
 )
@@ -219,16 +220,40 @@ def _build_scoring_prompt(
         "extraction_text": _format_extraction_text(advisor_state),
     }
     stable_prefix = _render_prompt_template(template, values)
+    required_fields = list(advisor_state.required_fields or advisor_state.target_fields)
+    completed_fields = list(advisor_state.completed_fields or [])
+    pending_fields = [field for field in required_fields if field not in completed_fields]
+    dynamic_context: dict[str, Any] = {
+        "messages": [item.model_dump(mode="json") for item in graph_state.messages[-10:]],
+        "lead_extracted": advisor_state.lead_extracted.model_dump(mode="json"),
+        "criteria_scores": advisor_state.criteria_scores,
+        "target_criteria": advisor_state.target_criteria,
+        "required_fields": required_fields,
+        "completed_fields": completed_fields,
+        "pending_fields": pending_fields,
+        "capture_exposure_count": advisor_state.capture_exposure_count,
+        "capture_unlocked": advisor_state.capture_exposure_count >= 2,
+        "current_dialogue_act": graph_state.turn_analysis.dialogue_act if graph_state.turn_analysis else None,
+        "current_turn_output_types": [str(item.get("type") or "") for item in graph_state.turn_outputs],
+        "last_turn_dialogue_act": graph_state.last_turn_dialogue_act,
+        "last_turn_output_types": list(graph_state.last_turn_output_types or []),
+        "last_turn_search_summary": graph_state.last_turn_search_summary,
+    }
+    if isinstance(graph_state, RealtorGraphState):
+        dynamic_context["search_filters"] = graph_state.search_filters.model_dump(mode="json")
+        dynamic_context["last_search_results_summary"] = [
+            {
+                "id": item.id,
+                "price": item.price,
+                "currency": item.currency,
+                "province": item.location.province,
+                "bedrooms_clean": item.features.bedrooms_clean,
+                "bathrooms_clean": item.features.bathrooms_clean,
+            }
+            for item in graph_state.last_search_results[:4]
+        ]
     dynamic_context = json.dumps(
-        {
-            "messages": [item.model_dump(mode="json") for item in graph_state.messages[-10:]],
-            "lead_extracted": advisor_state.lead_extracted.model_dump(mode="json"),
-            "criteria_scores": advisor_state.criteria_scores,
-            "target_criteria": advisor_state.target_criteria,
-            "required_fields": advisor_state.required_fields,
-            "capture_exposure_count": advisor_state.capture_exposure_count,
-            "capture_unlocked": advisor_state.capture_exposure_count >= 2,
-        },
+        dynamic_context,
         ensure_ascii=True,
         indent=2,
         default=str,

@@ -199,7 +199,7 @@ def summarize_state(state: dict[str, Any]) -> dict[str, Any]:
             "cards_mode": state.get("cards_mode"),
             "render_mode": state.get("render_mode"),
             "cards_shown": _safe_serialize(state.get("cards_shown", [])),
-            "last_mentioned": _safe_serialize(_item_get(state.get("last_mentioned"), "property_id_internal")),
+            "last_mentioned": _safe_serialize(_item_get(state.get("last_mentioned"), "id")),
             "active_comparison": _safe_serialize(state.get("active_comparison", [])),
         }
     return summary

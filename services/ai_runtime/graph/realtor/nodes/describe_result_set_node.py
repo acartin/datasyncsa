@@ -67,7 +67,7 @@ def _effective_area(property_item: Property) -> float | None:
 
 def _load_displayed_properties(graph_state: RealtorGraphState) -> list[Property]:
     property_map = {
-        item.property_id_internal: item
+        item.id: item
         for item in [*graph_state.last_search_results, *graph_state.inventory]
     }
 
@@ -75,7 +75,7 @@ def _load_displayed_properties(graph_state: RealtorGraphState) -> list[Property]
     if graph_state.cards_shown:
         for property_id in graph_state.cards_shown:
             item = property_map.get(property_id)
-            if item and item.property_id_internal not in {current.property_id_internal for current in selected}:
+            if item and item.id not in {current.id for current in selected}:
                 selected.append(item)
     elif graph_state.last_search_results:
         selected = list(graph_state.last_search_results[:3])

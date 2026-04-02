@@ -41,6 +41,7 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
 - `graph/generic/**`: builder y nodos del vertical reducido.
+- `graph/healthcare/**`, `graph/legal/**`, `graph/insurance/**`: prompts semanticos propietarios por vertical.
 - `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
 - `rag/**`: repositorios pgvector aislados por tenant.
 - `workers/lead_worker.py`: worker fire-and-forget placeholder v1.
@@ -90,17 +91,22 @@ Cada turno registra:
 
 ### Shared flow
 
-`START -> resolve_references -> classify_intent -> route_next_intent`
+`START -> analyze_turn`
 
 Routers compartidos:
 
-- `after_resolve_references`
+- `after_analyze_turn`
   - `ask_clarification`
   - `collect_lead_data`
-  - `classify_intent`
-- `after_classify_intent`
+  - `capture_memory_entities`
+- `after_capture_memory`
+  - `memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+- `after_memory_lookup`
+  - `route_next_intent`
+  - `lead_advisor`
+  - `end`
 - `after_check_queue`
   - `route_next_intent`
   - `lead_advisor`
@@ -114,7 +120,7 @@ Routers compartidos:
 
 ### Intent queue
 
-- `classify_intent` genera hasta 4 intents
+- `analyze_turn` interpreta el turno y puede proponer hasta 4 intents iniciales
 - `route_next_intent` elige el siguiente intent ejecutable
 - cada nodo de capacidad cierra explicitamente `running -> done`
 - `check_queue` decide si quedan intents pendientes
@@ -130,9 +136,10 @@ Routers compartidos:
 
 ### LLM
 
-- `resolve_references`: clasifica tipo de referencia
-- `classify_intent`: detecta intenciones
+- `analyze_turn`: interpreta el turno; es responsabilidad semantica del vertical
 - `route_next_intent`: solo condiciones lazy
+- `capture_memory_entities`: extrae memoria canonica del turno
+- `lead_advisor`: scoring y estrategia de captura
 - `synthesize`: respuesta final
 - `compare_properties`: solo redaccion
 - `llm_recommend`: solo redaccion
@@ -160,21 +167,36 @@ Routers compartidos:
 
 Prompts incluidos:
 
-- base:
+- DB-backed por vertical:
+  - `planner_system`
+  - `synthesizer_system`
+- shared tecnicos:
   - `reference_classifier_prompt.py`
-  - `intent_detector_prompt.py`
   - `lazy_condition_evaluator_prompt.py`
   - `clarification_prompt.py`
   - `lead_data_collector_prompt.py`
-- vertical:
-  - `vertical/realtor/{plan,synthesis}_prompt.py`
-  - `vertical/healthcare/{plan,synthesis}_prompt.py`
-  - `vertical/legal/{plan,synthesis}_prompt.py`
+  - `memory_entity_extractor_prompt.py`
+- analyze_turn por vertical:
+  - `graph/realtor/prompts/analyze_turn_prompt.py`
+  - `graph/healthcare/prompts/analyze_turn_prompt.py`
+  - `graph/legal/prompts/analyze_turn_prompt.py`
+  - `graph/insurance/prompts/analyze_turn_prompt.py`
+- intent_detector por vertical:
+  - `graph/realtor/prompts/intent_detector_prompt.py`
+  - `graph/healthcare/prompts/intent_detector_prompt.py`
+  - `graph/legal/prompts/intent_detector_prompt.py`
+  - `graph/insurance/prompts/intent_detector_prompt.py`
 - realtor:
   - `text_to_sql_prompt.py`
   - `comparison_synthesizer_prompt.py`
   - `recommendation_prompt.py`
   - `appointment_data_collector_prompt.py`
+
+Guardrail:
+
+- Los prompts semanticos de negocio no deben vivir en `graph/_shared/prompts`.
+- `analyze_turn` e `intent_detector` son `vertical-owned`.
+- `shared` solo puede contener prompts tecnicos neutrales.
 
 ## Persistencia y Caches
 

@@ -24,7 +24,7 @@ async def financial_calc(state: dict[str, Any], deps: GraphDependencies) -> dict
     if not context.price and graph_state.last_mentioned:
         context = context.model_copy(
             update={
-                "property_id": graph_state.last_mentioned.property_id_internal,
+                "property_id": graph_state.last_mentioned.id,
                 "price": graph_state.last_mentioned.price,
                 "currency": graph_state.last_mentioned.currency,
             }

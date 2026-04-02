@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-03-30T17:01:54Z`
+- Generated UTC: `2026-04-01T20:09:03Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-28`
-- Git commit: `e88b29f`
+- Git branch: `HETZNER-LOCAL-2026-03-31`
+- Git commit: `5705281`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -29,7 +29,8 @@
 ## 3. ARQUITECTURA CORE
 
 - `ai-runtime` resuelve tenant, vertical, flow y estado de sesion.
-- `realtor_flow` y `generic_flow` son selectores logicos internos.
+- `realtor_flow` y `basic_flow` son selectores logicos internos.
+- `analyze_turn` e `intent_detector` son prompts semanticos por vertical; `shared` solo debe contener piezas tecnicas neutrales.
 - `scoring-core` permanece separado y no debe absorber decisiones conversacionales.
 - `chat-web-renderer` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por `client_id`.
@@ -40,17 +41,17 @@
 postgres
 redis
 ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
 datasyncsa-web
-etl-docs
 portainer
+admin-console-api
+admin-console-web
+etl-docs
+etl-docs-worker
 scoring-core
 scoring-core-worker
 test-ui
-admin-console-api
-admin-console-web
-chat-web-renderer-api
-chat-web-renderer-ui
-etl-docs-worker
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES

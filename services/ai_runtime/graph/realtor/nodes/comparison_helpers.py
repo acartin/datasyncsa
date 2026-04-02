@@ -14,7 +14,7 @@ def score_property(property_item: Property) -> PropertyComparisonScore:
         "price_efficiency": max(0.0, 12.0 - (property_item.price / 50000.0)),
     }
     return PropertyComparisonScore(
-        property_id_internal=property_item.property_id_internal,
+        property_id=property_item.id,
         score_total=round(sum(dimensions.values()), 2),
         dimensions=dimensions,
     )

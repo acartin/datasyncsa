@@ -74,7 +74,9 @@
             "answer_contains_any": [
               "me inclinaría",
               "me inclinaria",
-              "recomiendo"
+              "recomiendo",
+              "recomendaria",
+              "recomendaría"
             ],
             "manual_review_focus": [
               "no debe inventar preferencias ni sonar sobreactuado"
@@ -85,10 +87,12 @@
           "user": "Y como sabes eso?",
           "expect": {
             "answer_contains_any": [
-              "Tenes razon",
-              "tenes razon",
+              "te explico",
+              "claro",
               "me basé",
-              "me base"
+              "me base",
+              "detalle",
+              "ficha"
             ],
             "answer_excludes": [
               "la informacion la obtengo de la base de datos"

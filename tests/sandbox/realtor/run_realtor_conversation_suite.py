@@ -3,8 +3,8 @@
 Runner JSON-driven para baterias conversacionales realtor.
 
 Uso:
-  python3 tests/sandbox/realtor/run_generated_conversation_suite.py \
-    --suite tests/sandbox/realtor/generated_conversation_suite.template.json
+  python3 tests/sandbox/realtor/run_realtor_conversation_suite.py \
+    --suite tests/sandbox/realtor/realtor_conversation_suite.template.json
 
 Opciones comunes:
   --json-out /tmp/realtor_generated_suite_report.json
@@ -37,12 +37,14 @@ except ImportError:
 
 
 DEFAULT_CLIENT_ID = os.getenv("CLIENT_ID", "64f357a0-98eb-44f1-9f41-6e615ed26180")
-DEFAULT_USER_ID = os.getenv("REALTOR_SANDBOX_USER_ID", "generated-suite-user")
+DEFAULT_USER_ID = os.getenv("REALTOR_SANDBOX_USER_ID", "realtor-suite-user")
 DEFAULT_RUNTIME_URL = os.getenv(
     "AI_RUNTIME_SANDBOX_API",
     f"http://127.0.0.1:{os.getenv('AI_RUNTIME_PORT', '8096')}/api/v1",
 ).rstrip("/")
 DEFAULT_INTERNAL_TOKEN = os.getenv("INTERNAL_API_TOKEN")
+SUITE_DIR = Path(__file__).resolve().parent
+DEFAULT_SUITE_PATH = SUITE_DIR / "realtor_regression_suite.json"
 SUITE_TYPES = {"generated", "regression", "manual"}
 STRUCTURED_EXPECTATION_KEYS = {
     "expected_should_ask",
@@ -55,6 +57,7 @@ STRUCTURED_EXPECTATION_KEYS = {
     "expected_lead_extracted_contains",
     "expected_criteria_min",
     "expected_criteria_max",
+    "expected_resolved_references_within_cards_shown",
 }
 FIELD_ALIASES = {
     "extracted_name": "nombre",
@@ -136,6 +139,8 @@ class TurnResult:
     lead_completed_fields: list[str] = field(default_factory=list)
     lead_extracted: dict[str, Any] = field(default_factory=dict)
     lead_criteria_scores: dict[str, Any] = field(default_factory=dict)
+    resolved_reference_ids: list[str] = field(default_factory=list)
+    cards_shown: list[str] = field(default_factory=list)
     passed: bool = True
     issues: list[str] = field(default_factory=list)
     manual_review_focus: list[str] = field(default_factory=list)
@@ -144,6 +149,14 @@ class TurnResult:
 def _load_json(path: str) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _list_available_suites() -> list[Path]:
+    return sorted(
+        path
+        for path in SUITE_DIR.glob("*.json")
+        if not path.name.endswith(".schema.json")
+    )
 
 
 def _lower(value: Any) -> str:
@@ -297,6 +310,12 @@ class GeneratedConversationSuiteRunner:
             "search_filters": (((summary.get("realtor") or {}).get("search_filters"))),
             "effective_search_filters": (((summary.get("realtor") or {}).get("effective_search_filters"))),
             "search_match_scope": None,
+            "resolved_reference_ids": [
+                str(item.get("property_id"))
+                for item in (summary.get("resolved_references") or [])
+                if isinstance(item, dict) and item.get("kind") == "property" and item.get("property_id")
+            ],
+            "cards_shown": list((((summary.get("vertical_state") or {}).get("cards_shown")) or [])),
             "lead_should_ask": lead_advisor.get("should_ask"),
             "lead_capture_exposure_count": lead_advisor.get("capture_exposure_count"),
             "lead_field_to_ask": lead_advisor.get("field_to_ask"),
@@ -345,6 +364,8 @@ class GeneratedConversationSuiteRunner:
             lead_completed_fields=list(trace_facts.get("lead_completed_fields") or []),
             lead_extracted=dict(trace_facts.get("lead_extracted") or {}),
             lead_criteria_scores=dict(trace_facts.get("lead_criteria_scores") or {}),
+            resolved_reference_ids=list(trace_facts.get("resolved_reference_ids") or []),
+            cards_shown=list(trace_facts.get("cards_shown") or []),
             manual_review_focus=list(expect.get("manual_review_focus") or []),
         )
 
@@ -508,6 +529,23 @@ class GeneratedConversationSuiteRunner:
                     result.issues.append(
                         f"criteria_scores[{criterion_key}] esperado <= {max_value} real={actual_value}"
                     )
+
+            if expect.get("expected_resolved_references_within_cards_shown") is True:
+                if not result.resolved_reference_ids:
+                    result.issues.append("se esperaba al menos una referencia resuelta")
+                elif not result.cards_shown:
+                    result.issues.append("se esperaba cards_shown para validar el scope visible")
+                else:
+                    visible_ids = {str(item) for item in result.cards_shown}
+                    outside_visible = [
+                        item for item in result.resolved_reference_ids
+                        if str(item) not in visible_ids
+                    ]
+                    if outside_visible:
+                        result.issues.append(
+                            "resolved_references salieron del scope visible: "
+                            f"{outside_visible} vs cards_shown={result.cards_shown}"
+                        )
 
         result.passed = not result.issues
         return result
@@ -687,8 +725,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Runner JSON-driven para conversaciones realtor")
     parser.add_argument(
         "--suite",
-        required=True,
-        help="Ruta al JSON con la suite generada",
+        default=str(DEFAULT_SUITE_PATH),
+        help=f"Ruta al JSON con la suite conversacional (default: {DEFAULT_SUITE_PATH.name})",
+    )
+    parser.add_argument(
+        "--list-suites",
+        action="store_true",
+        help="Lista las suites JSON disponibles y sale",
     )
     parser.add_argument(
         "--runtime-url",
@@ -725,6 +768,13 @@ def main() -> int:
         help="Detiene cada conversacion al primer turno fallido",
     )
     args = parser.parse_args()
+
+    if args.list_suites:
+        print("Suites disponibles:")
+        for path in _list_available_suites():
+            marker = " (default)" if path.resolve() == DEFAULT_SUITE_PATH.resolve() else ""
+            print(f"- {path.name}{marker}")
+        return 0
 
     suite = _load_json(args.suite)
     suite_type = _infer_suite_type(suite, args.suite)

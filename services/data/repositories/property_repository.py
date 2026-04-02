@@ -68,37 +68,6 @@ class PropertyRepository:
             return default
 
     @staticmethod
-    def _expand_property_id_variants(property_ids: Sequence[str]) -> list[str]:
-        variants: list[str] = []
-        seen: set[str] = set()
-        for raw_value in property_ids:
-            raw = str(raw_value or "").strip()
-            if not raw:
-                continue
-            for candidate in (raw, re.sub(r"^[A-Za-z\\s_-]+", "", raw), re.sub(r"[^0-9]", "", raw)):
-                normalized = str(candidate or "").strip()
-                if not normalized or normalized in seen:
-                    continue
-                seen.add(normalized)
-                variants.append(normalized)
-        return variants
-
-    @staticmethod
-    def _normalize_property_key_variants(property_ids: Sequence[str]) -> list[str]:
-        variants: list[str] = []
-        seen: set[str] = set()
-        for raw_value in property_ids:
-            raw = str(raw_value or "").strip()
-            if not raw:
-                continue
-            normalized = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            variants.append(normalized)
-        return variants
-
-    @staticmethod
     async def _fetch_property_assets(
         connection,
         property_ids: Sequence[str],
@@ -150,14 +119,8 @@ class PropertyRepository:
             bathrooms_clean = cls._to_float(row.get("bathrooms")) or 0.0
         sqm_clean_raw = features_raw.get("sqm_clean")
         sqm_clean = cls._to_int(sqm_clean_raw, default=cls._to_int(row.get("area_sqm"), default=0)) or None
-        property_id_internal = str(
-            features_raw.get("property_id_internal")
-            or row.get("external_prop_id")
-            or row.get("id")
-        )
-
         payload = {
-            "property_id_internal": property_id_internal,
+            "id": str(row.get("id") or ""),
             "client_id": str(row.get("client_id") or ""),
             "title": str(row.get("title") or ""),
             "description_html": str(row.get("description") or ""),
@@ -190,7 +153,6 @@ class PropertyRepository:
             },
             "meta": {
                 "source_system": "lead_properties",
-                "source_property_ref": row.get("external_prop_id"),
                 "public_url": row.get("public_url"),
                 "ingested_at": row.get("created_at"),
                 "updated_at": row.get("updated_at"),
@@ -313,11 +275,8 @@ class PropertyRepository:
         client_id: str,
         property_ids: Sequence[str],
     ) -> list[Property]:
-        if not property_ids:
-            return []
-        id_variants = self._expand_property_id_variants(property_ids)
-        canonical_variants = self._normalize_property_key_variants([*property_ids, *id_variants])
-        if not id_variants and not canonical_variants:
+        property_ids_clean = [str(item).strip() for item in property_ids if str(item).strip()]
+        if not property_ids_clean:
             return []
         query = (
             text(
@@ -325,23 +284,10 @@ class PropertyRepository:
                 SELECT p.*
                 FROM lead_properties p
                 WHERE p.client_id = :client_id
-                  AND (
-                    p.external_prop_id::text IN :property_ids_external
-                    OR p.id::text IN :property_ids_internal
-                    OR UPPER(
-                        regexp_replace(
-                            COALESCE(p.features->>'property_id_internal', ''),
-                            '[^A-Za-z0-9]',
-                            '',
-                            'g'
-                        )
-                    ) IN :property_ids_canonical
-                  )
+                  AND p.id::text IN :property_ids
                 """
             ).bindparams(
-                bindparam("property_ids_external", expanding=True),
-                bindparam("property_ids_internal", expanding=True),
-                bindparam("property_ids_canonical", expanding=True),
+                bindparam("property_ids", expanding=True),
             )
         )
         async with self.engine.begin() as connection:
@@ -350,9 +296,7 @@ class PropertyRepository:
                     query,
                     {
                         "client_id": client_id,
-                        "property_ids_external": id_variants,
-                        "property_ids_internal": id_variants,
-                        "property_ids_canonical": canonical_variants,
+                        "property_ids": property_ids_clean,
                     },
                 )
             ).mappings().all()

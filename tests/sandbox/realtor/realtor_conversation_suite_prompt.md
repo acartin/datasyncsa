@@ -76,13 +76,13 @@ Reglas de calidad:
 
 Flujo recomendado:
 1. Pedirle a la otra IA que genere el JSON.
-2. Guardarlo, por ejemplo, en `tests/sandbox/realtor/generated_suite_01.json`.
+2. Guardarlo, por ejemplo, en `tests/sandbox/realtor/realtor_suite_candidate.json`.
 3. Correr:
 
 ```bash
-python3 tests/sandbox/realtor/run_generated_conversation_suite.py \
-  --suite tests/sandbox/realtor/generated_suite_01.json \
-  --json-out /tmp/generated_suite_01_report.json
+python3 tests/sandbox/realtor/run_realtor_conversation_suite.py \
+  --suite tests/sandbox/realtor/realtor_suite_candidate.json \
+  --json-out /tmp/realtor_suite_candidate_report.json
 ```
 
 4. Revisar el reporte y luego hacer una pasada manual en los turnos con `manual_review_focus`.

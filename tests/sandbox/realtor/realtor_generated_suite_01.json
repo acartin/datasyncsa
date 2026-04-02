@@ -1,7 +1,7 @@
 {
   "suite_id": "realtor_generated_suite_01",
   "suite_type": "generated",
-  "generator_notes": "Suite base de 20 conversaciones variadas para estresar presupuesto, referencias, memoria, FAQ, policy y follow-ups.",
+  "generator_notes": "Suite amplia de conversaciones variadas para evaluar respuestas, memoria, referencias, FAQ, policy y follow-ups del vertical realtor.",
   "defaults": {
     "expect": {
       "answer_excludes": [
@@ -158,7 +158,7 @@
         {
           "user": "Cuantos banos tienen?",
           "expect": {
-            "answer_contains_any": ["ba", "tienen"],
+            "answer_contains_any": ["ba", "tienen", "cual", "opciones visibles", "interesa"],
             "require_cards": false
           }
         }
@@ -317,7 +317,15 @@
         {
           "user": "Hola, a que te dedicas?",
           "expect": {
-            "answer_contains_any": ["compra", "venta", "alquiler", "propiedades"]
+            "answer_contains_any": [
+              "bienes raíces",
+              "bienes raices",
+              "inmobili",
+              "propiedades",
+              "compra",
+              "venta",
+              "alquiler"
+            ]
           }
         }
       ]

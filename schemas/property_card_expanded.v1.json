@@ -152,7 +152,7 @@
         "client_id": {
           "type": "string"
         },
-        "source_property_ref": {
+        "property_id": {
           "type": "string"
         },
         "conversation_id": {
