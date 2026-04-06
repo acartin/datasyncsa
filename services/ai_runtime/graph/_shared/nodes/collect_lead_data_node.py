@@ -9,6 +9,7 @@ from services.ai_runtime.domain.contracts import AgentRecord
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.prompt_context import summarize_messages_for_prompt
 
 
 async def collect_lead_data(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
@@ -20,7 +21,7 @@ async def collect_lead_data(state: dict[str, Any], deps: GraphDependencies) -> d
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "messages": [message.model_dump(mode="json") for message in graph_state.messages[-6:]],
+            "messages": summarize_messages_for_prompt(graph_state.messages, limit=6),
             "lead_extracted": graph_state.lead_advisor.lead_extracted.model_dump(mode="json"),
             "active_intent": graph_state.active_intent.model_dump(mode="json") if graph_state.active_intent else None,
         },

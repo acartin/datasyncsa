@@ -121,7 +121,6 @@ class TenantConfig(BaseModel):
     vertical: Vertical
     bot_name: str = "Datasyncsa AI"
     tone_prompt: str = ""
-    system_prompts: dict[str, str] = Field(default_factory=dict)
     capabilities: list[str] = Field(default_factory=list)
     redis_ttl_seconds: int = 3600
     business: TenantBusinessProfile

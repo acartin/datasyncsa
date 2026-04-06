@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,6 +19,7 @@ from services.ai_runtime.domain.state import (
     SCORING_CRITERION_ALIASES,
     SCORING_FIELD_ALIASES,
 )
+from services.ai_runtime.graph._shared.prompt_context import summarize_messages_for_prompt
 
 
 DEFAULT_SCORING_TEMPLATE = """
@@ -50,9 +54,50 @@ REGLAS
 - No inventes informacion.
 """.strip()
 
+_SCORING_CONTEXT_CACHE_TTL_SECONDS = 1800
+# Explicit cache creation for Gemini Flash-Lite is rejected below ~2048 tokens. We use a
+# conservative char threshold to avoid repeated provider-side create failures on smaller prompts.
+_SCORING_EXPLICIT_CACHE_MIN_STABLE_CHARS = 8000
+_SCORING_DYNAMIC_TIMESTAMP_SENTINEL = "see dynamic_context.timestamp_utc"
+
+_HIGH_URGENCY_HINTS = (
+    "hoy",
+    "manana",
+    "esta semana",
+    "este fin de semana",
+    "este finde",
+    "cuanto antes",
+    "lo antes posible",
+    "de inmediato",
+    "inmediatamente",
+    "urgente",
+    "urgencia",
+    "pronto",
+)
+_MEDIUM_URGENCY_HINTS = (
+    "este mes",
+    "fin de mes",
+    "antes de fin de mes",
+    "proximo mes",
+    "este trimestre",
+    "en unas semanas",
+    "en unos dias",
+)
+_WEEKDAY_PATTERN = re.compile(
+    r"\b(este|proximo)\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b"
+)
+
 
 def _normalize_key(value: str) -> str:
     return str(value or "").strip().lower()
+
+
+def _normalize_text(value: Any) -> str:
+    candidate = str(value or "").strip().lower()
+    if not candidate:
+        return ""
+    normalized = unicodedata.normalize("NFKD", candidate)
+    return "".join(char for char in normalized if not unicodedata.combining(char))
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -205,26 +250,128 @@ def _render_prompt_template(template: str, values: dict[str, str]) -> str:
         return escaped.format(**values)
 
 
-def _build_scoring_prompt(
+def _build_scoring_output_contract(advisor_state: LeadAdvisorState) -> dict[str, Any]:
+    criteria_keys = [key for key in advisor_state.target_criteria if _normalize_key(key)]
+    extracted_keys = [key for key in advisor_state.target_fields if _normalize_key(key)]
+    canonical_scores = {
+        key: {
+            "score": "number 0..10",
+            "reason": "string breve y concreta",
+        }
+        for key in criteria_keys
+    }
+    canonical_extracted = {
+        key: "valor extraido o null si no hay evidencia suficiente"
+        for key in extracted_keys
+    }
+    return {
+        "top_level_keys": [
+            "scores",
+            "extracted_data",
+            "score_reasons",
+            "reasoning",
+            "confidence",
+            "slot_hints",
+        ],
+        "scores_rules": {
+            "only_target_criteria": criteria_keys,
+            "range": "0..10",
+            "shape": canonical_scores,
+        },
+        "extracted_data_rules": {
+            "only_target_fields": extracted_keys,
+            "shape": canonical_extracted,
+        },
+        "score_reasons_rules": {
+            "same_keys_as_scores": True,
+            "shape": {key: "string breve" for key in criteria_keys},
+        },
+        "reasoning_rule": "string breve",
+        "confidence_rule": "number 0..1",
+        "slot_hints_rule": {
+            "shape": {
+                "next_field": "campo canonico opcional",
+                "question": "pregunta sugerida opcional",
+            }
+        },
+    }
+
+
+def _build_scoring_reference_payload(
     graph_state: BaseGraphState,
     advisor_state: LeadAdvisorState,
-) -> PromptPayload:
+) -> dict[str, Any]:
+    profile = advisor_state.scoring_profile
+    criteria_aliases = {
+        key: list(SCORING_CRITERION_ALIASES.get(_normalize_key(key), (_normalize_key(key),)))
+        for key in advisor_state.target_criteria
+        if _normalize_key(key)
+    }
+    canonical_fields = {
+        field.key: field.model_dump(mode="json")
+        for field in list(profile.extraction_fields or []) if profile and str(field.key or "").strip()
+    }
+    return {
+        "vertical": graph_state.vertical,
+        "profile_metadata": {
+            "vertical_id": profile.vertical_id if profile else None,
+            "model_id": profile.model_id if profile else None,
+            "model_version": profile.model_version if profile else None,
+            "prompt_id": profile.prompt_id if profile else None,
+            "prompt_version": profile.prompt_version if profile else None,
+        },
+        "criteria_config": [criterion.model_dump(mode="json") for criterion in list(profile.criteria or [])] if profile else [],
+        "extraction_fields_config": canonical_fields,
+        "scoring_contract": dict(profile.scoring_contract or {}) if profile else {},
+        "criterion_aliases": criteria_aliases,
+        "field_aliases": dict(SCORING_FIELD_ALIASES),
+        "output_contract": _build_scoring_output_contract(advisor_state),
+    }
+
+
+def _build_scoring_stable_prefix(
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+) -> str:
     profile = advisor_state.scoring_profile
     template = profile.prompt_template if profile and profile.prompt_template else DEFAULT_SCORING_TEMPLATE
     values = {
         "vertical_name": graph_state.vertical,
         "business_domain": str(graph_state.tenant_config.metadata.get("business_domain") or "real_estate"),
         "locale": str(graph_state.tenant_config.metadata.get("locale") or "es-CR"),
-        "timestamp_utc": datetime.now(tz=UTC).isoformat(),
+        "timestamp_utc": _SCORING_DYNAMIC_TIMESTAMP_SENTINEL,
         "criteria_text": _format_criteria_text(advisor_state),
         "extraction_text": _format_extraction_text(advisor_state),
     }
-    stable_prefix = _render_prompt_template(template, values)
+    stable_prompt = _render_prompt_template(template, values)
+    reference_payload = _build_scoring_reference_payload(graph_state, advisor_state)
+    reference_block = json.dumps(reference_payload, ensure_ascii=True, indent=2, default=str)
+    sections = [
+        stable_prompt,
+        (
+            "CONFIGURACION_CANONICA_JSON\n"
+            "Usa esta configuracion como fuente de verdad para los nombres canonicos, los aliases y la forma exacta del JSON de salida.\n"
+            f"{reference_block}"
+        ),
+    ]
+    return "\n\n".join(section for section in sections if section).strip()
+
+
+def _build_scoring_cache_key(stable_prefix: str) -> str:
+    return hashlib.sha256(stable_prefix.encode("utf-8")).hexdigest()
+
+
+def _build_scoring_prompt(
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+) -> PromptPayload:
+    stable_prefix = _build_scoring_stable_prefix(graph_state, advisor_state)
     required_fields = list(advisor_state.required_fields or advisor_state.target_fields)
     completed_fields = list(advisor_state.completed_fields or [])
     pending_fields = [field for field in required_fields if field not in completed_fields]
     dynamic_context: dict[str, Any] = {
-        "messages": [item.model_dump(mode="json") for item in graph_state.messages[-10:]],
+        "timestamp_utc": datetime.now(tz=UTC).isoformat(),
+        "messages": summarize_messages_for_prompt(graph_state.messages, limit=10),
         "lead_extracted": advisor_state.lead_extracted.model_dump(mode="json"),
         "criteria_scores": advisor_state.criteria_scores,
         "target_criteria": advisor_state.target_criteria,
@@ -259,15 +406,16 @@ def _build_scoring_prompt(
         default=str,
     )
     full_prompt = "\n\n".join([stable_prefix, dynamic_context]).strip()
+    cacheable = len(stable_prefix) >= _SCORING_EXPLICIT_CACHE_MIN_STABLE_CHARS
     return PromptPayload(
         node_type="lead_scoring_evaluator",
         stable_prefix=stable_prefix,
         dynamic_context=dynamic_context,
         full_prompt=full_prompt,
-        cacheable=False,
-        cache_namespace=None,
-        cache_key=None,
-        cache_ttl_seconds=0,
+        cacheable=cacheable,
+        cache_namespace="lead_scoring_evaluator" if cacheable else None,
+        cache_key=_build_scoring_cache_key(stable_prefix) if cacheable else None,
+        cache_ttl_seconds=_SCORING_CONTEXT_CACHE_TTL_SECONDS if cacheable else 0,
     )
 
 
@@ -342,6 +490,81 @@ def _merge_extracted(base: LeadExtracted, incoming: dict[str, Any]) -> LeadExtra
             continue
         payload[key] = value
     return LeadExtracted.model_validate(payload)
+
+
+def _timeline_floor_from_text(value: Any) -> float | None:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    if any(hint in normalized for hint in _HIGH_URGENCY_HINTS):
+        return 8.0
+    if any(hint in normalized for hint in _MEDIUM_URGENCY_HINTS):
+        return 6.0
+    if _WEEKDAY_PATTERN.search(normalized):
+        return 6.0
+    return None
+
+
+def _extract_current_user_message(graph_state: BaseGraphState) -> str | None:
+    for message in reversed(graph_state.messages):
+        if str(getattr(message, "role", "")).strip().lower() != "user":
+            continue
+        content = str(getattr(message, "content", "")).strip()
+        if content:
+            return content
+    return None
+
+
+def _apply_timeline_score_guardrail(
+    *,
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+    merged_scores: dict[str, float],
+    merged_reasons: dict[str, str],
+    merged_extracted: LeadExtracted,
+    criterion_bounds: dict[str, tuple[float, float]],
+) -> list[str]:
+    candidate_texts = [
+        _extract_current_user_message(graph_state),
+        merged_extracted.fecha_preferida,
+    ]
+    floor: float | None = None
+    source_text: str | None = None
+    for item in candidate_texts:
+        candidate_floor = _timeline_floor_from_text(item)
+        if candidate_floor is None:
+            continue
+        floor = candidate_floor
+        source_text = str(item).strip()
+        break
+    if floor is None:
+        return []
+
+    adjusted: list[str] = []
+    for criterion_key in advisor_state.target_criteria:
+        normalized_key = _normalize_key(criterion_key)
+        if normalized_key not in {"plazo", "urgencia", "emergencia", "timeline", "urgency"}:
+            continue
+        lower, upper = criterion_bounds.get(normalized_key, (0.0, 10.0))
+        current_score = _coerce_float(merged_scores.get(normalized_key))
+        if current_score is None:
+            continue
+        guarded_score = _clamp(floor, lower=lower, upper=upper)
+        if current_score >= guarded_score:
+            continue
+        merged_scores[normalized_key] = guarded_score
+        previous_reason = str(merged_reasons.get(normalized_key) or "").strip()
+        guardrail_reason = (
+            f"Guardrail temporal: horizonte explicito detectado en '{source_text}'; "
+            f"{normalized_key} ajustado a {guarded_score:.1f}."
+        )
+        merged_reasons[normalized_key] = (
+            f"{previous_reason} {guardrail_reason}".strip()
+            if previous_reason
+            else guardrail_reason
+        )
+        adjusted.append(normalized_key)
+    return adjusted
 
 
 async def enrich_lead_advisor_with_llm_scoring(
@@ -457,6 +680,15 @@ async def enrich_lead_advisor_with_llm_scoring(
     if confidence is not None:
         confidence = _clamp(confidence, lower=0.0, upper=1.0)
 
+    guardrails_applied = _apply_timeline_score_guardrail(
+        graph_state=graph_state,
+        advisor_state=advisor_state,
+        merged_scores=merged_scores,
+        merged_reasons=merged_reasons,
+        merged_extracted=merged_extracted,
+        criterion_bounds=criterion_bounds,
+    )
+
     updated_advisor = advisor_state.model_copy(
         update={
             "criteria_scores": merged_scores,
@@ -476,6 +708,8 @@ async def enrich_lead_advisor_with_llm_scoring(
     }
     if reasoning:
         scoring_output["reasoning"] = reasoning
+    if guardrails_applied:
+        scoring_output["guardrails_applied"] = guardrails_applied
     if slot_hints:
         scoring_output["slot_hints"] = dict(slot_hints)
     return updated_advisor, scoring_output, slot_hints

@@ -167,31 +167,6 @@ class TenantRepository:
 
     def __init__(self, engine: AsyncEngine):
         self.engine = engine
-        self._system_prompts_table: str | None = None
-
-    async def _resolve_system_prompts_table(self) -> str | None:
-        if self._system_prompts_table is not None:
-            return self._system_prompts_table
-
-        query = text(
-            """
-            SELECT
-                COALESCE(
-                    to_regclass('public.system_prompts')::text,
-                    to_regclass('public.ai_system_prompts')::text,
-                    ''
-                ) AS table_name
-            """
-        )
-        async with self.engine.begin() as connection:
-            table_name = (await connection.execute(query)).scalar_one()
-
-        normalized = str(table_name or "").split(".")[-1]
-        if normalized not in {"", "system_prompts", "ai_system_prompts"}:
-            raise RuntimeError(f"Unsupported system prompts table: {normalized}")
-
-        self._system_prompts_table = normalized or None
-        return self._system_prompts_table
 
     async def _load_scoring_profile(
         self,
@@ -326,36 +301,8 @@ class TenantRepository:
         )
 
     async def load_tenant_config(self, client_id: str) -> TenantConfig | None:
-        system_prompts_table = await self._resolve_system_prompts_table()
-        planner_prompt_select = "''::text AS planner_prompt"
-        synthesizer_prompt_select = "''::text AS synthesizer_prompt"
-        system_prompt_joins = ""
-        if system_prompts_table:
-            planner_prompt_select = "COALESCE(planner_prompt.prompt_text, '') AS planner_prompt"
-            synthesizer_prompt_select = "COALESCE(synthesizer_prompt.prompt_text, '') AS synthesizer_prompt"
-            system_prompt_joins = f"""
-            LEFT JOIN LATERAL (
-                SELECT p.prompt_text
-                FROM {system_prompts_table} p
-                WHERE p.node_slug = 'planner_system'
-                  AND p.vertical_slug = v.slug
-                  AND COALESCE(p.is_active, true) = true
-                ORDER BY p.version DESC, p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
-                LIMIT 1
-            ) planner_prompt ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT p.prompt_text
-                FROM {system_prompts_table} p
-                WHERE p.node_slug = 'synthesizer_system'
-                  AND p.vertical_slug = v.slug
-                  AND COALESCE(p.is_active, true) = true
-                ORDER BY p.version DESC, p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
-                LIMIT 1
-            ) synthesizer_prompt ON TRUE
-            """
-
         query = text(
-            f"""
+            """
             SELECT
                 c.id::text AS client_id,
                 c.vertical_id AS vertical_id,
@@ -363,15 +310,13 @@ class TenantRepository:
                 v.slug AS source_vertical_slug,
                 COALESCE(c.name, 'Datasyncsa AI') AS bot_name,
                 COALESCE(tone_prompt.prompt_text, '') AS tone_prompt,
-                {planner_prompt_select},
-                {synthesizer_prompt_select},
                 3600 AS redis_ttl_seconds,
                 '[]'::jsonb AS phones,
                 NULL::text AS email,
                 '[]'::jsonb AS operation_zones,
-                '{{}}'::jsonb AS commissions,
-                '{{}}'::jsonb AS appointment_policy,
-                '{{}}'::jsonb AS schedules
+                '{}'::jsonb AS commissions,
+                '{}'::jsonb AS appointment_policy,
+                '{}'::jsonb AS schedules
             FROM lead_clients c
             LEFT JOIN lead_client_verticals v
                 ON v.id = c.vertical_id
@@ -385,7 +330,6 @@ class TenantRepository:
                 ORDER BY p.version DESC NULLS LAST, p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST
                 LIMIT 1
             ) tone_prompt ON TRUE
-            {system_prompt_joins}
             WHERE c.id = :client_id
               AND c.deleted_at IS NULL
             """
@@ -413,10 +357,6 @@ class TenantRepository:
             vertical=runtime_vertical,
             bot_name=row["bot_name"],
             tone_prompt=_normalize_prompt_text(row["tone_prompt"]),
-            system_prompts={
-                "planner_system": _normalize_prompt_text(row["planner_prompt"]),
-                "synthesizer_system": _normalize_prompt_text(row["synthesizer_prompt"]),
-            },
             capabilities=list(DEFAULT_CAPABILITIES_BY_VERTICAL.get(runtime_vertical, [])),
             redis_ttl_seconds=row["redis_ttl_seconds"],
             business=business,

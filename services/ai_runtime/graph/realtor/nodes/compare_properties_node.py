@@ -9,6 +9,7 @@ from services.ai_runtime.domain.contracts import Property
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.prompt_context import summarize_properties_for_prompt
 from services.ai_runtime.graph.realtor.nodes.comparison_helpers import score_property
 
 
@@ -65,7 +66,11 @@ async def compare_properties(state: dict[str, Any], deps: GraphDependencies) -> 
         graph_state.vertical,
         {
             "focus_scope": graph_state.focus_scope,
-            "properties": [item.model_dump(mode="json") for item in properties],
+            "properties": summarize_properties_for_prompt(
+                properties,
+                limit=len(properties),
+                include_description_excerpt=True,
+            ),
             "scores": [item.model_dump(mode="json") for item in scores],
         },
     )

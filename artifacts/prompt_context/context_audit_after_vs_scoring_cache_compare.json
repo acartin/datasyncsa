@@ -1,0 +1,839 @@
+{
+  "generated_at": "2026-04-04T17:29:37.223269+00:00",
+  "before_filters_summary": {
+    "user_ids": [
+      "context-audit-after-final"
+    ],
+    "channels": [],
+    "purposes": [
+      "generated-conversation-suite"
+    ]
+  },
+  "after_filters_summary": {
+    "user_ids": [
+      "context-audit-after-scoring-cache"
+    ],
+    "channels": [],
+    "purposes": [
+      "generated-conversation-suite"
+    ]
+  },
+  "documents": {
+    "before": 28,
+    "after": 28
+  },
+  "sessions": {
+    "before": 11,
+    "after": 11
+  },
+  "llm_calls": {
+    "before": 116,
+    "after": 112
+  },
+  "totals": {
+    "metrics": {
+      "calls": {
+        "before": 0,
+        "after": 0,
+        "delta": 0.0,
+        "delta_percent": null
+      },
+      "stable_chars_total": {
+        "before": 861774,
+        "after": 1032482,
+        "delta": 170708.0,
+        "delta_percent": 19.81
+      },
+      "dynamic_chars_total": {
+        "before": 674259,
+        "after": 636479,
+        "delta": -37780.0,
+        "delta_percent": -5.6
+      },
+      "full_chars_total": {
+        "before": 1334043,
+        "after": 1478674,
+        "delta": 144631.0,
+        "delta_percent": 10.84
+      },
+      "effective_chars_total": {
+        "before": 928583,
+        "after": 712541,
+        "delta": -216042.0,
+        "delta_percent": -23.27
+      },
+      "saved_chars_total": {
+        "before": 405460,
+        "after": 766133,
+        "delta": 360673.0,
+        "delta_percent": 88.95
+      },
+      "avg_dynamic_chars": {
+        "before": 5812.58,
+        "after": 5682.85,
+        "delta": -129.73,
+        "delta_percent": -2.23
+      },
+      "avg_full_chars": {
+        "before": 11500.37,
+        "after": 13202.45,
+        "delta": 1702.08,
+        "delta_percent": 14.8
+      },
+      "avg_effective_chars": {
+        "before": 8005.03,
+        "after": 6361.97,
+        "delta": -1643.06,
+        "delta_percent": -20.53
+      },
+      "p95_dynamic_chars": {
+        "before": 20020,
+        "after": 20020,
+        "delta": 0.0,
+        "delta_percent": 0.0
+      },
+      "p95_full_chars": {
+        "before": 20021,
+        "after": 20021,
+        "delta": 0.0,
+        "delta_percent": 0.0
+      },
+      "p95_effective_chars": {
+        "before": 20020,
+        "after": 20020,
+        "delta": 0.0,
+        "delta_percent": 0.0
+      }
+    },
+    "cache_status_counts": {
+      "before": {
+        "bypass": 60,
+        "hit": 54,
+        "miss_created": 2
+      },
+      "after": {
+        "bypass": 30,
+        "hit": 82
+      }
+    },
+    "top_level_keys": []
+  },
+  "by_node": {
+    "analyze_turn": {
+      "metrics": {
+        "calls": {
+          "before": 28,
+          "after": 28,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "stable_chars_total": {
+          "before": 364532,
+          "after": 364532,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "dynamic_chars_total": {
+          "before": 99888,
+          "after": 94827,
+          "delta": -5061.0,
+          "delta_percent": -5.07
+        },
+        "full_chars_total": {
+          "before": 464476,
+          "after": 459415,
+          "delta": -5061.0,
+          "delta_percent": -1.09
+        },
+        "effective_chars_total": {
+          "before": 112909,
+          "after": 94827,
+          "delta": -18082.0,
+          "delta_percent": -16.01
+        },
+        "saved_chars_total": {
+          "before": 351567,
+          "after": 364588,
+          "delta": 13021.0,
+          "delta_percent": 3.7
+        },
+        "avg_dynamic_chars": {
+          "before": 3567.43,
+          "after": 3386.68,
+          "delta": -180.75,
+          "delta_percent": -5.07
+        },
+        "avg_full_chars": {
+          "before": 16588.43,
+          "after": 16407.68,
+          "delta": -180.75,
+          "delta_percent": -1.09
+        },
+        "avg_effective_chars": {
+          "before": 4032.46,
+          "after": 3386.68,
+          "delta": -645.78,
+          "delta_percent": -16.01
+        },
+        "p95_dynamic_chars": {
+          "before": 6372,
+          "after": 5512,
+          "delta": -860.0,
+          "delta_percent": -13.5
+        },
+        "p95_full_chars": {
+          "before": 19393,
+          "after": 18533,
+          "delta": -860.0,
+          "delta_percent": -4.43
+        },
+        "p95_effective_chars": {
+          "before": 6598,
+          "after": 5512,
+          "delta": -1086.0,
+          "delta_percent": -16.46
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "hit": 27,
+          "miss_created": 1
+        },
+        "after": {
+          "hit": 28
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "last_search_results",
+          "before_total_chars": 25361,
+          "after_total_chars": 23640,
+          "delta_total_chars": -1721
+        },
+        {
+          "key": "recent_messages",
+          "before_total_chars": 14309,
+          "after_total_chars": 13369,
+          "delta_total_chars": -940
+        },
+        {
+          "key": "memory_summary",
+          "before_total_chars": 10033,
+          "after_total_chars": 9438,
+          "delta_total_chars": -595
+        },
+        {
+          "key": "visible_cards",
+          "before_total_chars": 9046,
+          "after_total_chars": 8493,
+          "delta_total_chars": -553
+        },
+        {
+          "key": "last_assistant_message",
+          "before_total_chars": 4683,
+          "after_total_chars": 4180,
+          "delta_total_chars": -503
+        },
+        {
+          "key": "last_turn_search_summary",
+          "before_total_chars": 4945,
+          "after_total_chars": 4577,
+          "delta_total_chars": -368
+        },
+        {
+          "key": "capabilities",
+          "before_total_chars": 3640,
+          "after_total_chars": 3640,
+          "delta_total_chars": 0
+        },
+        {
+          "key": "current_filters",
+          "before_total_chars": 6725,
+          "after_total_chars": 6725,
+          "delta_total_chars": 0
+        }
+      ]
+    },
+    "comparison_synthesizer": {
+      "metrics": {
+        "calls": {
+          "before": 1,
+          "after": 1,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "stable_chars_total": {
+          "before": 589,
+          "after": 589,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "dynamic_chars_total": {
+          "before": 61,
+          "after": 61,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "full_chars_total": {
+          "before": 652,
+          "after": 652,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "effective_chars_total": {
+          "before": 652,
+          "after": 652,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "saved_chars_total": {
+          "before": 0,
+          "after": 0,
+          "delta": 0.0,
+          "delta_percent": null
+        },
+        "avg_dynamic_chars": {
+          "before": 61.0,
+          "after": 61.0,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "avg_full_chars": {
+          "before": 652.0,
+          "after": 652.0,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "avg_effective_chars": {
+          "before": 652.0,
+          "after": 652.0,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_dynamic_chars": {
+          "before": 61,
+          "after": 61,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_full_chars": {
+          "before": 652,
+          "after": 652,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_effective_chars": {
+          "before": 652,
+          "after": 652,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "bypass": 1
+        },
+        "after": {
+          "bypass": 1
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "focus_scope",
+          "before_total_chars": 4,
+          "after_total_chars": 4,
+          "delta_total_chars": 0
+        },
+        {
+          "key": "properties",
+          "before_total_chars": 2,
+          "after_total_chars": 2,
+          "delta_total_chars": 0
+        },
+        {
+          "key": "scores",
+          "before_total_chars": 2,
+          "after_total_chars": 2,
+          "delta_total_chars": 0
+        }
+      ]
+    },
+    "lead_scoring_evaluator": {
+      "metrics": {
+        "calls": {
+          "before": 28,
+          "after": 27,
+          "delta": -1.0,
+          "delta_percent": -3.57
+        },
+        "stable_chars_total": {
+          "before": 158956,
+          "after": 345033,
+          "delta": 186077.0,
+          "delta_percent": 117.06
+        },
+        "dynamic_chars_total": {
+          "before": 61020,
+          "after": 52887,
+          "delta": -8133.0,
+          "delta_percent": -13.33
+        },
+        "full_chars_total": {
+          "before": 220032,
+          "after": 397974,
+          "delta": 177942.0,
+          "delta_percent": 80.87
+        },
+        "effective_chars_total": {
+          "before": 220032,
+          "after": 52887,
+          "delta": -167145.0,
+          "delta_percent": -75.96
+        },
+        "saved_chars_total": {
+          "before": 0,
+          "after": 345087,
+          "delta": 345087.0,
+          "delta_percent": null
+        },
+        "avg_dynamic_chars": {
+          "before": 2179.29,
+          "after": 1958.78,
+          "delta": -220.51,
+          "delta_percent": -10.12
+        },
+        "avg_full_chars": {
+          "before": 7858.29,
+          "after": 14739.78,
+          "delta": 6881.49,
+          "delta_percent": 87.57
+        },
+        "avg_effective_chars": {
+          "before": 7858.29,
+          "after": 1958.78,
+          "delta": -5899.51,
+          "delta_percent": -75.07
+        },
+        "p95_dynamic_chars": {
+          "before": 4031,
+          "after": 3134,
+          "delta": -897.0,
+          "delta_percent": -22.25
+        },
+        "p95_full_chars": {
+          "before": 9710,
+          "after": 15915,
+          "delta": 6205.0,
+          "delta_percent": 63.9
+        },
+        "p95_effective_chars": {
+          "before": 9710,
+          "after": 3134,
+          "delta": -6576.0,
+          "delta_percent": -67.72
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "bypass": 28
+        },
+        "after": {
+          "hit": 27
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "messages",
+          "before_total_chars": 19529,
+          "after_total_chars": 12699,
+          "delta_total_chars": -6830
+        },
+        {
+          "key": "timestamp_utc",
+          "before_total_chars": 0,
+          "after_total_chars": 918,
+          "delta_total_chars": 918
+        },
+        {
+          "key": "completed_fields",
+          "before_total_chars": 891,
+          "after_total_chars": 0,
+          "delta_total_chars": -891
+        },
+        {
+          "key": "last_turn_search_summary",
+          "before_total_chars": 4945,
+          "after_total_chars": 4178,
+          "delta_total_chars": -767
+        },
+        {
+          "key": "lead_extracted",
+          "before_total_chars": 6549,
+          "after_total_chars": 6193,
+          "delta_total_chars": -356
+        },
+        {
+          "key": "pending_fields",
+          "before_total_chars": 3365,
+          "after_total_chars": 3675,
+          "delta_total_chars": 310
+        },
+        {
+          "key": "required_fields",
+          "before_total_chars": 4200,
+          "after_total_chars": 4050,
+          "delta_total_chars": -150
+        },
+        {
+          "key": "criteria_scores",
+          "before_total_chars": 2604,
+          "after_total_chars": 2511,
+          "delta_total_chars": -93
+        }
+      ]
+    },
+    "memory_entity_extractor": {
+      "metrics": {
+        "calls": {
+          "before": 4,
+          "after": 3,
+          "delta": -1.0,
+          "delta_percent": -25.0
+        },
+        "stable_chars_total": {
+          "before": 15028,
+          "after": 11271,
+          "delta": -3757.0,
+          "delta_percent": -25.0
+        },
+        "dynamic_chars_total": {
+          "before": 5320,
+          "after": 3686,
+          "delta": -1634.0,
+          "delta_percent": -30.71
+        },
+        "full_chars_total": {
+          "before": 20356,
+          "after": 14963,
+          "delta": -5393.0,
+          "delta_percent": -26.49
+        },
+        "effective_chars_total": {
+          "before": 20356,
+          "after": 14963,
+          "delta": -5393.0,
+          "delta_percent": -26.49
+        },
+        "saved_chars_total": {
+          "before": 0,
+          "after": 0,
+          "delta": 0.0,
+          "delta_percent": null
+        },
+        "avg_dynamic_chars": {
+          "before": 1330.0,
+          "after": 1228.67,
+          "delta": -101.33,
+          "delta_percent": -7.62
+        },
+        "avg_full_chars": {
+          "before": 5089.0,
+          "after": 4987.67,
+          "delta": -101.33,
+          "delta_percent": -1.99
+        },
+        "avg_effective_chars": {
+          "before": 5089.0,
+          "after": 4987.67,
+          "delta": -101.33,
+          "delta_percent": -1.99
+        },
+        "p95_dynamic_chars": {
+          "before": 1755,
+          "after": 1546,
+          "delta": -209.0,
+          "delta_percent": -11.91
+        },
+        "p95_full_chars": {
+          "before": 5514,
+          "after": 5305,
+          "delta": -209.0,
+          "delta_percent": -3.79
+        },
+        "p95_effective_chars": {
+          "before": 5514,
+          "after": 5305,
+          "delta": -209.0,
+          "delta_percent": -3.79
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "bypass": 4
+        },
+        "after": {
+          "bypass": 3
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "messages",
+          "before_total_chars": 3210,
+          "after_total_chars": 2108,
+          "delta_total_chars": -1102
+        },
+        {
+          "key": "canonical_fields",
+          "before_total_chars": 1023,
+          "after_total_chars": 746,
+          "delta_total_chars": -277
+        },
+        {
+          "key": "message",
+          "before_total_chars": 310,
+          "after_total_chars": 221,
+          "delta_total_chars": -89
+        },
+        {
+          "key": "existing_entities",
+          "before_total_chars": 143,
+          "after_total_chars": 141,
+          "delta_total_chars": -2
+        }
+      ]
+    },
+    "synthesis_prompt": {
+      "metrics": {
+        "calls": {
+          "before": 28,
+          "after": 27,
+          "delta": -1.0,
+          "delta_percent": -3.57
+        },
+        "stable_chars_total": {
+          "before": 256060,
+          "after": 246915,
+          "delta": -9145.0,
+          "delta_percent": -3.57
+        },
+        "dynamic_chars_total": {
+          "before": 498275,
+          "after": 475676,
+          "delta": -22599.0,
+          "delta_percent": -4.54
+        },
+        "full_chars_total": {
+          "before": 552169,
+          "after": 532134,
+          "delta": -20035.0,
+          "delta_percent": -3.63
+        },
+        "effective_chars_total": {
+          "before": 498276,
+          "after": 475676,
+          "delta": -22600.0,
+          "delta_percent": -4.54
+        },
+        "saved_chars_total": {
+          "before": 53893,
+          "after": 56458,
+          "delta": 2565.0,
+          "delta_percent": 4.76
+        },
+        "avg_dynamic_chars": {
+          "before": 17795.54,
+          "after": 17617.63,
+          "delta": -177.91,
+          "delta_percent": -1.0
+        },
+        "avg_full_chars": {
+          "before": 19720.32,
+          "after": 19708.67,
+          "delta": -11.65,
+          "delta_percent": -0.06
+        },
+        "avg_effective_chars": {
+          "before": 17795.57,
+          "after": 17617.63,
+          "delta": -177.94,
+          "delta_percent": -1.0
+        },
+        "p95_dynamic_chars": {
+          "before": 20021,
+          "after": 20021,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_full_chars": {
+          "before": 20022,
+          "after": 20022,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_effective_chars": {
+          "before": 20021,
+          "after": 20021,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "hit": 27,
+          "miss_created": 1
+        },
+        "after": {
+          "hit": 27
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "inventory_preview",
+          "before_total_chars": 47561,
+          "after_total_chars": 42390,
+          "delta_total_chars": -5171
+        },
+        {
+          "key": "last_search_results_preview",
+          "before_total_chars": 47561,
+          "after_total_chars": 42390,
+          "delta_total_chars": -5171
+        },
+        {
+          "key": "turn_outputs",
+          "before_total_chars": 26212,
+          "after_total_chars": 22666,
+          "delta_total_chars": -3546
+        },
+        {
+          "key": "displayed_cards",
+          "before_total_chars": 19843,
+          "after_total_chars": 18107,
+          "delta_total_chars": -1736
+        },
+        {
+          "key": "turn_analysis",
+          "before_total_chars": 13205,
+          "after_total_chars": 11828,
+          "delta_total_chars": -1377
+        },
+        {
+          "key": "recent_messages",
+          "before_total_chars": 10202,
+          "after_total_chars": 9259,
+          "delta_total_chars": -943
+        },
+        {
+          "key": "lead_advisor",
+          "before_total_chars": 23692,
+          "after_total_chars": 22764,
+          "delta_total_chars": -928
+        },
+        {
+          "key": "last_mentioned",
+          "before_total_chars": 5335,
+          "after_total_chars": 4580,
+          "delta_total_chars": -755
+        }
+      ]
+    },
+    "text_to_sql": {
+      "metrics": {
+        "calls": {
+          "before": 27,
+          "after": 26,
+          "delta": -1.0,
+          "delta_percent": -3.7
+        },
+        "stable_chars_total": {
+          "before": 66609,
+          "after": 64142,
+          "delta": -2467.0,
+          "delta_percent": -3.7
+        },
+        "dynamic_chars_total": {
+          "before": 9695,
+          "after": 9342,
+          "delta": -353.0,
+          "delta_percent": -3.64
+        },
+        "full_chars_total": {
+          "before": 76358,
+          "after": 73536,
+          "delta": -2822.0,
+          "delta_percent": -3.7
+        },
+        "effective_chars_total": {
+          "before": 76358,
+          "after": 73536,
+          "delta": -2822.0,
+          "delta_percent": -3.7
+        },
+        "saved_chars_total": {
+          "before": 0,
+          "after": 0,
+          "delta": 0.0,
+          "delta_percent": null
+        },
+        "avg_dynamic_chars": {
+          "before": 359.07,
+          "after": 359.31,
+          "delta": 0.24,
+          "delta_percent": 0.07
+        },
+        "avg_full_chars": {
+          "before": 2828.07,
+          "after": 2828.31,
+          "delta": 0.24,
+          "delta_percent": 0.01
+        },
+        "avg_effective_chars": {
+          "before": 2828.07,
+          "after": 2828.31,
+          "delta": 0.24,
+          "delta_percent": 0.01
+        },
+        "p95_dynamic_chars": {
+          "before": 382,
+          "after": 382,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_full_chars": {
+          "before": 2851,
+          "after": 2851,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        },
+        "p95_effective_chars": {
+          "before": 2851,
+          "after": 2851,
+          "delta": 0.0,
+          "delta_percent": 0.0
+        }
+      },
+      "cache_status_counts": {
+        "before": {
+          "bypass": 27
+        },
+        "after": {
+          "bypass": 26
+        }
+      },
+      "top_level_keys": [
+        {
+          "key": "search_filters",
+          "before_total_chars": 6914,
+          "after_total_chars": 6664,
+          "delta_total_chars": -250
+        },
+        {
+          "key": "client_id",
+          "before_total_chars": 1026,
+          "after_total_chars": 988,
+          "delta_total_chars": -38
+        }
+      ]
+    }
+  }
+}

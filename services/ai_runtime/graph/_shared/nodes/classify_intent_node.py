@@ -9,6 +9,10 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.contracts import IntentDefinition
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
+from services.ai_runtime.graph._shared.prompt_context import (
+    summarize_message_for_prompt,
+    summarize_turn_outputs_for_prompt,
+)
 
 INTERNAL_INTENTS = {"focus_property"}
 COMPARE_SIGNAL_PATTERN = re.compile(
@@ -60,10 +64,10 @@ async def classify_intent(state: dict[str, Any], deps: GraphDependencies) -> dic
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "message": graph_state.messages[-1].model_dump(mode="json"),
+            "message": summarize_message_for_prompt(graph_state.messages[-1]),
             "capabilities": graph_state.capabilities,
             "resolved_references": graph_state.resolved_references,
-            "turn_outputs": graph_state.turn_outputs,
+            "turn_outputs": summarize_turn_outputs_for_prompt(graph_state.turn_outputs),
         },
     )
     detected = await deps.llm.detect_intents(prompt)

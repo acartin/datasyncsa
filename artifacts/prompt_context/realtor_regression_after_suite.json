@@ -1,0 +1,1586 @@
+{
+  "suite_id": "realtor_regression_suite",
+  "suite_type": "regression",
+  "client_id": "64f357a0-98eb-44f1-9f41-6e615ed26180",
+  "user_id": "context-audit-after-final",
+  "summary": {
+    "conversations_total": 11,
+    "turns_total": 28,
+    "turns_passed": 27,
+    "turns_failed": 1
+  },
+  "conversations": [
+    {
+      "id": "budget_scope_countrywide_reset",
+      "description": "Abrir el alcance a todo el pais no debe arrastrar Curridabat ni provincia previa.",
+      "tags": [
+        "regression",
+        "budget",
+        "scope_reset",
+        "geo",
+        "pack_search",
+        "canonical"
+      ],
+      "session_id": "1f85eb16-0916-49e8-8a9c-393332714810",
+      "conversation_id": "fd5aae03-6150-4f45-8bb3-3366bdbe367d",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Me gustaria ver casas en Heredia",
+          "answer": "Te muestro dos casas en Heredia: una tiene 2 habitaciones y la otra 3. ¿Cuál se ajusta más a lo que buscás?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "18ac4a2b-6638-47a8-bd99-5d472a085d67",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Dame detalles de la ultima",
+          "answer": "Perfecto, te referís a Venta Casas en condominio Heredia, Mercedes. Esta opción tiene 3 habitaciones, 2.5 baños, 131 m² y está en 172,000 USD. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "2763e497-b8db-40ac-bf3a-a3f8196a17ae",
+          "dialogue_act": "select_result",
+          "turn_output_types": [
+            "property_focus",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 3,
+          "user_text": "Cuantos estacionamientos tiene?",
+          "answer": "Las dos opciones que te mostré tienen 2 estacionamientos. Si querés, te cuento más detalles de la que te interese. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "706dfbbb-f301-4b02-9308-74f75c36b420",
+          "dialogue_act": "ask_detail",
+          "turn_output_types": [
+            "result_set_detail",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 3,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 4,
+          "user_text": "Y tienes algo similar en Curridabat?",
+          "answer": "Te muestro una casa en Curridabat con 3 habitaciones y 2.5 baños. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 1,
+          "render_mode": "cards",
+          "cards_mode": "single",
+          "trace_id": "b82663fd-c152-4b5d-9fe0-c92f1493ce25",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 4,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": [
+            "si no responde con resultados directos, al menos no debe contaminar el alcance nacional futuro con filtros viejos"
+          ]
+        },
+        {
+          "turn_index": 5,
+          "user_text": "Ando buscando algo de menos de 200,000",
+          "answer": "No encontré casas en Curridabat por menos de $200,000. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "6e03e982-7dfc-4c8e-9a25-630ee2dd3c56",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "search",
+            "search",
+            "scoring_eval"
+          ],
+          "search_match_scope": "none",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 4,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia",
+              "casas en Heredia, casas en Curridabat"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 6,
+          "user_text": "Buscame en todo el pais una casa con ese presupuesto",
+          "answer": "Te muestro dos casas en venta en todo el país, ambas por debajo de $200,000. Una está en Sabana Sur, Mata Redonda, por $98,000 y tiene 3 habitaciones y 2 baños. La otra está en El Roble de Alajuela, por $129,411, también con 3 habitaciones y 2 baños. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "28bf6b32-446e-4a96-a731-c6722e2155eb",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 5,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "presupuesto",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": 200000.0,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia",
+              "casas en Heredia, casas en Curridabat",
+              "casas en todo el pais"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": [
+            "debe limpiar la zona previa y abrir alcance nacional manteniendo solo el presupuesto"
+          ]
+        },
+        {
+          "turn_index": 7,
+          "user_text": "Si, en todo el pais",
+          "answer": "Te muestro dos casas en venta en todo el país, ambas por debajo de $200,000. Una está en Sabana Sur, Mata Redonda, por $98,000 y tiene 3 habitaciones y 2 baños. La otra está en El Roble de Alajuela, por $129,411, también con 3 habitaciones y 2 baños. ¿Podrías decirme tu nombre para poder darte más detalles?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "30b91794-4fb3-4c92-a0e3-4b3e0d57621b",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 6,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías decirme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "presupuesto",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": 200000.0,
+            "aprobacion": null,
+            "preferencias": [
+              "casas en Heredia",
+              "casas en Heredia, casas en Curridabat",
+              "casas en todo el pais"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 6.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": [
+            "la confirmacion no debe reintroducir filtros geograficos viejos"
+          ]
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "new_search_drops_old_constraints",
+      "description": "Una nueva busqueda debe soltar filtros viejos de habitaciones y estacionamientos.",
+      "tags": [
+        "regression",
+        "new_search",
+        "filters_reset",
+        "pack_search",
+        "canonical"
+      ],
+      "session_id": "814accdd-6ed6-4317-840d-f9d2fc4966c6",
+      "conversation_id": "7ca99acc-fd4a-4d3a-8d3b-6168910794be",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Quiero una casa en Heredia con dos habitaciones y dos estacionamientos",
+          "answer": "Encontré dos opciones en Heredia que podrían interesarte. La primera tiene 2 habitaciones y 2 estacionamientos, y la segunda tiene 3 habitaciones y también 2 estacionamientos. ¿Te gustaría ver más detalles de alguna en particular?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "ff6369ee-4484-46b6-a7e9-fd8697e884b8",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "relaxed",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con dos habitaciones y dos estacionamientos"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Ahora mejor busco un lote en Guanacaste",
+          "answer": "No encontré lotes disponibles en Guanacaste con los criterios que me indicaste. ¿Te gustaría que ampliemos la búsqueda a otras provincias o que busquemos otro tipo de propiedad?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "927d71f2-9305-4a80-a18f-fc52cf8d2952",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "search",
+            "search",
+            "scoring_eval"
+          ],
+          "search_match_scope": "none",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con dos habitaciones y dos estacionamientos",
+              "lote en Guanacaste"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 3.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "greeting_only_does_not_force_name",
+      "description": "Un saludo puro no debe disparar captura ni exposiciones utiles.",
+      "tags": [
+        "mapa_momentos",
+        "greeting",
+        "lead_capture",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "26088cd8-7561-4415-b1b6-4fa58153780a",
+      "conversation_id": "a4630520-cc2d-4d41-9950-f4634b6f3d28",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Hola",
+          "answer": "Hola. ¿En qué te puedo ayudar hoy?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "7ef8cfb9-6ff4-438e-8abb-0b75fe83f6bd",
+          "dialogue_act": "small_talk",
+          "turn_output_types": [
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 0,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 1.0,
+            "apertura": 1.0,
+            "match": 1.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "first_useful_exposure_does_not_ask_name_yet",
+      "description": "La primera muestra util de resultados puede orientar, pero no debe iniciar captura de lead.",
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "first_exposure",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "0a81c55b-154b-499c-8d7f-83c5a351fc5c",
+      "conversation_id": "30a3a06d-b271-4e9b-93db-d57368152cfe",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y tiene un precio de $172,000, mientras que la segunda está en San Pablo, en el Condominio Rincón de Las Brisas, y cuesta $180,000. ¿Alguna de estas te llama la atención o te gustaría ver más opciones?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "bc15ec8a-686f-4c94-824c-e2372b38fb92",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "second_useful_exposure_unlocks_name_capture",
+      "description": "En la segunda muestra util ya se puede pedir nombre, pero con una sola pregunta total.",
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "second_exposure",
+        "single_question",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "72d146b6-32b9-4d5e-944a-ae4d859b024f",
+      "conversation_id": "1fced554-1367-478d-81f3-e0970561748b",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Busco una casa en Heredia con 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. Una está en Mercedes y la otra en San Pablo. ¿Te gustaría ver más detalles de alguna en particular?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "3fd6c61b-c28f-43f7-a691-7da5a18a8c3b",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Cuantos baños tiene la primera?",
+          "answer": "La primera opción, Venta Casas en condominio Heredia, Mercedes, tiene 2.5 baños. ¿Podrías indicarme tu nombre para poder darte más detalles?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "cd99ef55-faab-43fe-970e-2c401d013fe5",
+          "dialogue_act": "select_result",
+          "turn_output_types": [
+            "property_focus",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías indicarme tu nombre para poder darte más detalles?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "ambiguous_name_statement_is_captured",
+      "description": "El patron corto 'con Nombre Apellido' debe guardarse aunque el sistema aun no haya pedido el nombre.",
+      "tags": [
+        "mapa_momentos",
+        "nombre",
+        "memory_capture",
+        "regression",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "e112173b-d94f-46bb-be3e-cb4477af7e6e",
+      "conversation_id": "0dd81227-b2f4-4611-9f91-2354f843c2f0",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Busco una casa en Heredia con 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y tiene 2.5 baños, y la segunda está en San Pablo y también tiene 2.5 baños. ¿Te gustaría ver más detalles de alguna de ellas?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "2794ba0c-f708-44ec-be2c-2851795890b0",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Con Alvaro Cartin",
+          "answer": "Entiendo que buscás una casa en Heredia con 3 habitaciones. Ya te mostré dos opciones que cumplen con eso. ¿Te gustaría que profundicemos en alguna de ellas o preferís que busquemos otras alternativas?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "fc4a1178-e62c-4f4b-86f1-cbcca58ba5be",
+          "dialogue_act": "lead_capture",
+          "turn_output_types": [
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "nombre",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": "Alvaro Cartin",
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": false,
+          "issues": [
+            "la respuesta no contiene ninguna de las pistas esperadas: ['alvaro', 'alvaro']"
+          ],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": false
+    },
+    {
+      "id": "budget_after_viewing_context_is_captured",
+      "description": "Si el usuario aporta presupuesto despues de ver opciones, debe quedar capturado aunque no se abra otra pregunta.",
+      "tags": [
+        "mapa_momentos",
+        "presupuesto",
+        "scoring_capture",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "95af242e-216d-4541-a7cc-6024d76a55b5",
+      "conversation_id": "323ec9fe-c3b7-4c17-b117-203d89bb4ffe",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y tiene un precio de $172,000, mientras que la segunda está en San Pablo por $180,000. ¿Alguna de estas te llama la atención?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "5a63f966-f2de-43b8-890a-b93e1f018d95",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Mi presupuesto ronda entre 130 mil y 150 mil",
+          "answer": "No encontré casas en Heredia con 3 habitaciones entre $130,000 y $150,000. Sin embargo, ajusté un poco la búsqueda y te muestro dos opciones que podrían interesarte. La primera está en Mercedes por $172,000 y la segunda en San Pablo por $180,000. ¿Con quién tengo el gusto?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "gallery",
+          "trace_id": "0ce3ecfa-04d2-475b-95f0-7b9c633e7b31",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "search",
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "relaxed",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Con quién tengo el gusto?",
+          "lead_completed_fields": [
+            "presupuesto",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": 150000.0,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "financing_question_triggers_approval_after_name_is_known",
+      "description": "Una vez desbloqueada la captura y con nombre conocido, la pregunta de cuota debe abrir aprobacion financiera.",
+      "tags": [
+        "mapa_momentos",
+        "aprobacion",
+        "financing",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "e3529b58-7c51-4ece-9b58-96e18290841c",
+      "conversation_id": "fbed80e5-d7e7-48d0-b7c0-12690625107b",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes por $172,000 y la segunda en San Pablo por $180,000. ¿Alguna de estas te llama la atención o te gustaría ver más opciones?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "f01ad393-3b5e-4488-aafa-7e7108cf08db",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Cuantos baños tiene la primera?",
+          "answer": "La primera opción, Venta Casas en condominio Heredia, Mercedes, tiene 2.5 baños. ¿Podrías indicarme tu nombre para poder continuar?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "eaa7fb41-db29-49bc-8114-c2b03824199c",
+          "dialogue_act": "select_result",
+          "turn_output_types": [
+            "property_focus",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías indicarme tu nombre para poder continuar?",
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 3,
+          "user_text": "Me llamo Alvaro Cartin",
+          "answer": "¡Hola Álvaro! Ya tengo tu nombre.\n\nTe mostré dos casas en Heredia con 3 habitaciones:\n1.  En Mercedes, por $172,000 y tiene 2.5 baños.\n2.  En San Pablo, por $180,000 y también tiene 2.5 baños.\n\n¿Te gustaría ver más detalles de alguna de estas o prefieres que busquemos otras opciones?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "b97622dc-e37d-491b-96c4-90ee3a119d8f",
+          "dialogue_act": "lead_capture",
+          "turn_output_types": [
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "nombre",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": "Alvaro Cartin",
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 4,
+          "user_text": "Mi presupuesto ronda entre 130 mil y 150 mil",
+          "answer": "Entiendo, Álvaro. Ajusté la búsqueda para que el presupuesto sea entre $130,000 y $150,000, manteniendo las 3 habitaciones en Heredia. No encontré opciones exactas dentro de ese rango, pero sí te muestro dos casas que se acercan. Una está en Mercedes por $172,000 y la otra en San Pablo por $180,000. ¿Cuentas con algún tipo de aprobación hipotecaria o precalificación?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "gallery",
+          "trace_id": "876c93f1-5c6a-436c-84e3-cb39d639eda8",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "search",
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "relaxed",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 3,
+          "lead_field_to_ask": "aprobacion",
+          "lead_question_to_ask": "¿Cuentas con algún tipo de aprobación hipotecaria o precalificación?",
+          "lead_completed_fields": [
+            "nombre",
+            "presupuesto",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": "Alvaro Cartin",
+            "email": null,
+            "telefono": null,
+            "presupuesto": 150000.0,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 6.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 5,
+          "user_text": "Si la financio, cuanto seria la cuota aproximada?",
+          "answer": "Para darte una idea de la cuota aproximada, necesitaría saber el plazo del financiamiento y si tenés alguna precalificación o aprobación hipotecaria. ¿Cuentas con algún tipo de aprobación hipotecaria o precalificación?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "e880dead-09b9-4b4e-8084-b64d1763fa63",
+          "dialogue_act": "calculate",
+          "turn_output_types": [
+            "financial_calc",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 3,
+          "lead_field_to_ask": "aprobacion",
+          "lead_question_to_ask": "¿Cuentas con algún tipo de aprobación hipotecaria o precalificación?",
+          "lead_completed_fields": [
+            "nombre",
+            "presupuesto",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": "Alvaro Cartin",
+            "email": null,
+            "telefono": null,
+            "presupuesto": 150000.0,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 6.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "timeline_signal_should_raise_time_score",
+      "description": "Una urgencia temporal explicita debe reflejarse en el score temporal aunque no dispare captura ese mismo turno.",
+      "tags": [
+        "mapa_momentos",
+        "plazo",
+        "urgencia",
+        "scoring",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "5ac76cad-60fe-4b99-a4ae-9f235e8246c2",
+      "conversation_id": "c01612e8-d539-4ce0-bfe6-e64d5fd44e1e",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Estoy buscando una casa en Heredia de 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y tiene un precio de $172,000, mientras que la segunda está en San Pablo por $180,000. ¿Te gustaría ver más detalles de alguna de ellas?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "be0de62a-563d-4b40-87bb-eb63e1fcee5c",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Podria mudarme este mes si aparece algo bueno",
+          "answer": "Entiendo. Si aparece algo que te encante, podemos agilizar el proceso. Te sigo mostrando opciones en Heredia con 3 habitaciones. ¿Con quién tengo el gusto?",
+          "components_count": 4,
+          "render_mode": "cards",
+          "cards_mode": "gallery",
+          "trace_id": "c2ceab7d-ae1c-412b-bbb6-63335c895ce3",
+          "dialogue_act": "refine_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Con quién tengo el gusto?",
+          "lead_completed_fields": [
+            "fecha_preferida",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": "este mes",
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 6.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": [
+            "si este turno falla, el scoring temporal sigue subestimando una urgencia bastante explicita"
+          ]
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "negative_appointment_intent_must_not_push_tipo_cita",
+      "description": "Si el usuario niega agendar, appointment_intent debe quedar negativo y no debe proponerse tipo de cita.",
+      "tags": [
+        "mapa_momentos",
+        "appointment",
+        "negative_intent",
+        "guardrail",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "8870c088-3dce-426f-8876-70ccfcf1c680",
+      "conversation_id": "00b606bb-9cc3-42a0-9ab2-14fbcc034af7",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Busco una casa en Heredia con 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y cuesta $172,000, y la segunda está en San Pablo por $180,000. ¿Alguna de estas te llama la atención o querés ver más opciones?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "8836b5d9-e0f3-42ad-9dfa-fcfff75df4ef",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "No quiero agendar todavia, solo estoy comparando",
+          "answer": "Entendido. Si lo vemos por espacio y parqueo, la de Heredia sale mejor parada. Si lo tuyo es ubicación caminable, la de San Pedro gana terreno. ¿Querés que sigamos comparando o te muestro otras opciones?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "a741f4dd-ff34-4995-880d-a9b0dd86fb1a",
+          "dialogue_act": "compare",
+          "turn_output_types": [
+            "comparison",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "3 habitaciones en Heredia"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "negative"
+          },
+          "lead_criteria_scores": {
+            "intencion": 2.0,
+            "apertura": 7.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    },
+    {
+      "id": "property_selection_unlocks_name_on_second_exposure",
+      "description": "Cuando el usuario ya quiere visitar en la segunda exposicion, sube la intencion pero sigue siendo prioridad pedir nombre.",
+      "tags": [
+        "mapa_momentos",
+        "high_intent",
+        "identity_priority",
+        "tipo_cita",
+        "pack_moment_map",
+        "canonical"
+      ],
+      "session_id": "04c2cb47-7b3b-48f5-b343-181eb33a996f",
+      "conversation_id": "424b792d-3472-48f7-b098-19735602090b",
+      "turns": [
+        {
+          "turn_index": 1,
+          "user_text": "Busco una casa en Heredia con 3 habitaciones",
+          "answer": "Te muestro dos casas en Heredia con 3 habitaciones. La primera está en Mercedes y tiene un precio de $172,000, mientras que la segunda está en San Pablo por $180,000. ¿Alguna de estas te llama la atención?",
+          "components_count": 2,
+          "render_mode": "cards",
+          "cards_mode": "spotlight",
+          "trace_id": "c9b84148-8ede-4c32-8da0-0a08d12ed40c",
+          "dialogue_act": "new_search",
+          "turn_output_types": [
+            "search",
+            "render_cards",
+            "scoring_eval"
+          ],
+          "search_match_scope": "exact",
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": false,
+          "lead_capture_exposure_count": 1,
+          "lead_field_to_ask": null,
+          "lead_question_to_ask": null,
+          "lead_completed_fields": [
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": null,
+            "appointment_intent": "uncertain"
+          },
+          "lead_criteria_scores": {
+            "intencion": 5.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        },
+        {
+          "turn_index": 2,
+          "user_text": "Quiero visitar la primera",
+          "answer": "Perfecto, te referís a la casa en Mercedes. Tiene 3 habitaciones, 2.5 baños y mide 131 m². ¿Podrías indicarme tu nombre para agendar la visita?",
+          "components_count": 0,
+          "render_mode": null,
+          "cards_mode": null,
+          "trace_id": "d25a20f0-39f0-4ca1-9421-0724393721de",
+          "dialogue_act": "select_result",
+          "turn_output_types": [
+            "property_focus",
+            "scoring_eval"
+          ],
+          "search_match_scope": null,
+          "search_filters": null,
+          "effective_search_filters": null,
+          "lead_should_ask": true,
+          "lead_capture_exposure_count": 2,
+          "lead_field_to_ask": "nombre",
+          "lead_question_to_ask": "¿Podrías indicarme tu nombre para agendar la visita?",
+          "lead_completed_fields": [
+            "tipo_cita",
+            "preferencias",
+            "appointment_intent"
+          ],
+          "lead_extracted": {
+            "nombre": null,
+            "email": null,
+            "telefono": null,
+            "presupuesto": null,
+            "aprobacion": null,
+            "preferencias": [
+              "casa en Heredia con 3 habitaciones"
+            ],
+            "fecha_preferida": null,
+            "tipo_cita": "visit",
+            "appointment_intent": "positive"
+          },
+          "lead_criteria_scores": {
+            "intencion": 8.0,
+            "apertura": 8.0,
+            "match": 8.0,
+            "plazo": 1.0,
+            "solvencia": 1.0
+          },
+          "passed": true,
+          "issues": [],
+          "manual_review_focus": []
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

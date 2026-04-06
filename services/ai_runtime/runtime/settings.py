@@ -17,7 +17,14 @@ class AISettings:
     mail_provider: str = os.getenv("AI_MAIL_PROVIDER", "placeholder")
     llm_provider: str = os.getenv("AI_LLM_PROVIDER", "auto")
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
-    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    llm_default_model: str = os.getenv(
+        "LLM_DEFAULT_MODEL",
+        os.getenv("LLM_MODEL", "gemini-2.5-flash-lite"),
+    )
+    llm_analyze_turn_model: str = os.getenv(
+        "LLM_ANALYZE_TURN_MODEL",
+        os.getenv("LLM_DEFAULT_MODEL", os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")),
+    )
     llm_timeout_seconds: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
     llm_context_cache_enabled: bool = os.getenv("LLM_CONTEXT_CACHE_ENABLED", "true").lower() == "true"
     llm_context_cache_ttl_seconds: int = int(os.getenv("LLM_CONTEXT_CACHE_TTL_SECONDS", "1800"))

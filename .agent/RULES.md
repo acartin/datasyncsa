@@ -224,5 +224,6 @@ Para tareas de alto impacto, dejar claro:
 - Si un prompt necesita ejemplos, entidades o capacidades del dominio, no pertenece a `_shared/prompts`. La duplicacion consciente por vertical es preferible a una abstraccion shared falsa.
 - Cada vertical debe poder agregarse o eliminarse sin romper la composicion semantica de los demas.
 - El codigo determinista solo cubre validacion, invariantes, seguridad, side effects y guardrails universales; no debe esconder politica de negocio.
+- Si una politica conversacional pasa de prompt/LLM a codigo, debe expresarse como abstraccion semantica de alto nivel y no como casuistica textual. La regla debe nombrar una categoria estable del negocio y cubrir multiples variaciones del lenguaje sin enumerarlas una por una.
 - No mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final.
 - Todo cambio de ownership de prompts o fronteras entre verticales debe quedar protegido por pruebas de composicion y desacople.

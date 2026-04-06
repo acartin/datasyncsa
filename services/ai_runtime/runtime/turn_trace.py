@@ -555,9 +555,6 @@ class TracingLLMPort:
         )
         return result
 
-    async def classify_reference(self, prompt: Any):
-        return await self._record_call("classify_reference", prompt, self.inner.classify_reference(prompt))
-
     async def analyze_turn(self, prompt: Any):
         return await self._record_call("analyze_turn", prompt, self.inner.analyze_turn(prompt))
 

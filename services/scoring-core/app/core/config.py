@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Gemini / LLM Configuration
     google_api_key: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    llm_model: str = os.getenv("LLM_DEFAULT_MODEL", os.getenv("LLM_MODEL", "gemini-2.5-flash-lite"))
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
     llm_timeout_secs: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))

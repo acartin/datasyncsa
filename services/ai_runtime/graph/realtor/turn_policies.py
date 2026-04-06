@@ -104,6 +104,10 @@ RELAXATION_CRITERIA_OPTION_PATTERN = re.compile(
     r"\b(criterio|criterios|filtro|filtros|otro criterio|otros criterios)\b",
     flags=re.IGNORECASE,
 )
+FINANCIAL_QUERY_PATTERN = re.compile(
+    r"\b(cuota|financi(?:o|ar|ado|ada|amiento)|prima|preaprob(?:acion|ación)?|hipoteca|tasa)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _normalize_value(value: Any) -> Any:
@@ -287,6 +291,8 @@ def derive_realtor_pending_decision(
         return None
 
     latest_message = graph_state.messages[-1].content
+    if _is_explicit_financial_query(latest_message):
+        return None
     selected_option = _extract_search_relaxation_option(latest_message)
     if selected_option == "price":
         return _build_search_relaxation_pending_decision(
@@ -444,6 +450,13 @@ def _assistant_requested_search_relaxation(graph_state: RealtorGraphState) -> bo
         NO_RESULTS_ASSISTANT_PATTERN.search(assistant_message)
         and RELAXATION_PROMPT_PATTERN.search(assistant_message)
     )
+
+
+def _is_explicit_financial_query(message: str) -> bool:
+    normalized = (message or "").strip()
+    if not normalized:
+        return False
+    return bool(FINANCIAL_QUERY_PATTERN.search(normalized))
 
 
 def _coerce_result_set_detail(

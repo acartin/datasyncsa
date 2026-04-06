@@ -4,7 +4,7 @@ Sandbox realtor para disparar el primer turno del grafo actual.
 
 Objetivo principal:
 - lanzar el grafo realtor
-- confirmar que entra por `resolve_references`
+- confirmar que entra por `analyze_turn`
 - recuperar la traza del turno desde ai-runtime
 
 Usos:
@@ -145,9 +145,8 @@ class RealtorGraphProbe:
     def _extract_first_node_events(trace_payload: dict[str, Any]) -> list[dict[str, Any]]:
         events = trace_payload.get("events", [])
         interesting = {
-            "resolve_references",
-            "after_resolve_references",
-            "classify_reference",
+            "analyze_turn",
+            "after_analyze_turn",
         }
         return [event for event in events if event.get("name") in interesting]
 
@@ -225,7 +224,7 @@ class RealtorGraphProbe:
 
         print()
         print("=" * 72)
-        print("MODO INTERACTIVO REALTOR FIRST-NODE PROBE")
+        print("MODO INTERACTIVO REALTOR ANALYZE-TURN PROBE")
         print("=" * 72)
         print(f"client_id: {self.client_id}")
         print(f"user_id: {self.user_id}")
@@ -248,7 +247,7 @@ class RealtorGraphProbe:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sandbox realtor para disparar el primer nodo del grafo actual.")
+    parser = argparse.ArgumentParser(description="Sandbox realtor para disparar el primer nodo real del grafo actual.")
     parser.add_argument("--query", default=DEFAULT_QUERY, help="Mensaje a enviar en el primer turno.")
     parser.add_argument("--interactive", action="store_true", help="Modo interactivo.")
     parser.add_argument(

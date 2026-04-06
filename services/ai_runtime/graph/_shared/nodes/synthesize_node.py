@@ -8,6 +8,15 @@ from typing import Any
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState, has_valid_lead_contact
+from services.ai_runtime.graph._shared.prompt_context import (
+    summarize_lead_advisor_for_prompt,
+    summarize_memory_for_prompt,
+    summarize_message_for_prompt,
+    summarize_messages_for_prompt,
+    summarize_properties_for_prompt,
+    summarize_property_for_prompt,
+    summarize_turn_outputs_for_prompt,
+)
 
 
 FIELD_QUESTIONS = {
@@ -45,41 +54,21 @@ _TRAILING_PLAIN_QUESTION_BLOCK = re.compile(r"\s*[^¿?!.][^?]*\?\s*$")
 
 
 def _serialize_messages(messages: list[Any], *, limit: int = 8) -> list[dict[str, Any]]:
-    serialized: list[dict[str, Any]] = []
-    for item in messages[-limit:]:
-        if hasattr(item, "model_dump"):
-            serialized.append(item.model_dump(mode="json"))
-        elif isinstance(item, dict):
-            serialized.append(dict(item))
-    return serialized
+    return summarize_messages_for_prompt(messages, limit=limit)
 
 
 def _serialize_property(item: Any) -> dict[str, Any] | None:
-    if item in (None, {}):
-        return None
-    if hasattr(item, "model_dump"):
-        return item.model_dump(mode="json")
-    if isinstance(item, dict):
-        return dict(item)
-    return None
+    return summarize_property_for_prompt(item)
 
 
 def _serialize_properties(items: list[Any], *, limit: int = 8) -> list[dict[str, Any]]:
-    payload: list[dict[str, Any]] = []
-    for item in items[:limit]:
-        serialized = _serialize_property(item)
-        if serialized:
-            payload.append(serialized)
-    return payload
+    return summarize_properties_for_prompt(items, limit=limit)
 
 
 def _last_assistant_message(messages: list[Any]) -> dict[str, Any] | None:
     for item in reversed(messages[:-1]):
         if getattr(item, "role", None) == "assistant":
-            if hasattr(item, "model_dump"):
-                return item.model_dump(mode="json")
-            if isinstance(item, dict):
-                return dict(item)
+            return summarize_message_for_prompt(item)
     return None
 
 
@@ -94,7 +83,10 @@ def _serialize_displayed_cards(graph_state: RealtorGraphState) -> list[dict[str,
         item = property_map.get(property_id)
         if not item or item.id in seen:
             continue
-        selected.append(item.model_dump(mode="json"))
+        serialized = summarize_property_for_prompt(item)
+        if not serialized:
+            continue
+        selected.append(serialized)
         seen.add(item.id)
     return selected
 
@@ -123,14 +115,14 @@ def _build_search_strategy(graph_state: RealtorGraphState) -> dict[str, Any] | N
 
 def _build_context(graph_state: BaseGraphState) -> dict[str, Any]:
     context: dict[str, Any] = {
-        "current_message": graph_state.messages[-1].model_dump(mode="json"),
+        "current_message": summarize_message_for_prompt(graph_state.messages[-1]),
         "recent_messages": _serialize_messages(graph_state.messages),
         "last_assistant_message": _last_assistant_message(graph_state.messages),
         "turn_analysis": graph_state.turn_analysis.model_dump(mode="json") if graph_state.turn_analysis else None,
-        "turn_outputs": graph_state.turn_outputs,
+        "turn_outputs": summarize_turn_outputs_for_prompt(graph_state.turn_outputs),
         "turn_output_types": [str(item.get("type")) for item in graph_state.turn_outputs],
-        "lead_advisor": graph_state.lead_advisor.model_dump(mode="json"),
-        "memory": graph_state.memory.model_dump(mode="json"),
+        "lead_advisor": summarize_lead_advisor_for_prompt(graph_state.lead_advisor),
+        "memory": summarize_memory_for_prompt(graph_state.memory),
         "render_mode": getattr(graph_state, "render_mode", None),
         "cards_mode": getattr(graph_state, "cards_mode", None),
         "capabilities": graph_state.capabilities,
@@ -195,6 +187,34 @@ def _ensure_sentence_ending(text: str) -> str:
     return f"{cleaned}."
 
 
+def _resolve_lead_prompt_for_synthesis(
+    *,
+    answer: str,
+    lead_should_ask: bool,
+    lead_field_to_ask: str | None,
+    lead_question_to_ask: str | None,
+    appointment_pending_contact: bool,
+    lead_name_known: bool,
+) -> tuple[str, str | None, str | None]:
+    resolved_answer = answer
+    forced_field_to_ask: str | None = None
+    if appointment_pending_contact and lead_name_known:
+        forced_field_to_ask = "contacto"
+        if _looks_like_appointment_confirmation(resolved_answer):
+            resolved_answer = "Perfecto, ya tengo la fecha y la hora. Para dejar la cita confirmada, compartime tu telefono o tu correo."
+    elif appointment_pending_contact and not lead_name_known and _looks_like_appointment_confirmation(resolved_answer):
+        resolved_answer = "Perfecto, puedo ayudarte a coordinar la visita de esa opcion."
+
+    field_to_ask = lead_field_to_ask if lead_should_ask and lead_field_to_ask else None
+    if forced_field_to_ask:
+        field_to_ask = forced_field_to_ask
+
+    question_to_ask = None
+    if field_to_ask:
+        question_to_ask = str(lead_question_to_ask or "").strip() or FIELD_QUESTIONS.get(field_to_ask)
+    return resolved_answer, field_to_ask, question_to_ask
+
+
 async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     """Render the final user-facing answer from structured turn context."""
 
@@ -227,34 +247,38 @@ async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str
         and not bool(graph_state.cita.confirmada)
         and not contact_ok
     )
-    forced_field_to_ask: str | None = None
     lead_name_known = bool(str(graph_state.lead_advisor.lead_extracted.nombre or "").strip())
-    if appointment_pending_contact and lead_name_known:
-        forced_field_to_ask = "contacto"
-        if _looks_like_appointment_confirmation(answer):
-            answer = "Perfecto, ya tengo la fecha y la hora. Para dejar la cita confirmada, compartime tu telefono o tu correo."
-    elif appointment_pending_contact and not lead_name_known and _looks_like_appointment_confirmation(answer):
-        answer = "Perfecto, puedo ayudarte a coordinar la visita de esa opcion."
-
-    field_to_ask = None
-    if graph_state.lead_advisor.should_ask and graph_state.lead_advisor.field_to_ask:
-        field_to_ask = graph_state.lead_advisor.field_to_ask
-    if forced_field_to_ask:
-        field_to_ask = forced_field_to_ask
+    answer, field_to_ask, question_to_ask = _resolve_lead_prompt_for_synthesis(
+        answer=answer,
+        lead_should_ask=bool(graph_state.lead_advisor.should_ask),
+        lead_field_to_ask=graph_state.lead_advisor.field_to_ask,
+        lead_question_to_ask=graph_state.lead_advisor.question_to_ask,
+        appointment_pending_contact=appointment_pending_contact,
+        lead_name_known=lead_name_known,
+    )
 
     if field_to_ask:
-        question = (
-            str(graph_state.lead_advisor.question_to_ask or "").strip()
-            or FIELD_QUESTIONS.get(field_to_ask)
-        )
-        if question:
+        if question_to_ask:
             answer_body = _strip_trailing_question_blocks(answer)
             if answer_body:
-                answer = f"{_ensure_sentence_ending(answer_body)} {question}".strip()
+                answer = f"{_ensure_sentence_ending(answer_body)} {question_to_ask}".strip()
             else:
-                answer = question
+                answer = question_to_ask
 
     messages = [*graph_state.messages, {"role": "assistant", "content": answer}]
+    lead_advisor = graph_state.lead_advisor
+    if (
+        bool(lead_advisor.should_ask) != bool(field_to_ask)
+        or lead_advisor.field_to_ask != field_to_ask
+        or str(lead_advisor.question_to_ask or "").strip() != str(question_to_ask or "").strip()
+    ):
+        lead_advisor = lead_advisor.model_copy(
+            update={
+                "should_ask": bool(field_to_ask),
+                "field_to_ask": field_to_ask,
+                "question_to_ask": question_to_ask,
+            }
+        )
     await deps.worker_dispatcher.fire_and_forget(
         "lead_worker",
         {
@@ -266,5 +290,6 @@ async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str
     return {
         "final_response": answer,
         "messages": messages,
+        "lead_advisor": lead_advisor.model_dump(mode="json"),
         "turn_outputs": [*graph_state.turn_outputs],
     }

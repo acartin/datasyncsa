@@ -9,6 +9,10 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.contracts import ConversationEntity, LeadExtracted
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
+from services.ai_runtime.graph._shared.prompt_context import (
+    summarize_message_for_prompt,
+    summarize_messages_for_prompt,
+)
 
 
 _MEMORY_SIGNAL_PATTERNS = (
@@ -37,8 +41,60 @@ _NAME_PREFIX_PATTERN = re.compile(
 )
 _SHORT_NAME_PATTERN = re.compile(
     r"^\s*(?:con|soy)\s+"
-    r"(?P<name>[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+){0,3})\s*[\.\!\?]?\s*$"
+    r"(?P<name>[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+){0,3})\s*[\.\!\?]?\s*$",
+    flags=re.IGNORECASE,
 )
+_PERSON_NAME_TOKEN_PATTERN = re.compile(r"^[A-Za-zÁÉÍÓÚÑáéíóúñ'`.-]+$")
+_SELF_IDENTIFICATION_MARKERS = (
+    "me llamo",
+    "mi nombre es",
+    "mi nombre",
+    "soy",
+)
+_SELF_IDENTIFICATION_BREAK_WORDS = {
+    "y",
+    "e",
+    "o",
+    "u",
+    "pero",
+    "porque",
+    "que",
+    "busco",
+    "buscando",
+    "quiero",
+    "necesito",
+    "ando",
+    "estoy",
+    "me",
+    "mi",
+    "para",
+    "por",
+    "con",
+}
+_SELF_IDENTIFICATION_LEADING_REJECT_WORDS = {
+    "de",
+    "del",
+    "la",
+    "las",
+    "el",
+    "los",
+    "en",
+    "un",
+    "una",
+}
+_SELF_IDENTIFICATION_ROLE_WORDS = {
+    "cliente",
+    "inversionista",
+    "agente",
+    "asesor",
+    "asesora",
+    "interesado",
+    "interesada",
+    "comprador",
+    "compradora",
+    "vendedor",
+    "vendedora",
+}
 
 _BASE_STRUCTURED_MEMORY_KEYS = {
     "nombre",
@@ -59,6 +115,10 @@ _BASE_STRUCTURED_MEMORY_KEYS = {
     "preferencias",
 }
 
+_POSITIVE_APPOINTMENT_INTENT_VALUES = {"1", "positive", "si", "sí", "true", "yes"}
+_NEGATIVE_APPOINTMENT_INTENT_VALUES = {"0", "false", "negative", "no"}
+_ALLOWED_APPOINTMENT_INTENT_VALUES = {"positive", "negative", "uncertain"}
+
 
 def _should_extract_memory(message: str) -> bool:
     normalized = (message or "").strip()
@@ -67,6 +127,8 @@ def _should_extract_memory(message: str) -> bool:
     if _EMAIL_PATTERN.search(normalized) or _PHONE_PATTERN.search(normalized):
         return True
     if _SHORT_NAME_PATTERN.search(normalized):
+        return True
+    if _extract_explicit_self_identification_name(normalized):
         return True
     lowered = normalized.lower()
     return any(re.search(pattern, lowered) for pattern in _MEMORY_SIGNAL_PATTERNS)
@@ -129,6 +191,55 @@ def _normalize_person_name(value: str | None) -> str | None:
     return cleaned
 
 
+def _extract_name_after_self_identification_marker(text: str) -> str | None:
+    remainder = text.lstrip(" ,:;-")
+    if not remainder:
+        return None
+
+    candidate_tokens: list[str] = []
+    for raw_token in remainder.split():
+        token = raw_token.strip(" ,.!?;:()[]{}\"'")
+        lowered = token.lower()
+        if not token:
+            if candidate_tokens:
+                break
+            continue
+        if lowered in _SELF_IDENTIFICATION_BREAK_WORDS:
+            break
+        if not _PERSON_NAME_TOKEN_PATTERN.fullmatch(token):
+            break
+        candidate_tokens.append(token)
+        if len(candidate_tokens) >= 4:
+            break
+
+    if not candidate_tokens:
+        return None
+    if candidate_tokens[0].lower() in _SELF_IDENTIFICATION_LEADING_REJECT_WORDS:
+        return None
+    if len(candidate_tokens) == 1 and candidate_tokens[0].lower() in _SELF_IDENTIFICATION_ROLE_WORDS:
+        return None
+    return _normalize_person_name(" ".join(candidate_tokens))
+
+
+def _extract_explicit_self_identification_name(message: str) -> str | None:
+    text = re.sub(r"\s+", " ", (message or "").strip())
+    if not text:
+        return None
+
+    lowered = text.lower()
+    for marker in _SELF_IDENTIFICATION_MARKERS:
+        search_start = 0
+        while True:
+            index = lowered.find(marker, search_start)
+            if index < 0:
+                break
+            candidate = _extract_name_after_self_identification_marker(text[index + len(marker) :])
+            if candidate:
+                return candidate
+            search_start = index + len(marker)
+    return None
+
+
 def _extract_name_fallback(message: str) -> str | None:
     text = (message or "").strip()
     if not text:
@@ -139,13 +250,40 @@ def _extract_name_fallback(message: str) -> str | None:
     short = _SHORT_NAME_PATTERN.search(text)
     if short:
         return _normalize_person_name(short.group("name"))
-    return None
+    return _extract_explicit_self_identification_name(text)
+
+
+def _normalize_appointment_intent(value: Any) -> str | None:
+    if value in (None, "", []):
+        return None
+    if isinstance(value, bool):
+        return "positive" if value else "negative"
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return None
+    if normalized in _POSITIVE_APPOINTMENT_INTENT_VALUES:
+        return "positive"
+    if normalized in _NEGATIVE_APPOINTMENT_INTENT_VALUES:
+        return "negative"
+    if normalized in _ALLOWED_APPOINTMENT_INTENT_VALUES:
+        return normalized
+    return "uncertain"
 
 
 def _merge_canonical_fields(current: LeadExtracted, payload: dict[str, Any]) -> LeadExtracted:
     merged = current.model_dump(mode="json")
+    negative_appointment_intent = False
     for key, value in payload.items():
-        if key not in merged or value in (None, "", []):
+        if key not in merged:
+            continue
+        if key == "appointment_intent":
+            normalized = _normalize_appointment_intent(value)
+            if normalized is None:
+                continue
+            merged[key] = normalized
+            negative_appointment_intent = normalized == "negative"
+            continue
+        if value in (None, "", []):
             continue
         if key == "presupuesto":
             coerced = _coerce_budget_value(value)
@@ -156,6 +294,8 @@ def _merge_canonical_fields(current: LeadExtracted, payload: dict[str, Any]) -> 
             merged[key] = list(dict.fromkeys([*merged.get(key, []), *[item for item in value if item]]))
             continue
         merged[key] = value
+    if negative_appointment_intent:
+        merged["tipo_cita"] = None
     return LeadExtracted.model_validate(merged)
 
 
@@ -211,10 +351,17 @@ async def capture_memory_entities(state: dict[str, Any], deps: GraphDependencies
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "message": graph_state.messages[-1].model_dump(mode="json"),
-            "messages": [message.model_dump(mode="json") for message in graph_state.messages[-6:]],
+            "message": summarize_message_for_prompt(graph_state.messages[-1]),
+            "messages": summarize_messages_for_prompt(graph_state.messages, limit=6),
             "canonical_fields": graph_state.lead_advisor.lead_extracted.model_dump(mode="json"),
-            "existing_entities": [entity.model_dump(mode="json") for entity in graph_state.memory.entities[-12:]],
+            "existing_entities": [
+                {
+                    key: entity.model_dump(mode="json").get(key)
+                    for key in ("key", "value", "status", "value_type", "source_turn")
+                    if entity.model_dump(mode="json").get(key) not in (None, "", [], {})
+                }
+                for entity in graph_state.memory.entities[-12:]
+            ],
         },
         include_tone=False,
     )

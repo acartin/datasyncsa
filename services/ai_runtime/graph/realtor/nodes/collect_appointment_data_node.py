@@ -8,6 +8,10 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState, has_valid_lead_contact
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.prompt_context import (
+    summarize_messages_for_prompt,
+    summarize_property_for_prompt,
+)
 
 
 async def collect_appointment_data(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
@@ -17,10 +21,13 @@ async def collect_appointment_data(state: dict[str, Any], deps: GraphDependencie
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "messages": [message.model_dump(mode="json") for message in graph_state.messages[-6:]],
+            "messages": summarize_messages_for_prompt(graph_state.messages, limit=6),
             "cita": graph_state.cita.model_dump(mode="json"),
             "resolved_references": graph_state.resolved_references,
-            "last_mentioned": graph_state.last_mentioned.model_dump(mode="json") if graph_state.last_mentioned else None,
+            "last_mentioned": summarize_property_for_prompt(
+                graph_state.last_mentioned,
+                include_description_excerpt=True,
+            ),
         },
     )
     extracted = await deps.llm.extract_appointment_fields(prompt)

@@ -11,11 +11,11 @@ Estado actual:
 
 ## Orden de lectura recomendado
 
-1. `services/ai_runtime/ARCHITECTURE.md`
+1. `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
 2. `services/ai_runtime/docs/graphs/README.md`
 3. `docs/AI_RUNTIME_API_CONTRACT.md`
 4. `docs/AI_RUNTIME_FILE_MAP.md`
-5. `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
+5. `services/ai_runtime/ARCHITECTURE.md`
 6. `docs/AI_RUNTIME_HYBRID_SCORING_MOMENTS.md`
 7. `docs/SCORING_CORE_BOUNDARY.md`
 8. `docs/SCORING_CORE_API_CONTRACT.md`
@@ -25,9 +25,11 @@ Estado actual:
 Si hay contradiccion:
 
 1. codigo ejecutable vigente
-2. `services/ai_runtime/ARCHITECTURE.md`
-3. `.agent/RULES.md`
-4. este indice y el resto de docs `AI_RUNTIME_*`
+2. `docs/AI_RUNTIME_PROMPT_RUNTIME.md` para prompts y carga desde DB
+3. builders/routers del grafo y diagramas vivos para topologia
+4. `services/ai_runtime/ARCHITECTURE.md` como overview
+5. `.agent/RULES.md`
+6. este indice y el resto de docs `AI_RUNTIME_*`
 
 ## Notas
 
@@ -37,4 +39,5 @@ Si hay contradiccion:
 - el runtime usa `flow` interno para seleccionar `grafo_realtor` o `grafo_basico`
 - los diagramas vivos del runtime se regeneran en `services/ai_runtime/docs/graphs/`
 - la consola de trazas por turno vive en `services/ai_runtime/web/turn_trace/` y el runtime expone `/api/v1/debug/turn-trace/`
-- `docs/AI_RUNTIME_PROMPT_RUNTIME.md` documenta la carga real desde DB: `planner_system`/`synthesizer_system` salen de `system_prompts` o `ai_system_prompts`, mientras `lead_ai_prompts` solo aporta `tone_prompt`
+- `docs/AI_RUNTIME_PROMPT_RUNTIME.md` documenta la carga real de prompts: los prompts semanticos core viven en codigo por vertical; `lead_ai_prompts` solo aporta `tone_prompt`
+- `services/ai_runtime/ARCHITECTURE.md` debe mantenerse como resumen operativo del runtime, no como inventario exhaustivo de prompts ni como sustituto del codigo

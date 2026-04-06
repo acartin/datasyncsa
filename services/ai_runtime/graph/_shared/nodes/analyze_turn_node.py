@@ -15,6 +15,7 @@ from services.ai_runtime.domain.contracts import (
 )
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState, SearchFilters
+from services.ai_runtime.graph._shared.prompt_context import summarize_message_for_prompt, summarize_messages_for_prompt
 from services.ai_runtime.graph.realtor.turn_policies import (
     REALTOR_INTERNAL_INTENTS,
     apply_realtor_turn_policies,
@@ -299,16 +300,16 @@ async def analyze_turn(state: dict[str, Any], deps: GraphDependencies) -> dict[s
                 "sqm_clean": item.features.sqm_clean,
             }
         )
-    recent_messages = [message.model_dump(mode="json") for message in graph_state.messages[-8:]]
+    recent_messages = summarize_messages_for_prompt(graph_state.messages, limit=8)
     prompt = compose(
         "analyze_turn",
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "message": graph_state.messages[-1].model_dump(mode="json"),
+            "message": summarize_message_for_prompt(graph_state.messages[-1]),
             "recent_messages": recent_messages,
             "last_assistant_message": next(
-                (message.model_dump(mode="json") for message in reversed(graph_state.messages[:-1]) if message.role == "assistant"),
+                (summarize_message_for_prompt(message) for message in reversed(graph_state.messages[:-1]) if message.role == "assistant"),
                 None,
             ),
             "last_turn_dialogue_act": graph_state.last_turn_dialogue_act,

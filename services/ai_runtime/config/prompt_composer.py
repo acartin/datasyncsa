@@ -16,12 +16,14 @@ from services.ai_runtime.graph._shared.prompts.lead_data_collector_prompt import
 from services.ai_runtime.graph._shared.prompts.memory_entity_extractor_prompt import (
     build_prompt as memory_entity_extractor_prompt,
 )
-from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
 from services.ai_runtime.graph.healthcare.prompts.analyze_turn_prompt import (
     build_prompt as healthcare_analyze_turn_prompt,
 )
 from services.ai_runtime.graph.healthcare.prompts.intent_detector_prompt import (
     build_prompt as healthcare_intent_detector_prompt,
+)
+from services.ai_runtime.graph.healthcare.prompts.synthesis_prompt import (
+    build_prompt as healthcare_synthesis_prompt,
 )
 from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
     build_prompt as insurance_analyze_turn_prompt,
@@ -29,8 +31,12 @@ from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
 from services.ai_runtime.graph.insurance.prompts.intent_detector_prompt import (
     build_prompt as insurance_intent_detector_prompt,
 )
+from services.ai_runtime.graph.insurance.prompts.synthesis_prompt import (
+    build_prompt as insurance_synthesis_prompt,
+)
 from services.ai_runtime.graph.legal.prompts.analyze_turn_prompt import build_prompt as legal_analyze_turn_prompt
 from services.ai_runtime.graph.legal.prompts.intent_detector_prompt import build_prompt as legal_intent_detector_prompt
+from services.ai_runtime.graph.legal.prompts.synthesis_prompt import build_prompt as legal_synthesis_prompt
 from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
     build_prompt as appointment_collector_prompt,
 )
@@ -45,12 +51,8 @@ from services.ai_runtime.graph.realtor.prompts.recommendation_prompt import buil
 from services.ai_runtime.graph.realtor.prompts.search_filter_extractor_prompt import (
     build_prompt as search_filter_extractor_prompt,
 )
+from services.ai_runtime.graph.realtor.prompts.synthesis_prompt import build_prompt as realtor_synthesis_prompt
 from services.ai_runtime.graph.realtor.prompts.text_to_sql_prompt import build_prompt as text_to_sql_prompt
-
-SYSTEM_NODE_SLUG_BY_TYPE = {
-    "plan_prompt": "planner_system",
-    "synthesis_prompt": "synthesizer_system",
-}
 
 CONTEXT_CACHEABLE_NODE_TYPES = {
     "analyze_turn",
@@ -64,18 +66,6 @@ DEFAULT_CONTEXT_CACHE_TTL_SECONDS = 1800
 
 def load_tone_prompt(tenant_config: TenantConfig) -> str:
     return tenant_config.tone_prompt.strip()
-
-
-def load_vertical_prompt(tenant_config: TenantConfig, vertical: Vertical, node_type: str) -> str:
-    system_node_slug = SYSTEM_NODE_SLUG_BY_TYPE.get(node_type)
-    if not system_node_slug:
-        raise ValueError(f"Unsupported vertical prompt node_type={node_type!r} for vertical={vertical!r}")
-    runtime_prompt = (tenant_config.system_prompts.get(system_node_slug) or "").strip()
-    if runtime_prompt:
-        return runtime_prompt
-    raise ValueError(
-        f"Missing system prompt slug={system_node_slug!r} for vertical={vertical!r} and client_id={tenant_config.client_id!r}"
-    )
 
 
 def _render_context(context: dict[str, Any]) -> str:
@@ -106,6 +96,18 @@ def load_intent_detector_prompt(vertical: Vertical) -> str:
     raise ValueError(f"Unsupported intent_detector vertical={vertical!r}")
 
 
+def load_synthesis_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_synthesis_prompt()
+    if vertical == "healthcare":
+        return healthcare_synthesis_prompt()
+    if vertical == "legal":
+        return legal_synthesis_prompt()
+    if vertical == "insurance":
+        return insurance_synthesis_prompt()
+    raise ValueError(f"Unsupported synthesis_prompt vertical={vertical!r}")
+
+
 def compose(
     node_type: str,
     tenant_config: TenantConfig,
@@ -117,12 +119,10 @@ def compose(
     """Compose stable instructions + runtime context as the canonical prompt payload."""
 
     tone = load_tone_prompt(tenant_config) if include_tone else ""
-    if node_type in {"plan_prompt", "synthesis_prompt"}:
-        base = load_vertical_prompt(tenant_config, vertical, node_type)
-    elif node_type == "analyze_turn":
+    if node_type == "analyze_turn":
         base = load_analyze_turn_prompt(vertical)
-    elif node_type == "reference_classifier":
-        base = reference_classifier_prompt()
+    elif node_type == "synthesis_prompt":
+        base = load_synthesis_prompt(vertical)
     elif node_type == "intent_detector":
         base = load_intent_detector_prompt(vertical)
     elif node_type == "lazy_condition_evaluator":

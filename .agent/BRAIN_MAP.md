@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-01T20:09:03Z`
+- Generated UTC: `2026-04-04T20:46:04Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-31`
-- Git commit: `5705281`
+- Git branch: `HETZNER-LOCAL-2026-04-03`
+- Git commit: `7779462`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -39,18 +39,18 @@
 
 ```text
 postgres
+admin-console-api
 redis
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
-datasyncsa-web
-portainer
-admin-console-api
-admin-console-web
-etl-docs
 etl-docs-worker
+portainer
 scoring-core
 scoring-core-worker
+admin-console-web
+datasyncsa-web
+etl-docs
 test-ui
 ```
 

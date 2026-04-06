@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from services.ai_runtime.domain.contracts import IntentDefinition, ReferenceDecision, TextToSQLResult, TurnAnalysis
+from services.ai_runtime.domain.contracts import IntentDefinition, TextToSQLResult, TurnAnalysis
 from services.ai_runtime.domain.prompts import PromptInput, PromptPayload
 from services.ai_runtime.runtime.settings import AISettings
 
@@ -134,9 +134,6 @@ class NoopLLMPort:
         del prompt
         return TurnAnalysis()
 
-    async def classify_reference(self, prompt: PromptInput) -> ReferenceDecision:
-        return ReferenceDecision(kind="NONE", confidence=1)
-
     async def detect_intents(self, prompt: PromptInput) -> list[IntentDefinition]:
         return []
 
@@ -182,7 +179,8 @@ class GeminiLLMPort:
         self,
         *,
         api_key: str,
-        model: str,
+        default_model: str,
+        analyze_turn_model: str | None = None,
         timeout_seconds: int = 30,
         context_cache_enabled: bool = True,
         context_cache_ttl_seconds: int = 1800,
@@ -198,7 +196,8 @@ class GeminiLLMPort:
 
         self._genai = genai
         self._api_key = api_key.strip()
-        self._model = model.strip()
+        self._default_model = default_model.strip()
+        self._analyze_turn_model = (analyze_turn_model or default_model).strip()
         self._timeout_seconds = max(1, int(timeout_seconds))
         self._client = self._genai.Client(api_key=self._api_key)
         self._context_cache_enabled = bool(context_cache_enabled)
@@ -208,9 +207,14 @@ class GeminiLLMPort:
         self._context_cache_failures: set[str] = set()
         self._context_cache_lock: asyncio.Lock | None = None
 
-    def _cache_registry_key(self, prompt: PromptPayload) -> str:
+    def _model_for_operation(self, operation_name: str) -> str:
+        if operation_name == "analyze_turn":
+            return self._analyze_turn_model
+        return self._default_model
+
+    def _cache_registry_key(self, prompt: PromptPayload, *, model: str) -> str:
         base_key = prompt.cache_key or hashlib.sha256(prompt.stable_prefix.encode("utf-8")).hexdigest()
-        return f"{self._model}:{prompt.cache_namespace or prompt.node_type}:{base_key}"
+        return f"{model}:{prompt.cache_namespace or prompt.node_type}:{base_key}"
 
     def _mark_cache_failure(self, registry_key: str, prompt: PromptPayload, exc: Exception) -> None:
         self._context_cache_failures.add(registry_key)
@@ -235,7 +239,7 @@ class GeminiLLMPort:
             return False
         return entry.expires_at <= datetime.now(tz=UTC) + timedelta(seconds=5)
 
-    async def _get_or_create_cached_content(self, prompt: PromptPayload) -> str | None:
+    async def _get_or_create_cached_content(self, prompt: PromptPayload, *, model: str) -> str | None:
         if not self._context_cache_enabled:
             prompt.record_cache(status="disabled")
             return None
@@ -250,11 +254,12 @@ class GeminiLLMPort:
             )
             return None
 
-        registry_key = self._cache_registry_key(prompt)
+        registry_key = self._cache_registry_key(prompt, model=model)
         prompt.record_cache(
             eligible=True,
             registry_key=registry_key,
             stable_chars=len(prompt.stable_prefix),
+            model=model,
         )
         if registry_key in self._context_cache_failures:
             prompt.record_cache(status="bypass", reason="previous_create_failed")
@@ -295,7 +300,7 @@ class GeminiLLMPort:
                 cached = await asyncio.wait_for(
                     asyncio.to_thread(
                         self._client.caches.create,
-                        model=self._model,
+                        model=model,
                         config=types.CreateCachedContentConfig(
                             display_name=f"{prompt.node_type}-{registry_key[-12:]}",
                             system_instruction=prompt.stable_prefix,
@@ -334,6 +339,7 @@ class GeminiLLMPort:
         self,
         prompt: PromptInput,
         *,
+        model: str,
         response_mime_type: str | None = None,
         temperature: float = 0.1,
         max_output_tokens: int = 1024,
@@ -349,8 +355,9 @@ class GeminiLLMPort:
         registry_key: str | None = None
         cached_content: str | None = None
         if isinstance(prompt, PromptPayload):
-            registry_key = self._cache_registry_key(prompt)
-            cached_content = await self._get_or_create_cached_content(prompt)
+            prompt.record_cache(model=model)
+            registry_key = self._cache_registry_key(prompt, model=model)
+            cached_content = await self._get_or_create_cached_content(prompt, model=model)
             if cached_content:
                 config = types.GenerateContentConfig(
                     temperature=temperature,
@@ -364,7 +371,7 @@ class GeminiLLMPort:
             response = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._client.models.generate_content,
-                    model=self._model,
+                    model=model,
                     contents=contents,
                     config=config,
                 ),
@@ -382,7 +389,7 @@ class GeminiLLMPort:
                 response = await asyncio.wait_for(
                     asyncio.to_thread(
                         self._client.models.generate_content,
-                        model=self._model,
+                        model=model,
                         contents=_coerce_prompt_text(prompt),
                         config=types.GenerateContentConfig(
                             temperature=temperature,
@@ -399,9 +406,17 @@ class GeminiLLMPort:
             raise ValueError("EMPTY_LLM_RESPONSE")
         return text
 
-    async def _generate_json(self, prompt: PromptInput, *, temperature: float = 0.1, max_output_tokens: int = 1024) -> Any:
+    async def _generate_json(
+        self,
+        prompt: PromptInput,
+        *,
+        model: str,
+        temperature: float = 0.1,
+        max_output_tokens: int = 1024,
+    ) -> Any:
         text = await self._generate_text(
             prompt,
+            model=model,
             response_mime_type="application/json",
             temperature=temperature,
             max_output_tokens=max_output_tokens,
@@ -411,17 +426,10 @@ class GeminiLLMPort:
             raise ValueError("INVALID_JSON_RESPONSE")
         return payload
 
-    async def classify_reference(self, prompt: PromptInput) -> ReferenceDecision:
-        try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=256)
-            return ReferenceDecision.model_validate(payload)
-        except Exception as exc:
-            logger.warning("LLM classify_reference fallback to NONE: %s", exc)
-            return ReferenceDecision(kind="NONE", confidence=0)
-
     async def analyze_turn(self, prompt: PromptInput) -> TurnAnalysis:
+        model = self._model_for_operation("analyze_turn")
         try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=1200)
+            payload = await self._generate_json(prompt, model=model, temperature=0.0, max_output_tokens=1200)
             payload = _normalize_turn_analysis_payload(payload)
             return TurnAnalysis.model_validate(payload)
         except Exception as exc:
@@ -429,8 +437,9 @@ class GeminiLLMPort:
             return TurnAnalysis()
 
     async def detect_intents(self, prompt: PromptInput) -> list[IntentDefinition]:
+        model = self._model_for_operation("detect_intents")
         try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=768)
+            payload = await self._generate_json(prompt, model=model, temperature=0.0, max_output_tokens=768)
         except Exception as exc:
             logger.warning("LLM detect_intents fallback to empty queue: %s", exc)
             return []
@@ -445,70 +454,79 @@ class GeminiLLMPort:
         return detected
 
     async def evaluate_lazy_condition(self, prompt: PromptInput) -> bool:
+        model = self._model_for_operation("evaluate_lazy_condition")
         try:
-            text = await self._generate_text(prompt, temperature=0.0, max_output_tokens=8)
+            text = await self._generate_text(prompt, model=model, temperature=0.0, max_output_tokens=8)
         except Exception as exc:
             logger.warning("LLM evaluate_lazy_condition fallback false: %s", exc)
             return False
         return _extract_bool(text)
 
     async def extract_search_filters(self, prompt: PromptInput) -> dict[str, object]:
+        model = self._model_for_operation("extract_search_filters")
         try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=768)
+            payload = await self._generate_json(prompt, model=model, temperature=0.0, max_output_tokens=768)
         except Exception as exc:
             logger.warning("LLM extract_search_filters fallback empty payload: %s", exc)
             return {}
         return payload if isinstance(payload, dict) else {}
 
     async def extract_memory_entities(self, prompt: PromptInput) -> dict[str, object]:
+        model = self._model_for_operation("extract_memory_entities")
         try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=768)
+            payload = await self._generate_json(prompt, model=model, temperature=0.0, max_output_tokens=768)
         except Exception as exc:
             logger.warning("LLM extract_memory_entities fallback empty payload: %s", exc)
             return {"canonical_fields": {}, "entities": []}
         return payload if isinstance(payload, dict) else {"canonical_fields": {}, "entities": []}
 
     async def synthesize_response(self, prompt: PromptInput) -> str:
+        model = self._model_for_operation("synthesize_response")
         try:
-            return await self._generate_text(prompt, temperature=0.3, max_output_tokens=900)
+            return await self._generate_text(prompt, model=model, temperature=0.3, max_output_tokens=900)
         except Exception as exc:
             logger.warning("LLM synthesize_response fallback generic answer: %s", exc)
             return "Puedo ayudarte con eso. Contame un poquito mas para darte una respuesta mas precisa."
 
     async def redact_recommendation(self, prompt: PromptInput) -> str:
+        model = self._model_for_operation("redact_recommendation")
         try:
-            return await self._generate_text(prompt, temperature=0.35, max_output_tokens=700)
+            return await self._generate_text(prompt, model=model, temperature=0.35, max_output_tokens=700)
         except Exception as exc:
             logger.warning("LLM redact_recommendation fallback generic answer: %s", exc)
             return "Te puedo recomendar una opcion cuando tenga mejor contexto de lo que buscas."
 
     async def translate_text_to_sql(self, prompt: PromptInput) -> TextToSQLResult:
+        model = self._model_for_operation("translate_text_to_sql")
         try:
-            payload = await self._generate_json(prompt, temperature=0.0, max_output_tokens=768)
+            payload = await self._generate_json(prompt, model=model, temperature=0.0, max_output_tokens=768)
             return TextToSQLResult.model_validate(payload)
         except Exception as exc:
             logger.warning("LLM translate_text_to_sql fallback empty query: %s", exc)
             return TextToSQLResult(sql="SELECT 1 WHERE 1 = 0", params={})
 
     async def extract_lead_fields(self, prompt: PromptInput) -> dict[str, object]:
+        model = self._model_for_operation("extract_lead_fields")
         try:
-            payload = await self._generate_json(prompt, temperature=0.1, max_output_tokens=512)
+            payload = await self._generate_json(prompt, model=model, temperature=0.1, max_output_tokens=512)
         except Exception as exc:
             logger.warning("LLM extract_lead_fields fallback empty payload: %s", exc)
             return {}
         return payload if isinstance(payload, dict) else {}
 
     async def extract_appointment_fields(self, prompt: PromptInput) -> dict[str, object]:
+        model = self._model_for_operation("extract_appointment_fields")
         try:
-            payload = await self._generate_json(prompt, temperature=0.1, max_output_tokens=512)
+            payload = await self._generate_json(prompt, model=model, temperature=0.1, max_output_tokens=512)
         except Exception as exc:
             logger.warning("LLM extract_appointment_fields fallback empty payload: %s", exc)
             return {}
         return payload if isinstance(payload, dict) else {}
 
     async def score_turn(self, prompt: PromptInput) -> dict[str, object]:
+        model = self._model_for_operation("score_turn")
         try:
-            payload = await self._generate_json(prompt, temperature=0.1, max_output_tokens=768)
+            payload = await self._generate_json(prompt, model=model, temperature=0.1, max_output_tokens=768)
         except Exception as exc:
             logger.warning("LLM score_turn fallback baseline scores: %s", exc)
             return {
@@ -531,10 +549,15 @@ def build_llm_port(settings: AISettings):
         logger.warning("AI runtime LLM provider resolved to noop")
         return NoopLLMPort()
     if provider == "gemini":
-        logger.info("AI runtime LLM provider resolved to gemini model=%s", settings.llm_model)
+        logger.info(
+            "AI runtime LLM provider resolved to gemini default_model=%s analyze_turn_model=%s",
+            settings.llm_default_model,
+            settings.llm_analyze_turn_model,
+        )
         return GeminiLLMPort(
             api_key=settings.google_api_key,
-            model=settings.llm_model,
+            default_model=settings.llm_default_model,
+            analyze_turn_model=settings.llm_analyze_turn_model,
             timeout_seconds=settings.llm_timeout_seconds,
             context_cache_enabled=settings.llm_context_cache_enabled,
             context_cache_ttl_seconds=settings.llm_context_cache_ttl_seconds,

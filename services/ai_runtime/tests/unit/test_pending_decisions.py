@@ -103,6 +103,22 @@ class PendingDecisionTests(unittest.TestCase):
 
         self.assertIsNone(decision)
 
+    def test_derive_pending_decision_not_created_for_explicit_financial_query(self) -> None:
+        graph_state = _state(
+            ("user", "Busco una casa en Heredia de 3 habitaciones"),
+            ("assistant", "No encontre casas exactas. Te gustaria ver mas detalles de estas o preferis que ajustemos la busqueda de otra manera?"),
+            ("user", "Si la financio, cuanto seria la cuota aproximada?"),
+        )
+        analysis = TurnAnalysis(
+            dialogue_act="unknown",
+            confidence=0.0,
+            reference=ReferenceDecision(kind="NONE", confidence=0.0),
+        )
+
+        decision = derive_realtor_pending_decision(graph_state, analysis)
+
+        self.assertIsNone(decision)
+
 
 if __name__ == "__main__":
     unittest.main()

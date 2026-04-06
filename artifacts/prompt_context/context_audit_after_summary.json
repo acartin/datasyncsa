@@ -1,0 +1,380 @@
+{
+  "generated_at": "2026-04-03T23:02:43.174135+00:00",
+  "documents": 28,
+  "sessions": 11,
+  "llm_calls": 116,
+  "trace_paths": [
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/04c2cb47-7b3b-48f5-b343-181eb33a996f/turn-0001-c9b84148-8ede-4c32-8da0-0a08d12ed40c.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/04c2cb47-7b3b-48f5-b343-181eb33a996f/turn-0002-d25a20f0-39f0-4ca1-9421-0724393721de.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/0a81c55b-154b-499c-8d7f-83c5a351fc5c/turn-0001-bc15ec8a-686f-4c94-824c-e2372b38fb92.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0001-18ac4a2b-6638-47a8-bd99-5d472a085d67.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0002-2763e497-b8db-40ac-bf3a-a3f8196a17ae.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0003-706dfbbb-f301-4b02-9308-74f75c36b420.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0004-b82663fd-c152-4b5d-9fe0-c92f1493ce25.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0005-6e03e982-7dfc-4c8e-9a25-630ee2dd3c56.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0006-28bf6b32-446e-4a96-a731-c6722e2155eb.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/1f85eb16-0916-49e8-8a9c-393332714810/turn-0007-30b91794-4fb3-4c92-a0e3-4b3e0d57621b.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/26088cd8-7561-4415-b1b6-4fa58153780a/turn-0001-7ef8cfb9-6ff4-438e-8abb-0b75fe83f6bd.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/5ac76cad-60fe-4b99-a4ae-9f235e8246c2/turn-0001-be0de62a-563d-4b40-87bb-eb63e1fcee5c.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/5ac76cad-60fe-4b99-a4ae-9f235e8246c2/turn-0002-c2ceab7d-ae1c-412b-bbb6-63335c895ce3.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/72d146b6-32b9-4d5e-944a-ae4d859b024f/turn-0001-3fd6c61b-c28f-43f7-a691-7da5a18a8c3b.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/72d146b6-32b9-4d5e-944a-ae4d859b024f/turn-0002-cd99ef55-faab-43fe-970e-2c401d013fe5.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/814accdd-6ed6-4317-840d-f9d2fc4966c6/turn-0001-ff6369ee-4484-46b6-a7e9-fd8697e884b8.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/814accdd-6ed6-4317-840d-f9d2fc4966c6/turn-0002-927d71f2-9305-4a80-a18f-fc52cf8d2952.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/8870c088-3dce-426f-8876-70ccfcf1c680/turn-0001-8836b5d9-e0f3-42ad-9dfa-fcfff75df4ef.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/8870c088-3dce-426f-8876-70ccfcf1c680/turn-0002-a741f4dd-ff34-4995-880d-a9b0dd86fb1a.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/95af242e-216d-4541-a7cc-6024d76a55b5/turn-0001-5a63f966-f2de-43b8-890a-b93e1f018d95.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/95af242e-216d-4541-a7cc-6024d76a55b5/turn-0002-0ce3ecfa-04d2-475b-95f0-7b9c633e7b31.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e112173b-d94f-46bb-be3e-cb4477af7e6e/turn-0001-2794ba0c-f708-44ec-be2c-2851795890b0.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e112173b-d94f-46bb-be3e-cb4477af7e6e/turn-0002-fc4a1178-e62c-4f4b-86f1-cbcca58ba5be.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e3529b58-7c51-4ece-9b58-96e18290841c/turn-0001-f01ad393-3b5e-4488-aafa-7e7108cf08db.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e3529b58-7c51-4ece-9b58-96e18290841c/turn-0002-eaa7fb41-db29-49bc-8114-c2b03824199c.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e3529b58-7c51-4ece-9b58-96e18290841c/turn-0003-b97622dc-e37d-491b-96c4-90ee3a119d8f.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e3529b58-7c51-4ece-9b58-96e18290841c/turn-0004-876c93f1-5c6a-436c-84e3-cb39d639eda8.json",
+    "log/turn-traces/64f357a0-98eb-44f1-9f41-6e615ed26180/e3529b58-7c51-4ece-9b58-96e18290841c/turn-0005-e880dead-09b9-4b4e-8084-b64d1763fa63.json"
+  ],
+  "filters_summary": {
+    "user_ids": [
+      "context-audit-after-final"
+    ],
+    "channels": [],
+    "purposes": [
+      "generated-conversation-suite"
+    ]
+  },
+  "totals": {
+    "stable_chars_total": 861774,
+    "dynamic_chars_total": 674259,
+    "full_chars_total": 1334043,
+    "effective_chars_total": 928583,
+    "saved_chars_total": 405460,
+    "saved_percent": 30.39,
+    "avg_dynamic_chars": 5812.58,
+    "avg_full_chars": 11500.37,
+    "avg_effective_chars": 8005.03,
+    "p95_dynamic_chars": 20020,
+    "p95_full_chars": 20021,
+    "p95_effective_chars": 20020,
+    "cache_status_counts": {
+      "bypass": 60,
+      "hit": 54,
+      "miss_created": 2
+    }
+  },
+  "by_node": {
+    "analyze_turn": {
+      "calls": 28,
+      "stable_chars_total": 364532,
+      "dynamic_chars_total": 99888,
+      "full_chars_total": 464476,
+      "effective_chars_total": 112909,
+      "saved_chars_total": 351567,
+      "avg_dynamic_chars": 3567.43,
+      "avg_full_chars": 16588.43,
+      "avg_effective_chars": 4032.46,
+      "p95_dynamic_chars": 6372,
+      "p95_full_chars": 19393,
+      "p95_effective_chars": 6598,
+      "cache_status_counts": {
+        "hit": 27,
+        "miss_created": 1
+      },
+      "top_level_keys": [
+        {
+          "key": "last_search_results",
+          "total_chars": 25361,
+          "avg_chars": 905.75,
+          "calls_present": 28
+        },
+        {
+          "key": "recent_messages",
+          "total_chars": 14309,
+          "avg_chars": 511.04,
+          "calls_present": 28
+        },
+        {
+          "key": "memory_summary",
+          "total_chars": 10033,
+          "avg_chars": 358.32,
+          "calls_present": 28
+        },
+        {
+          "key": "visible_cards",
+          "total_chars": 9046,
+          "avg_chars": 323.07,
+          "calls_present": 28
+        },
+        {
+          "key": "current_filters",
+          "total_chars": 6725,
+          "avg_chars": 240.18,
+          "calls_present": 28
+        },
+        {
+          "key": "last_turn_search_summary",
+          "total_chars": 4945,
+          "avg_chars": 176.61,
+          "calls_present": 28
+        },
+        {
+          "key": "last_assistant_message",
+          "total_chars": 4683,
+          "avg_chars": 167.25,
+          "calls_present": 28
+        },
+        {
+          "key": "capabilities",
+          "total_chars": 3640,
+          "avg_chars": 130.0,
+          "calls_present": 28
+        }
+      ]
+    },
+    "comparison_synthesizer": {
+      "calls": 1,
+      "stable_chars_total": 589,
+      "dynamic_chars_total": 61,
+      "full_chars_total": 652,
+      "effective_chars_total": 652,
+      "saved_chars_total": 0,
+      "avg_dynamic_chars": 61.0,
+      "avg_full_chars": 652.0,
+      "avg_effective_chars": 652.0,
+      "p95_dynamic_chars": 61,
+      "p95_full_chars": 652,
+      "p95_effective_chars": 652,
+      "cache_status_counts": {
+        "bypass": 1
+      },
+      "top_level_keys": [
+        {
+          "key": "focus_scope",
+          "total_chars": 4,
+          "avg_chars": 4.0,
+          "calls_present": 1
+        },
+        {
+          "key": "properties",
+          "total_chars": 2,
+          "avg_chars": 2.0,
+          "calls_present": 1
+        },
+        {
+          "key": "scores",
+          "total_chars": 2,
+          "avg_chars": 2.0,
+          "calls_present": 1
+        }
+      ]
+    },
+    "lead_scoring_evaluator": {
+      "calls": 28,
+      "stable_chars_total": 158956,
+      "dynamic_chars_total": 61020,
+      "full_chars_total": 220032,
+      "effective_chars_total": 220032,
+      "saved_chars_total": 0,
+      "avg_dynamic_chars": 2179.29,
+      "avg_full_chars": 7858.29,
+      "avg_effective_chars": 7858.29,
+      "p95_dynamic_chars": 4031,
+      "p95_full_chars": 9710,
+      "p95_effective_chars": 9710,
+      "cache_status_counts": {
+        "bypass": 28
+      },
+      "top_level_keys": [
+        {
+          "key": "messages",
+          "total_chars": 19529,
+          "avg_chars": 697.46,
+          "calls_present": 28
+        },
+        {
+          "key": "lead_extracted",
+          "total_chars": 6549,
+          "avg_chars": 233.89,
+          "calls_present": 28
+        },
+        {
+          "key": "last_turn_search_summary",
+          "total_chars": 4945,
+          "avg_chars": 176.61,
+          "calls_present": 28
+        },
+        {
+          "key": "required_fields",
+          "total_chars": 4200,
+          "avg_chars": 150.0,
+          "calls_present": 28
+        },
+        {
+          "key": "pending_fields",
+          "total_chars": 3365,
+          "avg_chars": 120.18,
+          "calls_present": 28
+        },
+        {
+          "key": "criteria_scores",
+          "total_chars": 2604,
+          "avg_chars": 93.0,
+          "calls_present": 28
+        },
+        {
+          "key": "target_criteria",
+          "total_chars": 1904,
+          "avg_chars": 68.0,
+          "calls_present": 28
+        },
+        {
+          "key": "completed_fields",
+          "total_chars": 891,
+          "avg_chars": 31.82,
+          "calls_present": 28
+        }
+      ]
+    },
+    "memory_entity_extractor": {
+      "calls": 4,
+      "stable_chars_total": 15028,
+      "dynamic_chars_total": 5320,
+      "full_chars_total": 20356,
+      "effective_chars_total": 20356,
+      "saved_chars_total": 0,
+      "avg_dynamic_chars": 1330.0,
+      "avg_full_chars": 5089.0,
+      "avg_effective_chars": 5089.0,
+      "p95_dynamic_chars": 1755,
+      "p95_full_chars": 5514,
+      "p95_effective_chars": 5514,
+      "cache_status_counts": {
+        "bypass": 4
+      },
+      "top_level_keys": [
+        {
+          "key": "messages",
+          "total_chars": 3210,
+          "avg_chars": 802.5,
+          "calls_present": 4
+        },
+        {
+          "key": "canonical_fields",
+          "total_chars": 1023,
+          "avg_chars": 255.75,
+          "calls_present": 4
+        },
+        {
+          "key": "message",
+          "total_chars": 310,
+          "avg_chars": 77.5,
+          "calls_present": 4
+        },
+        {
+          "key": "existing_entities",
+          "total_chars": 143,
+          "avg_chars": 35.75,
+          "calls_present": 4
+        }
+      ]
+    },
+    "synthesis_prompt": {
+      "calls": 28,
+      "stable_chars_total": 256060,
+      "dynamic_chars_total": 498275,
+      "full_chars_total": 552169,
+      "effective_chars_total": 498276,
+      "saved_chars_total": 53893,
+      "avg_dynamic_chars": 17795.54,
+      "avg_full_chars": 19720.32,
+      "avg_effective_chars": 17795.57,
+      "p95_dynamic_chars": 20021,
+      "p95_full_chars": 20022,
+      "p95_effective_chars": 20021,
+      "cache_status_counts": {
+        "hit": 27,
+        "miss_created": 1
+      },
+      "top_level_keys": [
+        {
+          "key": "last_search_results_preview",
+          "total_chars": 47561,
+          "avg_chars": 3170.73,
+          "calls_present": 15
+        },
+        {
+          "key": "inventory_preview",
+          "total_chars": 47561,
+          "avg_chars": 3170.73,
+          "calls_present": 15
+        },
+        {
+          "key": "turn_outputs",
+          "total_chars": 26212,
+          "avg_chars": 1747.47,
+          "calls_present": 15
+        },
+        {
+          "key": "lead_advisor",
+          "total_chars": 23692,
+          "avg_chars": 1579.47,
+          "calls_present": 15
+        },
+        {
+          "key": "displayed_cards",
+          "total_chars": 19843,
+          "avg_chars": 1322.87,
+          "calls_present": 15
+        },
+        {
+          "key": "turn_analysis",
+          "total_chars": 13205,
+          "avg_chars": 880.33,
+          "calls_present": 15
+        },
+        {
+          "key": "recent_messages",
+          "total_chars": 10202,
+          "avg_chars": 680.13,
+          "calls_present": 15
+        },
+        {
+          "key": "last_mentioned",
+          "total_chars": 5335,
+          "avg_chars": 355.67,
+          "calls_present": 15
+        }
+      ]
+    },
+    "text_to_sql": {
+      "calls": 27,
+      "stable_chars_total": 66609,
+      "dynamic_chars_total": 9695,
+      "full_chars_total": 76358,
+      "effective_chars_total": 76358,
+      "saved_chars_total": 0,
+      "avg_dynamic_chars": 359.07,
+      "avg_full_chars": 2828.07,
+      "avg_effective_chars": 2828.07,
+      "p95_dynamic_chars": 382,
+      "p95_full_chars": 2851,
+      "p95_effective_chars": 2851,
+      "cache_status_counts": {
+        "bypass": 27
+      },
+      "top_level_keys": [
+        {
+          "key": "search_filters",
+          "total_chars": 6914,
+          "avg_chars": 256.07,
+          "calls_present": 27
+        },
+        {
+          "key": "client_id",
+          "total_chars": 1026,
+          "avg_chars": 38.0,
+          "calls_present": 27
+        }
+      ]
+    }
+  }
+}

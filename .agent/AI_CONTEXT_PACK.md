@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-01T20:09:03Z`
+- Generated UTC: `2026-04-04T20:46:04Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-31`
-- Git commit: `5705281`
+- Git branch: `HETZNER-LOCAL-2026-04-03`
+- Git commit: `7779462`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-01T20:09:03Z`
+- Generated UTC: `2026-04-04T20:46:04Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-03-31`
-- Git commit: `5705281`
+- Git branch: `HETZNER-LOCAL-2026-04-03`
+- Git commit: `7779462`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -52,18 +52,18 @@
 
 ```text
 postgres
+admin-console-api
 redis
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
-datasyncsa-web
-portainer
-admin-console-api
-admin-console-web
-etl-docs
 etl-docs-worker
+portainer
 scoring-core
 scoring-core-worker
+admin-console-web
+datasyncsa-web
+etl-docs
 test-ui
 ```
 
@@ -95,20 +95,20 @@ test-ui
 ### Servicios activos del compose
 
 ```text
+datasyncsa-web
 postgres
-admin-console-api
 redis
+scoring-core
+scoring-core-worker
+test-ui
+admin-console-api
+admin-console-web
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
-datasyncsa-web
 etl-docs
-portainer
-scoring-core
-scoring-core-worker
-admin-console-web
 etl-docs-worker
-test-ui
+portainer
 ```
 ### `docker-compose.yml:1-220`
 
@@ -629,11 +629,6 @@ services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
-services/ai_runtime/tests/unit/test_prompt_composer.py:49:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:107:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
@@ -643,6 +638,12 @@ services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ =
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:34:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:107:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -661,11 +662,15 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 ```
 
 ## Rutas API Detectadas
@@ -702,6 +707,25 @@ services/web/admin-console/backend/app/modules/roles/router.py:66:@router.get("/
 services/web/admin-console/backend/app/modules/roles/router.py:73:@router.post("", response_model=RoleRow)
 services/web/admin-console/backend/app/modules/roles/router.py:77:@router.put("/{role_id}", response_model=RoleRow)
 services/web/admin-console/backend/app/modules/roles/router.py:84:@router.delete("/{role_id}")
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:50:@router.get("/clients", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/clients/router.py:144:@router.get("/clients/data", response_model=List[ClientRow])
 services/web/admin-console/backend/app/modules/clients/router.py:149:@router.get("/clients/simple-list", response_model=List[ClientSimple])
@@ -739,25 +763,6 @@ services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
-services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
-services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
-services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
-services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
-services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
-services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:151:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:529:@router.get("/lookups/verticals")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:534:@router.get("/lookups/models")
@@ -787,6 +792,8 @@ services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:705:@router.post("/prompts", response_model=ScoringPromptRow)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:710:@router.put("/prompts/{item_id}", response_model=ScoringPromptRow)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:718:@router.delete("/prompts/{item_id}")
+services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
 services/web/admin-console/backend/app/modules/leads_v2/router.py:68:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:69:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.get("/data", response_model=List[dict])
@@ -800,6 +807,13 @@ services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("
 services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
+services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
+services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
+services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
 services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
@@ -814,29 +828,20 @@ services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("
 services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/main.py:56:@app.get("/health")
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
-services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
-services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
+services/web/admin-console/backend/app/main.py:56:@app.get("/health")
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 ```
 
 ## AI Runtime
@@ -909,69 +914,57 @@ Lectura adicional segun el caso:
 
 ## Objetivo
 
-Documentar la ruta real de carga y composicion de prompts en `ai-runtime` para evitar asumir tablas, fallbacks o carpetas que el codigo activo no usa.
+Documentar la ruta real de carga y composicion de prompts en `ai-runtime` despues de la migracion de los prompts semanticos core a codigo por vertical.
 
-Este documento no reemplaza leer los prompts activos. Para tareas que toquen logica conversacional, planner, synthesizer, lead capture o scoring, hay que leer los textos activos en BD o en la traza del turno. Saber la ruta de carga no alcanza.
+Este documento no reemplaza leer los prompts activos. Para cambios en logica conversacional o phrasing final, hay que leer los builders vigentes en codigo y, cuando aplique, las trazas del turno.
 
 ## Resumen ejecutivo
 
-El runtime actual separa los prompts en dos grupos:
+El runtime actual separa prompts en tres grupos:
 
-1. Prompts DB-backed del sistema
-- `planner_system`
-- `synthesizer_system`
+1. Prompts semanticos core locales por vertical
+- `analyze_turn`
+- `intent_detector`
+- `synthesis_prompt`
 
-2. Prompts locales en codigo
+2. Prompts tecnicos locales
 - prompts compartidos bajo `services/ai_runtime/graph/_shared/prompts/*.py`
 - prompts realtor especificos bajo `services/ai_runtime/graph/realtor/prompts/*.py`
 
-3. Prompt de scoring por modelo (DB-backed, in-memory)
+3. Configuracion externa aun activa
+- `lead_ai_prompts.slug = 'primary_chat'` para `tone_prompt`
 - `lead_scoring_prompts.prompt_template`
 - `lead_scoring_prompts.extraction_schema`
-- `lead_scoring_criteria` (criterios activos del modelo)
-
-Ademas existe un overlay de tono por tenant:
-
-- `lead_ai_prompts.slug = 'primary_chat'`
-
-Ese overlay no reemplaza `planner_system` ni `synthesizer_system`; solo alimenta `tone_prompt`.
-
-## Fuente canonica por tipo de prompt
-
-### 1. `planner_system` y `synthesizer_system`
-
-Codigo:
-
-- `services/data/repositories/tenant_repository.py`
-- `services/ai_runtime/config/prompt_composer.py`
-
-Tabla usada:
-
-- ruta soportada por codigo: `system_prompts` si existe
-- fallback de compatibilidad: `ai_system_prompts`
-- en la BD actual validada para este repo: existe `ai_system_prompts` y no existe `system_prompts`
-
-Resolucion:
-
-1. `TenantRepository._resolve_system_prompts_table()` detecta si existe `public.system_prompts`.
-2. Si no existe, intenta `public.ai_system_prompts`.
-3. Si no existe ninguna, deja ambos prompts vacios.
-4. `load_tenant_config()` busca:
-   - `node_slug = 'planner_system'`
-   - `node_slug = 'synthesizer_system'`
-5. La busqueda se hace por `vertical_slug = v.slug` del tenant.
-6. Solo toma registros activos: `COALESCE(is_active, true) = true`.
-7. Elige la version mas reciente con este orden:
-   - `version DESC`
-   - `updated_at DESC NULLS LAST`
-   - `created_at DESC NULLS LAST`
+- `lead_scoring_criteria`
 
 Importante:
 
-- No hay fallback global por `node_slug` sin `vertical_slug`.
-- No hay lookup por `client_id`.
-- Si la tabla existe pero no hay fila para ese `vertical_slug`, el prompt queda vacio.
-- Cuando luego se intenta usar, `prompt_composer.load_vertical_prompt()` lanza error si el prompt sigue vacio.
+- `planner_system` y `synthesizer_system` pueden seguir existiendo en BD como residuo historico, pero ya no forman parte del runtime activo.
+- El runtime ya no carga `system_prompts` ni `ai_system_prompts` para planner/synthesizer.
+
+## Fuente canonica por tipo de prompt
+
+### 1. Prompts semanticos core
+
+Codigo:
+
+- `services/ai_runtime/config/prompt_composer.py`
+- `services/ai_runtime/graph/realtor/prompts/*.py`
+- `services/ai_runtime/graph/healthcare/prompts/*.py`
+- `services/ai_runtime/graph/legal/prompts/*.py`
+- `services/ai_runtime/graph/insurance/prompts/*.py`
+
+Resolucion:
+
+1. `compose("analyze_turn", ...)` llama `load_analyze_turn_prompt(vertical)`.
+2. `compose("intent_detector", ...)` llama `load_intent_detector_prompt(vertical)`.
+3. `compose("synthesis_prompt", ...)` llama `load_synthesis_prompt(vertical)`.
+4. Cada vertical resuelve su propio builder local en codigo.
+
+Resultado:
+
+- la semantica core del runtime vive versionada en git
+- ya no hay dependencia operativa de prompts planner/synthesizer en BD
 
 ### 2. `tone_prompt`
 
@@ -998,10 +991,9 @@ Resolucion:
 Resultado:
 
 - ese valor se guarda como `TenantConfig.tone_prompt`
-- no entra en `TenantConfig.system_prompts`
-- no sustituye planner ni synthesizer
+- entra al prompt solo cuando el nodo llama `compose(..., include_tone=True)`
 
-### 3. `lead_scoring` (evaluacion LLM en memoria)
+### 3. `lead_scoring`
 
 Codigo:
 
@@ -1016,11 +1008,10 @@ Tablas usadas:
 
 Resolucion:
 
-1. `TenantRepository._load_scoring_profile()` resuelve modelo activo por `vertical_id` + `scoring_model_id`.
-2. Carga criterios activos (`lead_scoring_criteria`).
-3. Carga prompt activo del modelo (`prompt_template`, `extraction_schema`).
-4. Se inyecta en `TenantConfig.scoring_profile`.
-5. `lead_advisor` ejecuta `score_turn` con ese prompt en memoria (sin persistencia realtime).
+1. `TenantRepository._load_scoring_profile()` resuelve el modelo activo por `vertical_id` + `scoring_model_id`.
+2. Carga criterios activos y el prompt del modelo.
+3. Inyecta el resultado en `TenantConfig.scoring_profile`.
+4. `lead_advisor` ejecuta `score_turn` con ese prompt en memoria.
 
 ## Cadena real de carga
 
@@ -1040,13 +1031,14 @@ Flujo:
 4. `TenantRepository` devuelve un `TenantConfig` con:
    - `vertical`
    - `tone_prompt`
-   - `system_prompts['planner_system']`
-   - `system_prompts['synthesizer_system']`
-5. `TenantLoader` cachea ese `TenantConfig` por `client_id` en `TenantCache`.
+   - `scoring_profile`
+   - metadata operativa del tenant
+5. `TenantLoader` cachea ese `TenantConfig` por `client_id`.
 
 Consecuencia operativa:
 
-- si se cambia el prompt en DB, el runtime puede seguir usando la version cacheada para ese tenant hasta que expire el TTL o se limpie `TenantCache`
+- un cambio en `lead_ai_prompts` o en scoring puede quedar cacheado hasta que expire `TenantCache`
+- un cambio en prompts core del runtime requiere redeploy/rebuild del servicio, porque ahora viven en codigo
 
 ### Paso 2. Normalizacion del texto
 
@@ -1064,7 +1056,7 @@ Que hace:
 - si viene como string triple quoted, extrae solo el cuerpo
 - si viene como texto plano, lo deja tal cual
 
-Esto existe para tolerar datos heredados en DB que fueron guardados con wrapper tipo archivo Python.
+Esto hoy aplica a `tone_prompt` y a datos heredados compatibles.
 
 ## Composicion final del prompt
 
@@ -1074,26 +1066,48 @@ Codigo:
 
 Formula canonica:
 
-`prompt_final = [tone_prompt si include_tone=True] + base_prompt + dynamic_context`
+`prompt_final = [tone_prompt si include_tone=True] + base_prompt_local + dynamic_context`
 
 Donde:
 
-- `tone_prompt` es opcional, sale de `lead_ai_prompts` y solo entra cuando el nodo llama `compose(..., include_tone=True)`
-- `base_prompt` sale de DB o de builders locales segun el nodo
+- `tone_prompt` es opcional y sale de `lead_ai_prompts`
+- `base_prompt_local` sale de builders en codigo segun `node_type` y `vertical`
 - `dynamic_context` es un JSON serializado con estado/contexto del turno
 
 ## Mapa de nodos y su fuente
 
-### DB-backed directos
+### Locales por vertical
+
+- `analyze_turn`
+- `intent_detector`
+- `synthesis_prompt`
+
+Fuente:
+
+- `services/ai_runtime/graph/realtor/prompts/*.py`
+- `services/ai_runtime/graph/healthcare/prompts/*.py`
+- `services/ai_runtime/graph/legal/prompts/*.py`
+- `services/ai_runtime/graph/insurance/prompts/*.py`
+
+Importante:
 ```
 ### `services/ai_runtime/ARCHITECTURE.md`
 
 ```
 # Datasyncsa AI Architecture
 
+Documento de orientacion del runtime conversacional activo.
+
+Precedencia si hay contradiccion:
+
+1. codigo ejecutable vigente
+2. `docs/AI_RUNTIME_PROMPT_RUNTIME.md` para carga/composicion de prompts
+3. builders/routers del grafo y diagramas vivos en `services/ai_runtime/docs/graphs/`
+4. este documento
+
 ## Objetivo
 
-`services/ai_runtime` define el runtime conversacional multitenant nuevo de Datasyncsa AI con dos grafos LangGraph:
+`services/ai_runtime` define el runtime conversacional multitenant activo de Datasyncsa AI con dos grafos LangGraph:
 
 - `grafo_realtor`
 - `grafo_basico`
@@ -1104,10 +1118,10 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 
 1. `client_id` vive en el estado desde el primer turno.
 2. El estado es acumulativo y se persiste por sesion.
-3. Prompts se componen en runtime con tres capas:
-   - `tone_prompt` del tenant
-   - prompt base del vertical
-   - contexto del turno
+3. Los prompts se componen en runtime como `stable_prefix + dynamic_context`.
+   - `tone_prompt` del tenant es opcional
+   - `analyze_turn`, `intent_detector` y `synthesis_prompt` son prompts locales por vertical
+   - `lead_scoring_prompts` y `tone_prompt` siguen siendo configuracion externa
 4. El LLM clasifica y redacta.
 5. El codigo resuelve IDs, cola, reglas y side-effects.
 6. Redis usa llaves prefijadas por tenant:
@@ -1168,6 +1182,13 @@ El estado esta modelado en `domain/state.py` y contiene:
 
 Los diagramas renderizados del estado actual del runtime viven en `services/ai_runtime/docs/graphs/` y se regeneran desde `services/ai_runtime/scripts/export_graph_diagrams.py`.
 
+Esta seccion resume la topologia comun. La fuente exacta de edges y routers vive en:
+
+- `services/ai_runtime/graph/generic/graph.py`
+- `services/ai_runtime/graph/realtor/graph.py`
+- `services/ai_runtime/graph/_shared/routers/common.py`
+- `services/ai_runtime/graph/realtor/routers/routes.py`
+
 ## Turn Trace
 
 Para desarrollo, `ai-runtime` registra una traza JSON por turno en `/app/log/turn-traces` y expone una consola en `/api/v1/debug/turn-trace/`.
@@ -1194,9 +1215,11 @@ Routers compartidos:
   - `memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+  - `synthesize`
 - `after_memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+  - `synthesize`
   - `end`
 - `after_check_queue`
   - `route_next_intent`
@@ -1211,7 +1234,8 @@ Routers compartidos:
 
 ### Intent queue
 
-- `analyze_turn` interpreta el turno y puede proponer hasta 4 intents iniciales
+- `analyze_turn` interpreta el turno y devuelve `turn_analysis` con `intent_plan` inicial
+- codigo deterministico normaliza referencias y alimenta `intent_queue`
 - `route_next_intent` elige el siguiente intent ejecutable
 - cada nodo de capacidad cierra explicitamente `running -> done`
 - `check_queue` decide si quedan intents pendientes
@@ -1219,9 +1243,10 @@ Routers compartidos:
 ### Realtor enrich/reanalyze loop
 
 - `search`
-- si `0 resultados` y `attempts < 3` -> `search` otra vez con filtros relajados
-- si `0 < resultados < 4` -> `render_mode=text`
-- si `>= 4` -> `render_cards`
+- si `0 resultados` y `search_attempts < 3` -> `search` otra vez
+- si `0 resultados` y `search_attempts >= 3` -> `lead_advisor`
+- si hay resultados -> `render_cards` -> `check_queue`
+- `render_mode` y `cards_mode` se deciden downstream, no en el router
 
 ## Separacion de Responsabilidades
 
@@ -1249,26 +1274,6 @@ Routers compartidos:
 - aislamiento `client_id` en Redis y PostgreSQL
 
 ## Prompt Runtime
-
-`prompt_composer.compose(node_type, tenant_config, vertical, context)` aplica:
-
-1. `tone_prompt` del tenant
-2. prompt del vertical o prompt base segun `node_type`
-3. contexto JSON serializado del turno
-
-Prompts incluidos:
-
-- DB-backed por vertical:
-  - `planner_system`
-  - `synthesizer_system`
-- shared tecnicos:
-  - `reference_classifier_prompt.py`
-  - `lazy_condition_evaluator_prompt.py`
-  - `clarification_prompt.py`
-  - `lead_data_collector_prompt.py`
-  - `memory_entity_extractor_prompt.py`
-- analyze_turn por vertical:
-  - `graph/realtor/prompts/analyze_turn_prompt.py`
 ```
 ### `services/ai_runtime/main.py`
 
@@ -1611,9 +1616,27 @@ from services.ai_runtime.runtime.turn_trace import (
 from services.ai_runtime.verticals import get_vertical_spec
 
 
+def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
+    if not isinstance(base_state, RealtorGraphState):
+        return None
+    search_outputs = [item for item in base_state.turn_outputs if str(item.get("type") or "").strip().lower() == "search"]
+    if not search_outputs:
+        return None
+    latest = search_outputs[-1]
+    return {
+        "count": latest.get("count"),
+        "match_scope": latest.get("match_scope"),
+        "relaxation_applied": bool(latest.get("relaxation_applied")),
+        "effective_filters": latest.get("effective_filters"),
+    }
+
+
 def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     """Clear fields that belong to a single turn while keeping session memory alive."""
 
+    base_state.last_turn_dialogue_act = base_state.turn_analysis.dialogue_act if base_state.turn_analysis else None
+    base_state.last_turn_output_types = [str(item.get("type") or "") for item in base_state.turn_outputs]
+    base_state.last_turn_search_summary = _build_last_turn_search_summary(base_state)
     base_state.final_response = None
     base_state.pending_clarification = None
     base_state.pending_decision = None
@@ -1738,24 +1761,6 @@ class ConversationRuntime:
                 components=components,
                 sources=sources,
                 ui_payload=getattr(final_state, "ui_payload", None),
-                render_mode=getattr(final_state, "render_mode", None),
-                cards_mode=getattr(final_state, "cards_mode", None),
-                escalated=final_state.escalacion.solicitada,
-                scoring_status="disabled",
-                metadata={"flow": flow, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
-            )
-            self.dependencies.trace_store.finish_turn(
-                status="completed",
-                final_state_summary=summarize_state(final_state.model_dump(mode="json")),
-                response_payload=response.model_dump(mode="json"),
-            )
-            return response
-        except Exception as exc:
-            self.dependencies.trace_store.finish_turn(
-                status="failed",
-                final_state_summary=summarize_state(base_state.model_dump(mode="json")),
-                error=repr(exc),
-            )
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1920,6 +1925,9 @@ class BaseGraphState(BaseModel):
     completed_intents: list[IntentDefinition] = Field(default_factory=list)
     turn_outputs: list[dict[str, Any]] = Field(default_factory=list)
     turn_analysis: TurnAnalysis | None = None
+    last_turn_dialogue_act: str | None = None
+    last_turn_output_types: list[str] = Field(default_factory=list)
+    last_turn_search_summary: dict[str, Any] | None = None
     cita: Appointment
     escalacion: EscalationState = Field(default_factory=EscalationState)
     lead_advisor: LeadAdvisorState = Field(default_factory=LeadAdvisorState)
@@ -1937,9 +1945,6 @@ class GenericGraphState(BaseGraphState):
 class RealtorGraphState(BaseGraphState):
     """State for the full realtor graph."""
 
-    search_filters: SearchFilters = Field(default_factory=SearchFilters)
-    effective_search_filters: SearchFilters | None = None
-    inventory: list[Property] = Field(default_factory=list)
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -2340,7 +2345,7 @@ class InferenceClient:
             "gbraid": session.get("gbraid"),
             "wbraid": session.get("wbraid"),
             "referrer_url": session.get("referrer_url"),
-            "source_property_ref": session.get("source_property_ref"),
+            "property_id": session.get("property_id"),
             "landing_page_url": session.get("landing_page_url")
         }
         user_metadata = {k: v for k, v in user_metadata.items() if v is not None}
@@ -2938,12 +2943,14 @@ from services.ai_runtime.graph._shared.prompts.lead_data_collector_prompt import
 from services.ai_runtime.graph._shared.prompts.memory_entity_extractor_prompt import (
     build_prompt as memory_entity_extractor_prompt,
 )
-from services.ai_runtime.graph._shared.prompts.reference_classifier_prompt import build_prompt as reference_classifier_prompt
 from services.ai_runtime.graph.healthcare.prompts.analyze_turn_prompt import (
     build_prompt as healthcare_analyze_turn_prompt,
 )
 from services.ai_runtime.graph.healthcare.prompts.intent_detector_prompt import (
     build_prompt as healthcare_intent_detector_prompt,
+)
+from services.ai_runtime.graph.healthcare.prompts.synthesis_prompt import (
+    build_prompt as healthcare_synthesis_prompt,
 )
 from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
     build_prompt as insurance_analyze_turn_prompt,
@@ -2951,8 +2958,12 @@ from services.ai_runtime.graph.insurance.prompts.analyze_turn_prompt import (
 from services.ai_runtime.graph.insurance.prompts.intent_detector_prompt import (
     build_prompt as insurance_intent_detector_prompt,
 )
+from services.ai_runtime.graph.insurance.prompts.synthesis_prompt import (
+    build_prompt as insurance_synthesis_prompt,
+)
 from services.ai_runtime.graph.legal.prompts.analyze_turn_prompt import build_prompt as legal_analyze_turn_prompt
 from services.ai_runtime.graph.legal.prompts.intent_detector_prompt import build_prompt as legal_intent_detector_prompt
+from services.ai_runtime.graph.legal.prompts.synthesis_prompt import build_prompt as legal_synthesis_prompt
 from services.ai_runtime.graph.realtor.prompts.appointment_data_collector_prompt import (
     build_prompt as appointment_collector_prompt,
 )
@@ -2967,12 +2978,8 @@ from services.ai_runtime.graph.realtor.prompts.recommendation_prompt import buil
 from services.ai_runtime.graph.realtor.prompts.search_filter_extractor_prompt import (
     build_prompt as search_filter_extractor_prompt,
 )
+from services.ai_runtime.graph.realtor.prompts.synthesis_prompt import build_prompt as realtor_synthesis_prompt
 from services.ai_runtime.graph.realtor.prompts.text_to_sql_prompt import build_prompt as text_to_sql_prompt
-
-SYSTEM_NODE_SLUG_BY_TYPE = {
-    "plan_prompt": "planner_system",
-    "synthesis_prompt": "synthesizer_system",
-}
 
 CONTEXT_CACHEABLE_NODE_TYPES = {
     "analyze_turn",
@@ -2986,18 +2993,6 @@ DEFAULT_CONTEXT_CACHE_TTL_SECONDS = 1800
 
 def load_tone_prompt(tenant_config: TenantConfig) -> str:
     return tenant_config.tone_prompt.strip()
-
-
-def load_vertical_prompt(tenant_config: TenantConfig, vertical: Vertical, node_type: str) -> str:
-    system_node_slug = SYSTEM_NODE_SLUG_BY_TYPE.get(node_type)
-    if not system_node_slug:
-        raise ValueError(f"Unsupported vertical prompt node_type={node_type!r} for vertical={vertical!r}")
-    runtime_prompt = (tenant_config.system_prompts.get(system_node_slug) or "").strip()
-    if runtime_prompt:
-        return runtime_prompt
-    raise ValueError(
-        f"Missing system prompt slug={system_node_slug!r} for vertical={vertical!r} and client_id={tenant_config.client_id!r}"
-    )
 
 
 def _render_context(context: dict[str, Any]) -> str:
@@ -3028,6 +3023,18 @@ def load_intent_detector_prompt(vertical: Vertical) -> str:
     raise ValueError(f"Unsupported intent_detector vertical={vertical!r}")
 
 
+def load_synthesis_prompt(vertical: Vertical) -> str:
+    if vertical == "realtor":
+        return realtor_synthesis_prompt()
+    if vertical == "healthcare":
+        return healthcare_synthesis_prompt()
+    if vertical == "legal":
+        return legal_synthesis_prompt()
+    if vertical == "insurance":
+        return insurance_synthesis_prompt()
+    raise ValueError(f"Unsupported synthesis_prompt vertical={vertical!r}")
+
+
 def compose(
     node_type: str,
     tenant_config: TenantConfig,
@@ -3039,12 +3046,10 @@ def compose(
     """Compose stable instructions + runtime context as the canonical prompt payload."""
 
     tone = load_tone_prompt(tenant_config) if include_tone else ""
-    if node_type in {"plan_prompt", "synthesis_prompt"}:
-        base = load_vertical_prompt(tenant_config, vertical, node_type)
-    elif node_type == "analyze_turn":
+    if node_type == "analyze_turn":
         base = load_analyze_turn_prompt(vertical)
-    elif node_type == "reference_classifier":
-        base = reference_classifier_prompt()
+    elif node_type == "synthesis_prompt":
+        base = load_synthesis_prompt(vertical)
     elif node_type == "intent_detector":
         base = load_intent_detector_prompt(vertical)
     elif node_type == "lazy_condition_evaluator":
@@ -3247,10 +3252,12 @@ tests/sandbox/__pycache__/simulate_multichat_realtor.cpython-312.pyc
 tests/sandbox/__pycache__/test_gemini_latency_realtor_contract.cpython-312.pyc
 tests/sandbox/dentist/simulate_chat_dentist.py
 tests/sandbox/dentist/simulate_multichat_dentist.py
+tests/sandbox/realtor/lead_advisor_completion_suite.json
 tests/sandbox/realtor/manual_suite_01.json
 tests/sandbox/realtor/realtor_conversation_suite.schema.json
 tests/sandbox/realtor/realtor_conversation_suite.template.json
 tests/sandbox/realtor/realtor_conversation_suite_prompt.md
+tests/sandbox/realtor/realtor_generated_suite_01.json
 tests/sandbox/realtor/realtor_regression_suite.json
 tests/sandbox/realtor/run_realtor_conversation_suite.py
 tests/sandbox/realtor/simulate_chat_realtor.py

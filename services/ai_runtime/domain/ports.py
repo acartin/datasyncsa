@@ -12,7 +12,6 @@ from services.ai_runtime.domain.contracts import (
     MailDispatchResult,
     Property,
     PropertyComparisonScore,
-    ReferenceDecision,
     TenantConfig,
     TextToSQLResult,
 )
@@ -21,8 +20,6 @@ from services.ai_runtime.domain.prompts import PromptInput
 
 class LLMPort(Protocol):
     async def analyze_turn(self, prompt: PromptInput) -> TurnAnalysis: ...
-
-    async def classify_reference(self, prompt: PromptInput) -> ReferenceDecision: ...
 
     async def detect_intents(self, prompt: PromptInput) -> list[IntentDefinition]: ...
 

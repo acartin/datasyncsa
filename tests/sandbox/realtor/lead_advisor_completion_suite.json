@@ -1,0 +1,666 @@
+{
+    "suite_id": "lead_advisor_completion_suite",
+    "suite_type": "regression",
+    "generator_notes": "Suite enfocada en lead_advisor: cubre captura progresiva, guardrails, campos poco cubiertos (contacto, fecha_preferida, tipo_cita) y cierre progresivo del lead. Compatible con run_realtor_conversation_suite.py.",
+    "defaults": {
+        "expect": {
+            "answer_excludes": [
+                "seguimos viendo"
+            ]
+        }
+    },
+    "conversations": [
+        {
+            "id": "greeting_no_capture",
+            "description": "Saludo puro no debe disparar captura ni preguntar por nombre.",
+            "tags": [
+                "lead_advisor",
+                "greeting",
+                "guardrail",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Buenas tardes",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_capture_exposure_count": 0,
+                        "answer_excludes": [
+                            "cual es tu nombre",
+                            "con quien tengo el gusto",
+                            "podrias decirme tu nombre"
+                        ],
+                        "expected_criteria_max": {
+                            "intencion": 1.5
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "first_exposure_no_name_request",
+            "description": "Primera exposicion util no debe pedir nombre todavia.",
+            "tags": [
+                "lead_advisor",
+                "first_exposure",
+                "nombre",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en Santa Ana con dos habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_capture_exposure_count": 1,
+                        "answer_excludes": [
+                            "podrias indicarme tu nombre",
+                            "con quien tengo el gusto",
+                            "cual es tu nombre"
+                        ],
+                        "expected_completed_fields_all": [
+                            "preferencias"
+                        ],
+                        "expected_criteria_min": {
+                            "apertura": 5,
+                            "match": 5
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "second_exposure_unlocks_name",
+            "description": "En la segunda exposicion util el sistema puede pedir el nombre con una sola pregunta.",
+            "tags": [
+                "lead_advisor",
+                "second_exposure",
+                "nombre",
+                "single_question",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en Heredia con 3 habitaciones",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Cuantos baños tiene la primera?",
+                    "expect": {
+                        "answer_contains_any": [
+                            "baños",
+                            "baños",
+                            "banos"
+                        ],
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "expected_question_contains_any": [
+                            "nombre",
+                            "llamas",
+                            "gusto"
+                        ],
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "spontaneous_name_captured",
+            "description": "Si el usuario da su nombre espontaneamente sin que se le haya pedido, debe quedar capturado.",
+            "tags": [
+                "lead_advisor",
+                "nombre",
+                "spontaneous_capture",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Hola, soy Maria Jimenez, busco una casa en Alajuela",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Maria Jimenez"
+                        },
+                        "max_questions": 2
+                    }
+                }
+            ]
+        },
+        {
+            "id": "spontaneous_budget_captured",
+            "description": "Presupuesto aportado voluntariamente despues de ver resultados debe quedar en lead_extracted.",
+            "tags": [
+                "lead_advisor",
+                "presupuesto",
+                "spontaneous_capture",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Quiero ver casas en Heredia de dos habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Mi presupuesto es de unos 180 mil dolares",
+                    "expect": {
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "expected_completed_fields_all": [
+                            "presupuesto",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "presupuesto": 180000
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "financing_signal_opens_aprobacion",
+            "description": "Cuando el usuario pregunta por cuota y ya tiene nombre y presupuesto capturados, la conversacion debe seguir por la via financiera sin perder contexto.",
+            "tags": [
+                "lead_advisor",
+                "aprobacion",
+                "financing",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Estoy buscando una casa en Heredia de 3 habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Cuantos baños tiene la primera?",
+                    "expect": {
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me llamo Carlos Mora",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Carlos Mora"
+                        },
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Mi presupuesto ronda entre 130 mil y 150 mil",
+                    "expect": {
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "presupuesto",
+                            "preferencias"
+                        ],
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Si la financio, cuanto seria la cuota aproximada?",
+                    "expect": {
+                        "answer_contains_any": [
+                            "cuota",
+                            "financ",
+                            "preaprob",
+                            "prima"
+                        ],
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "presupuesto",
+                            "preferencias"
+                        ],
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "urgency_raises_plazo_score",
+            "description": "Una urgencia temporal explicita debe subir el score de plazo aunque no dispare captura ese turno.",
+            "tags": [
+                "lead_advisor",
+                "plazo",
+                "urgencia",
+                "scoring",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Quiero ver casas en San Jose de dos habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Podria mudarme este mes si aparece algo bueno",
+                    "expect": {
+                        "expected_criteria_min": {
+                            "plazo": 5
+                        },
+                        "manual_review_focus": [
+                            "la urgencia es explicita y justificada, plazo debe reflejarla claramente"
+                        ],
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "negative_appointment_blocks_tipo_cita",
+            "description": "Si el usuario niega querer agendar, appointment_intent queda negativo y no debe proponerse tipo_cita.",
+            "tags": [
+                "lead_advisor",
+                "appointment",
+                "negative_intent",
+                "guardrail",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en Heredia con 3 habitaciones",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "No quiero agendar todavia, solo estoy comparando",
+                    "expect": {
+                        "answer_contains_any": [
+                            "comparando",
+                            "no hay problema",
+                            "entendido",
+                            "con gusto"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "forbidden_field_to_ask_any": [
+                            "tipo_cita"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "appointment_intent": "negative"
+                        },
+                        "expected_criteria_max": {
+                            "intencion": 3
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "high_intent_visit_still_prioritizes_nombre",
+            "description": "Cuando el usuario quiere visitar pero aun no se conoce su nombre, se prioriza captura de nombre.",
+            "tags": [
+                "lead_advisor",
+                "high_intent",
+                "nombre",
+                "identity_priority",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en Heredia con 3 habitaciones",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Quiero visitar la primera",
+                    "expect": {
+                        "expected_question_contains_any": [
+                            "nombre",
+                            "llamas",
+                            "gusto"
+                        ],
+                        "answer_contains_any": [
+                            "Mercedes",
+                            "visita"
+                        ],
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "spontaneous_email_captured_as_contacto",
+            "description": "Si el usuario aporta su correo voluntariamente, debe quedar en lead_extracted como contacto.",
+            "tags": [
+                "lead_advisor",
+                "contacto",
+                "email",
+                "spontaneous_capture",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en La Union, Cartago, con jardin",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me llamo Andrea Salazar, mi correo es andrea.salazar@gmail.com",
+                    "expect": {
+                        "answer_contains_any": [
+                            "Andrea",
+                            "correo",
+                            "contacto"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "email"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Andrea Salazar",
+                            "email": "andrea.salazar@gmail.com"
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "phone_offered_captured_as_contacto",
+            "description": "Si el usuario da su telefono de forma espontanea, debe quedar capturado como contacto.",
+            "tags": [
+                "lead_advisor",
+                "contacto",
+                "telefono",
+                "spontaneous_capture",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Quiero ver casas en Desamparados de dos habitaciones y buen precio",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Soy Luis Fallas, si me encuentran algo me pueden llamar al 8888-1234",
+                    "expect": {
+                        "answer_contains_any": [
+                            "Luis",
+                            "telefono",
+                            "numero",
+                            "contacto"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "telefono",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Luis Fallas",
+                            "telefono": "8888-1234"
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "fecha_preferida_captured_on_visit_intent",
+            "description": "Cuando el usuario menciona una fecha preferida para visitar, debe quedar capturada en lead_extracted.",
+            "tags": [
+                "lead_advisor",
+                "fecha_preferida",
+                "appointment",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Busco una casa en Tibas con tres habitaciones",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me llamo Roberto Vega y me gustaria visitarla el sabado por la manana",
+                    "expect": {
+                        "answer_contains_any": [
+                            "Roberto",
+                            "sabado",
+                            "visita"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_field_to_ask": null,
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Roberto Vega",
+                            "tipo_cita": "visita",
+                            "fecha_preferida": "sabado por la manana"
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "tipo_cita_positive_after_identity_known",
+            "description": "Con nombre conocido e intencion de visita confirmada, el sistema debe pedir el siguiente dato de coordinacion sin volver a nombre.",
+            "tags": [
+                "lead_advisor",
+                "tipo_cita",
+                "appointment",
+                "positive_intent",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Quiero ver casas en Moravia con dos habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Cuantos baños tiene la primera?",
+                    "expect": {
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Soy Paola Ureña",
+                    "expect": {
+                        "expected_should_ask": false,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Paola Ureña"
+                        },
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me gustaria ir a verla, como lo coordinamos?",
+                    "expect": {
+                        "answer_contains_any": [
+                            "visita",
+                            "coordinar",
+                            "cita"
+                        ],
+                        "expected_should_ask": true,
+                        "expected_field_to_ask_any": [
+                            "telefono",
+                            "email",
+                            "tipo_cita",
+                            "fecha_preferida",
+                            "contacto"
+                        ],
+                        "forbidden_field_to_ask_any": [
+                            "nombre"
+                        ],
+                        "expected_criteria_min": {
+                            "intencion": 6
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        },
+        {
+            "id": "progressive_lead_closure",
+            "description": "Flujo progresivo: nombre y presupuesto primero, luego fecha_preferida y telefono quedan capturados en turnos posteriores.",
+            "tags": [
+                "lead_advisor",
+                "progressive_closure",
+                "full_lead",
+                "canonical"
+            ],
+            "turns": [
+                {
+                    "user": "Buenas, busco una casa en San Rafael de Heredia con tres habitaciones",
+                    "expect": {
+                        "require_cards": true,
+                        "expected_should_ask": false,
+                        "expected_capture_exposure_count": 1,
+                        "expected_completed_fields_all": [
+                            "preferencias"
+                        ],
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "La segunda opcion se ve bien, cuanto mide el terreno?",
+                    "expect": {
+                        "answer_contains_any": [
+                            "m²",
+                            "metros",
+                            "terreno"
+                        ],
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "nombre",
+                        "expected_capture_exposure_count": 2,
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me llamo Diana Castro y mi presupuesto es de hasta 250 mil dolares",
+                    "expect": {
+                        "answer_contains_any": [
+                            "Diana",
+                            "presupuesto"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "presupuesto",
+                            "preferencias"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Diana Castro",
+                            "presupuesto": 250000
+                        },
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me interesa visitarla el proximo viernes por la tarde",
+                    "expect": {
+                        "expected_should_ask": true,
+                        "expected_field_to_ask_any": [
+                            "telefono",
+                            "email",
+                            "contacto"
+                        ],
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "presupuesto",
+                            "preferencias",
+                            "fecha_preferida"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Diana Castro",
+                            "presupuesto": 250000
+                        },
+                        "max_questions": 1
+                    }
+                },
+                {
+                    "user": "Me pueden contactar al 6060-5050",
+                    "expect": {
+                        "answer_contains_any": [
+                            "Diana",
+                            "contacto",
+                            "numero",
+                            "viernes"
+                        ],
+                        "expected_should_ask": false,
+                        "expected_completed_fields_all": [
+                            "nombre",
+                            "presupuesto",
+                            "preferencias",
+                            "fecha_preferida",
+                            "telefono"
+                        ],
+                        "expected_lead_extracted_contains": {
+                            "nombre": "Diana Castro",
+                            "presupuesto": 250000,
+                            "telefono": "6060-5050"
+                        },
+                        "max_questions": 1
+                    }
+                }
+            ]
+        }
+    ]
+}

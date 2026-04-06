@@ -9,6 +9,10 @@ from services.ai_runtime.domain.contracts import Property
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.prompt_context import (
+    summarize_properties_for_prompt,
+    summarize_property_for_prompt,
+)
 from services.ai_runtime.graph.realtor.nodes.comparison_helpers import score_property
 
 
@@ -74,9 +78,16 @@ async def llm_recommend(state: dict[str, Any], deps: GraphDependencies) -> dict[
         graph_state.tenant_config,
         graph_state.vertical,
         {
-            "visible_properties": [item.model_dump(mode="json") for item in properties],
+            "visible_properties": summarize_properties_for_prompt(
+                properties,
+                limit=len(properties),
+                include_description_excerpt=True,
+            ),
             "scores": [item.model_dump(mode="json") for item in scores],
-            "recommended_property": recommended_property.model_dump(mode="json"),
+            "recommended_property": summarize_property_for_prompt(
+                recommended_property,
+                include_description_excerpt=True,
+            ),
             "recommended_score": recommended_score.model_dump(mode="json"),
             "explicit_preferences": _extract_explicit_preferences(graph_state),
         },

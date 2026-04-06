@@ -1,8 +1,17 @@
 # Datasyncsa AI Architecture
 
+Documento de orientacion del runtime conversacional activo.
+
+Precedencia si hay contradiccion:
+
+1. codigo ejecutable vigente
+2. `docs/AI_RUNTIME_PROMPT_RUNTIME.md` para carga/composicion de prompts
+3. builders/routers del grafo y diagramas vivos en `services/ai_runtime/docs/graphs/`
+4. este documento
+
 ## Objetivo
 
-`services/ai_runtime` define el runtime conversacional multitenant nuevo de Datasyncsa AI con dos grafos LangGraph:
+`services/ai_runtime` define el runtime conversacional multitenant activo de Datasyncsa AI con dos grafos LangGraph:
 
 - `grafo_realtor`
 - `grafo_basico`
@@ -13,10 +22,10 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 
 1. `client_id` vive en el estado desde el primer turno.
 2. El estado es acumulativo y se persiste por sesion.
-3. Prompts se componen en runtime con tres capas:
-   - `tone_prompt` del tenant
-   - prompt base del vertical
-   - contexto del turno
+3. Los prompts se componen en runtime como `stable_prefix + dynamic_context`.
+   - `tone_prompt` del tenant es opcional
+   - `analyze_turn`, `intent_detector` y `synthesis_prompt` son prompts locales por vertical
+   - `lead_scoring_prompts` y `tone_prompt` siguen siendo configuracion externa
 4. El LLM clasifica y redacta.
 5. El codigo resuelve IDs, cola, reglas y side-effects.
 6. Redis usa llaves prefijadas por tenant:
@@ -77,6 +86,13 @@ El estado esta modelado en `domain/state.py` y contiene:
 
 Los diagramas renderizados del estado actual del runtime viven en `services/ai_runtime/docs/graphs/` y se regeneran desde `services/ai_runtime/scripts/export_graph_diagrams.py`.
 
+Esta seccion resume la topologia comun. La fuente exacta de edges y routers vive en:
+
+- `services/ai_runtime/graph/generic/graph.py`
+- `services/ai_runtime/graph/realtor/graph.py`
+- `services/ai_runtime/graph/_shared/routers/common.py`
+- `services/ai_runtime/graph/realtor/routers/routes.py`
+
 ## Turn Trace
 
 Para desarrollo, `ai-runtime` registra una traza JSON por turno en `/app/log/turn-traces` y expone una consola en `/api/v1/debug/turn-trace/`.
@@ -103,9 +119,11 @@ Routers compartidos:
   - `memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+  - `synthesize`
 - `after_memory_lookup`
   - `route_next_intent`
   - `lead_advisor`
+  - `synthesize`
   - `end`
 - `after_check_queue`
   - `route_next_intent`
@@ -120,7 +138,8 @@ Routers compartidos:
 
 ### Intent queue
 
-- `analyze_turn` interpreta el turno y puede proponer hasta 4 intents iniciales
+- `analyze_turn` interpreta el turno y devuelve `turn_analysis` con `intent_plan` inicial
+- codigo deterministico normaliza referencias y alimenta `intent_queue`
 - `route_next_intent` elige el siguiente intent ejecutable
 - cada nodo de capacidad cierra explicitamente `running -> done`
 - `check_queue` decide si quedan intents pendientes
@@ -128,9 +147,10 @@ Routers compartidos:
 ### Realtor enrich/reanalyze loop
 
 - `search`
-- si `0 resultados` y `attempts < 3` -> `search` otra vez con filtros relajados
-- si `0 < resultados < 4` -> `render_mode=text`
-- si `>= 4` -> `render_cards`
+- si `0 resultados` y `search_attempts < 3` -> `search` otra vez
+- si `0 resultados` y `search_attempts >= 3` -> `lead_advisor`
+- si hay resultados -> `render_cards` -> `check_queue`
+- `render_mode` y `cards_mode` se deciden downstream, no en el router
 
 ## Separacion de Responsabilidades
 
@@ -159,38 +179,20 @@ Routers compartidos:
 
 ## Prompt Runtime
 
-`prompt_composer.compose(node_type, tenant_config, vertical, context)` aplica:
+`prompt_composer.compose(node_type, tenant_config, vertical, context)` compone:
 
 1. `tone_prompt` del tenant
 2. prompt del vertical o prompt base segun `node_type`
 3. contexto JSON serializado del turno
 
-Prompts incluidos:
+El detalle canonico de carga, tablas, fallbacks y ownership vive en `docs/AI_RUNTIME_PROMPT_RUNTIME.md`.
 
-- DB-backed por vertical:
-  - `planner_system`
-  - `synthesizer_system`
-- shared tecnicos:
-  - `reference_classifier_prompt.py`
-  - `lazy_condition_evaluator_prompt.py`
-  - `clarification_prompt.py`
-  - `lead_data_collector_prompt.py`
-  - `memory_entity_extractor_prompt.py`
-- analyze_turn por vertical:
-  - `graph/realtor/prompts/analyze_turn_prompt.py`
-  - `graph/healthcare/prompts/analyze_turn_prompt.py`
-  - `graph/legal/prompts/analyze_turn_prompt.py`
-  - `graph/insurance/prompts/analyze_turn_prompt.py`
-- intent_detector por vertical:
-  - `graph/realtor/prompts/intent_detector_prompt.py`
-  - `graph/healthcare/prompts/intent_detector_prompt.py`
-  - `graph/legal/prompts/intent_detector_prompt.py`
-  - `graph/insurance/prompts/intent_detector_prompt.py`
-- realtor:
-  - `text_to_sql_prompt.py`
-  - `comparison_synthesizer_prompt.py`
-  - `recommendation_prompt.py`
-  - `appointment_data_collector_prompt.py`
+Resumen minimo:
+
+- `analyze_turn`, `intent_detector` y `synthesis_prompt` se resuelven por vertical desde codigo local
+- `_shared/prompts` solo debe contener prompts tecnicos neutrales
+- `tone_prompt` se carga por tenant desde `lead_ai_prompts`
+- `lead_scoring_evaluator` usa el `scoring_profile` cargado en `TenantConfig`
 
 Guardrail:
 
@@ -224,58 +226,3 @@ Guardrail:
 - actualizar Redis sin bloquear el turno principal
 
 El dispatcher actual en `runtime/bootstrap.py` es placeholder. El contrato ya esta listo para migrarlo a RQ, Celery o un bus interno despues.
-
-## Fases de Implementacion
-
-### Fase 1
-
-Lista en este scaffold:
-
-- contratos
-- estado
-- `tenant_loader`
-- `prompt_composer`
-- bootstrap FastAPI
-- stores/repositorios
-
-### Fase 2
-
-Lista en este scaffold:
-
-- `grafo_basico`
-- nodos compartidos
-- `rag_agencia`
-- `captura_lead`
-- `agendar`
-
-### Fase 3
-
-Lista en este scaffold:
-
-- `grafo_realtor`
-- `search`
-- `render_cards`
-- `financial_calc`
-- `rag_agencia`
-- `rag_docs`
-
-### Fase 4
-
-Lista en este scaffold:
-
-- comparacion
-- recomendacion
-- agendamiento
-- `lead_advisor`
-- `mensajear` placeholder
-- cierre explicito de intents en cola
-
-### Fase 5
-
-Preparado para la siguiente iteracion:
-
-- conectar proveedor LLM real en `runtime/llm.py`
-- conectar embeddings reales para RAG
-- reemplazar dispatcher inline por cola asincrona
-- persistencia final Redis -> PostgreSQL al cierre
-- historial anaforico mas rico con snapshots de propiedades
