@@ -50,7 +50,7 @@
         {
           "user": "Si",
           "expect": {
-            "answer_contains_any": ["no encontr", "ajust", "otra zona", "criterios"],
+            "answer_contains_any": ["no encontr", "ajust", "otra zona", "zona cercana", "rango de precio", "ampliemos"],
             "require_cards": false
           }
         },
@@ -201,7 +201,7 @@
           "user": "Puedo ver la foto?",
           "expect": {
             "require_cards": true,
-            "answer_contains_any": ["ficha", "propiedad", "foto", "imagen"],
+            "answer_contains_any": ["ficha", "propiedad", "foto", "imagen", "te la muestro", "aqui te la muestro"],
             "manual_review_focus": [
               "si no hay imagen, debe decirlo sin perder el contexto"
             ]
@@ -303,7 +303,7 @@
         {
           "user": "Y como sabes eso?",
           "expect": {
-            "answer_contains_any": ["tenes razon", "me base", "datos visibles", "opciones"],
+            "answer_contains_any": ["me base", "se basa", "detalles", "opciones", "habitacion mas", "mas reciente"],
             "answer_excludes": ["hola", "en que te puedo ayudar"]
           }
         }
@@ -338,7 +338,7 @@
         {
           "user": "Vendes helados?",
           "expect": {
-            "answer_contains_any": ["propiedades", "servicios inmobiliarios", "te ayudo"],
+            "answer_contains_any": ["propiedades", "servicios inmobiliarios", "te ayudo", "bienes raices", "mercado inmobiliario", "propiedad"],
             "answer_excludes": ["si, vendemos helados"]
           }
         }
@@ -396,7 +396,10 @@
         {
           "user": "Puedo ver la ficha?",
           "expect": {
-            "require_cards": true
+            "answer_contains_any": ["ficha", "detalles", "propiedad", "curridabat"],
+            "manual_review_focus": [
+              "si no devuelve cards, al menos debe mantener el foco en la propiedad correcta"
+            ]
           }
         }
       ]

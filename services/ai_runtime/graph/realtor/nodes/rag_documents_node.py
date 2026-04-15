@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 
 async def rag_documents(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from services.ai_runtime.config.geo_catalog import DEFAULT_COUNTRY_CODE, normali
 from services.ai_runtime.config.property_type_catalog import normalize_property_type
 from services.ai_runtime.domain.contracts import IntentPlanItem, PendingDecision, ReferenceDecision, TurnAnalysis
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState, SearchFilters
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 
 REALTOR_INTERNAL_INTENTS = {"focus_property", "describe_result_set", "show_result_cards"}
 DETAIL_ATTRIBUTE_PATTERNS: dict[str, re.Pattern[str]] = {

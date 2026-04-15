@@ -1,4 +1,8 @@
-"""Canonical business contracts for the AI runtime."""
+"""Canonical business contracts for the AI runtime.
+
+These contracts are vertical-agnostic. Realtor-specific types live in
+``services/ai_runtime/graph/realtor/contracts`` and must not leak here.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +33,6 @@ DialogueAct = Literal[
     "small_talk",
     "unknown",
 ]
-DetailAttributeKey = Literal["habitaciones", "banos", "area", "precio", "garage", "foto"]
 DetailScope = Literal["current_result_set", "resolved_reference"]
 ReferenceKind = Literal[
     "ORDINAL",
@@ -41,10 +44,8 @@ ReferenceKind = Literal[
     "NONE",
 ]
 IntentStatus = Literal["pending", "running", "done", "failed", "skipped"]
-AppointmentType = Literal["presencial", "visita", "videollamada"]
 MemoryEntityStatus = Literal["explicit", "inferred", "confirmed"]
 MemoryEntityValueType = Literal["string", "number", "boolean", "list", "object"]
-MemoryLookupKey = Literal["nombre", "edad", "presupuesto", "email", "telefono"]
 
 
 class ChatMessage(BaseModel):
@@ -128,60 +129,6 @@ class TenantConfig(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class PropertyFeatures(BaseModel):
-    """Canonical normalized property feature set."""
-
-    garage_clean: int
-    bedrooms_clean: int
-    bathrooms_clean: float
-    sqm_clean: int | None = None
-    lot_size_sqm: str | None = None
-    year_built: str | None = None
-    amenities: list[str] = Field(default_factory=list)
-    is_featured: bool = False
-    size_unit: str | None = None
-    garage: str | None = None
-    bedrooms: str | None = None
-    bathrooms: str | None = None
-
-
-class PropertyMedia(BaseModel):
-    primary_image_url: str | None = None
-    image_urls: list[str] = Field(default_factory=list)
-
-
-class PropertyLocation(BaseModel):
-    country: str | None = None
-    province: str | None = None
-    lat: float | None = None
-    lng: float | None = None
-
-
-class PropertyMeta(BaseModel):
-    source_system: str | None = None
-    public_url: str | None = None
-    ingested_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class Property(BaseModel):
-    """Canonical property contract v1.0."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    client_id: str
-    title: str
-    description_html: str
-    price: float
-    currency: str
-    address: str | None = None
-    features: PropertyFeatures
-    media: PropertyMedia = Field(default_factory=PropertyMedia)
-    location: PropertyLocation = Field(default_factory=PropertyLocation)
-    meta: PropertyMeta = Field(default_factory=PropertyMeta)
-
-
 class LeadPlaceholder(BaseModel):
     """Placeholder lead contract for v1."""
 
@@ -228,9 +175,9 @@ class ConversationEntity(BaseModel):
 class Appointment(BaseModel):
     client_id: str
     id: str | None = None
-    propiedad_id: str | None = None
+    reference_id: str | None = None
     lead_id: str | None = None
-    tipo: AppointmentType | None = None
+    tipo: str | None = None
     fecha: str | None = None
     hora: str | None = None
     agente_asignado: str | None = None
@@ -315,10 +262,10 @@ class TurnAnalysis(BaseModel):
     reference: ReferenceDecision = Field(default_factory=lambda: ReferenceDecision(kind="NONE", confidence=0))
     intent_plan: list[IntentPlanItem] = Field(default_factory=list)
     filters_delta: dict[str, Any] = Field(default_factory=dict)
-    memory_lookup_key: MemoryLookupKey | None = None
+    memory_lookup_key: str | None = None
     reuse_current_filters: bool = False
     detail_scope: DetailScope | None = None
-    detail_attribute_key: DetailAttributeKey | None = None
+    detail_attribute_key: str | None = None
 
 
 class PendingDecision(BaseModel):
@@ -336,25 +283,6 @@ class PendingDecision(BaseModel):
 class TextToSQLResult(BaseModel):
     sql: str
     params: dict[str, Any] = Field(default_factory=dict)
-
-
-class PropertyComparisonScore(BaseModel):
-    property_id: str
-    score_total: float
-    dimensions: dict[str, float] = Field(default_factory=dict)
-
-
-class CardPayload(BaseModel):
-    id: str
-    title: str
-    price: float
-    currency: str
-    bedrooms_clean: int
-    bathrooms_clean: float
-    sqm_clean: int | None = None
-    primary_image_url: str | None = None
-    public_url: str | None = None
-    province: str | None = None
 
 
 class MailDispatchResult(BaseModel):

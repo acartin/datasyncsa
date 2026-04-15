@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.ai_runtime.domain.state import RealtorGraphState
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 
 def after_route_next_intent(state: dict[str, object]) -> str:

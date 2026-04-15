@@ -9,8 +9,8 @@ from services.ai_runtime.domain.contracts import (
     TenantConfig,
     TurnAnalysis,
 )
-from services.ai_runtime.domain.state import RealtorGraphState, SearchFilters
 from services.ai_runtime.graph._shared.pending_decisions import render_pending_decision_question
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 from services.ai_runtime.graph.realtor.turn_policies import derive_realtor_pending_decision
 
 

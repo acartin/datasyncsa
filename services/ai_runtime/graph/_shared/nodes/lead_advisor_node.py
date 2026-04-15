@@ -8,10 +8,10 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     LeadAdvisorState,
-    RealtorGraphState,
     SCORING_FIELD_ALIASES,
     build_lead_advisor_state,
 )
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.scoring_hybrid import enrich_lead_advisor_with_llm_scoring
 
 EXPOSURE_OUTPUT_TYPES = {
@@ -35,6 +35,13 @@ FIELD_QUESTION_HINTS = {
     "tipo_cita": ("visita", "videollamada", "llamada"),
     "appointment_intent": ("cita", "agendar", "coordinar"),
 }
+
+
+def _compose_preferred_datetime(fecha: Any, hora: Any) -> str | None:
+    fecha_text = str(fecha or "").strip()
+    hora_text = str(hora or "").strip()
+    combined = " ".join(part for part in (fecha_text, hora_text) if part).strip()
+    return combined or None
 
 
 def _normalize_field_key(value: str | None) -> str:
@@ -100,6 +107,28 @@ def _sync_lead_extracted_from_state(graph_state: BaseGraphState, advisor_state: 
         if candidate is not None:
             payload["presupuesto"] = float(candidate)
 
+    if not payload.get("tipo_cita") and graph_state.cita.tipo:
+        payload["tipo_cita"] = str(graph_state.cita.tipo)
+
+    if not payload.get("fecha_preferida"):
+        preferred_datetime = _compose_preferred_datetime(graph_state.cita.fecha, graph_state.cita.hora)
+        if preferred_datetime:
+            payload["fecha_preferida"] = preferred_datetime
+
+    if (
+        not payload.get("appointment_intent")
+        and (
+            graph_state.cita.tipo
+            or graph_state.cita.fecha
+            or graph_state.cita.hora
+            or graph_state.cita.propiedad_id
+        )
+    ):
+        payload["appointment_intent"] = "positive"
+
+    if _normalize_field_key(payload.get("appointment_intent")) == "negative":
+        payload["tipo_cita"] = None
+
     synchronized = advisor_state.model_copy(
         update={
             "lead_extracted": advisor_state.lead_extracted.model_validate(payload),
@@ -138,6 +167,21 @@ def _select_field_to_ask(
     normalized_suggested = _normalize_field_key(suggested_field)
     if current_turn_is_exposure and int(capture_exposure_count or 0) == 2 and "nombre" in pending:
         return "nombre"
+
+    if (
+        normalized_act == "calculate"
+        and advisor_state.lead_extracted.presupuesto is not None
+        and "aprobacion" in pending
+    ):
+        return "aprobacion"
+
+    if normalized_act == "schedule":
+        if "email" in pending and "telefono" in pending:
+            return "contacto"
+        if "email" in pending:
+            return "email"
+        if "telefono" in pending:
+            return "telefono"
 
     if normalized_suggested == "contacto":
         if "email" in pending and "telefono" in pending:

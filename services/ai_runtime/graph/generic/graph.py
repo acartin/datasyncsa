@@ -15,6 +15,7 @@ from services.ai_runtime.graph._shared.nodes import (
     collect_lead_data,
     lead_advisor,
     memory_lookup,
+    prepare_synthesis,
     route_next_intent,
     synthesize,
 )
@@ -69,6 +70,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_node("mensajear", _mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
+    workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))
     workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
     workflow.add_edge(START, "analyze_turn")
@@ -89,15 +91,15 @@ def build_generic_graph(deps: GraphDependencies):
             "memory_lookup": "memory_lookup",
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
-            "synthesize": "synthesize",
+            "synthesize": "prepare_synthesis",
         },
     )
     workflow.add_conditional_edges(
         "memory_lookup",
         build_traced_router("after_memory_lookup", after_memory_lookup, deps),
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "synthesize"},
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "prepare_synthesis"},
     )
-    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_edge("collect_lead_data", "prepare_synthesis")
     workflow.add_conditional_edges(
         "route_next_intent",
         build_traced_router("after_route_next_intent", after_route_next_intent, deps),
@@ -113,7 +115,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "collect_appointment_data",
         build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
-        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+        {"assign_agent": "assign_agent", "synthesize": "prepare_synthesis"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")
@@ -122,6 +124,7 @@ def build_generic_graph(deps: GraphDependencies):
         build_traced_router("after_check_queue", after_check_queue, deps),
         {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
     )
-    workflow.add_edge("lead_advisor", "synthesize")
+    workflow.add_edge("lead_advisor", "prepare_synthesis")
+    workflow.add_edge("prepare_synthesis", "synthesize")
     workflow.add_edge("synthesize", END)
     return workflow.compile()

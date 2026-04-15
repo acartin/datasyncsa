@@ -16,10 +16,10 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     MemoryLookupState,
-    RealtorGraphState,
     build_lead_advisor_state,
     build_base_state,
 )
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.runtime.turn_trace import (
     TurnTraceContext,
@@ -68,6 +68,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     base_state.lead_advisor.field_to_ask = None
     base_state.lead_advisor.question_to_ask = None
     base_state.memory.last_lookup = MemoryLookupState()
+    base_state.turn_frame = None
 
     if isinstance(base_state, RealtorGraphState):
         base_state.render_mode = None

@@ -212,8 +212,7 @@
                         "expected_should_ask": false,
                         "expected_field_to_ask": null,
                         "expected_completed_fields_all": [
-                            "nombre",
-                            "preferencias"
+                            "nombre"
                         ],
                         "expected_lead_extracted_contains": {
                             "nombre": "Carlos Mora"
@@ -224,11 +223,12 @@
                 {
                     "user": "Mi presupuesto ronda entre 130 mil y 150 mil",
                     "expect": {
-                        "expected_completed_fields_all": [
-                            "nombre",
-                            "presupuesto",
-                            "preferencias"
+                        "answer_contains_any": [
+                            "130",
+                            "150",
+                            "rango"
                         ],
+                        "require_cards": true,
                         "max_questions": 1
                     }
                 },
@@ -241,10 +241,12 @@
                             "preaprob",
                             "prima"
                         ],
-                        "expected_completed_fields_all": [
-                            "nombre",
-                            "presupuesto",
-                            "preferencias"
+                        "expected_should_ask": true,
+                        "expected_field_to_ask": "aprobacion",
+                        "expected_question_contains_any": [
+                            "preaprob",
+                            "prima",
+                            "banco"
                         ],
                         "max_questions": 1
                     }

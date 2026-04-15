@@ -9,12 +9,13 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.contracts import (
     IntentDefinition,
     IntentPlanItem,
-    Property,
     ReferenceDecision,
     TurnAnalysis,
 )
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState, RealtorGraphState, SearchFilters
+from services.ai_runtime.domain.state import BaseGraphState
+from services.ai_runtime.graph.realtor.contracts import Property
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 from services.ai_runtime.graph._shared.prompt_context import summarize_message_for_prompt, summarize_messages_for_prompt
 from services.ai_runtime.graph.realtor.turn_policies import (
     REALTOR_INTERNAL_INTENTS,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.ai_runtime.domain.contracts import Property, PropertyComparisonScore
+from services.ai_runtime.graph.realtor.contracts import Property, PropertyComparisonScore
 
 
 def score_property(property_item: Property) -> PropertyComparisonScore:

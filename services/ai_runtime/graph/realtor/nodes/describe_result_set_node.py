@@ -5,10 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from services.ai_runtime.domain.contracts import Property, TurnAnalysis
+from services.ai_runtime.domain.contracts import TurnAnalysis
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.contracts import Property
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 
 def _format_number(value: float | int) -> str:

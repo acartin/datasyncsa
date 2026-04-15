@@ -1,4 +1,4 @@
-"""Graph state contracts for generic and realtor assistants."""
+"""Base graph state contracts shared by every vertical."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from services.ai_runtime.domain.contracts import (
     LeadPlaceholder,
     LeadScores,
     PendingDecision,
-    Property,
     ScoringProfile,
     TenantConfig,
     TurnAnalysis,
@@ -25,18 +24,6 @@ from services.ai_runtime.domain.contracts import (
 )
 
 
-DEFAULT_SCORING_CRITERIA_BY_VERTICAL: dict[str, list[str]] = {
-    "realtor": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-    "healthcare": ["apertura", "intencion", "emergencia", "match", "solvencia"],
-    "legal": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-    "insurance": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-}
-DEFAULT_REQUIRED_FIELDS_BY_VERTICAL: dict[str, list[str]] = {
-    "realtor": ["nombre", "contacto", "presupuesto", "aprobacion", "fecha_preferida", "appointment_intent"],
-    "healthcare": ["nombre", "contacto", "appointment_intent"],
-    "legal": ["nombre", "contacto", "appointment_intent"],
-    "insurance": ["nombre", "contacto", "presupuesto", "appointment_intent"],
-}
 SCORING_CRITERION_ALIASES: dict[str, tuple[str, ...]] = {
     "apertura": ("apertura", "engagement", "engage", "openness"),
     "intencion": ("intencion", "intent", "purchase_intent"),
@@ -69,30 +56,6 @@ SCORING_FIELD_ALIASES: dict[str, str] = {
     "schedule_intent": "appointment_intent",
 }
 _EMAIL_CONTACT_PATTERN = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", flags=re.IGNORECASE)
-
-
-class SearchFilters(BaseModel):
-    ubicacion: str | None = None
-    habitaciones: int | None = None
-    banos: float | None = None
-    garage: int | None = None
-    precio_max: float | None = None
-    precio_min: float | None = None
-    currency: str | None = None
-    provincia: str | None = None
-    amenidades: list[str] = Field(default_factory=list)
-    tipo: str | None = None
-    operacion: str | None = None
-
-
-class FinancialContext(BaseModel):
-    property_id: str | None = None
-    price: float | None = None
-    currency: str | None = None
-    prima: float | None = None
-    plazo: int | None = None
-    banco: str | None = None
-    resultado: dict[str, Any] | None = None
 
 
 class EscalationState(BaseModel):
@@ -167,30 +130,13 @@ class BaseGraphState(BaseModel):
     memory: ConversationMemoryState = Field(default_factory=ConversationMemoryState)
     lead: LeadPlaceholder = Field(default_factory=LeadPlaceholder)
     final_response: str | None = None
+    turn_frame: dict[str, Any] | None = None
 
 
 class GenericGraphState(BaseGraphState):
     """State shared today by healthcare, legal, and insurance tenants."""
 
     pass
-
-
-class RealtorGraphState(BaseGraphState):
-    """State for the full realtor graph."""
-
-    search_filters: SearchFilters = Field(default_factory=SearchFilters)
-    effective_search_filters: SearchFilters | None = None
-    inventory: list[Property] = Field(default_factory=list)
-    last_search_results: list[Property] = Field(default_factory=list)
-    last_mentioned: Property | None = None
-    active_comparison: list[str] = Field(default_factory=list)
-    focus_scope: str | None = None
-    search_attempts: int = 0
-    cards_shown: list[str] = Field(default_factory=list)
-    cards_mode: str | None = None
-    render_mode: str | None = None
-    ui_payload: dict[str, Any] | None = None
-    financial_context: FinancialContext = Field(default_factory=FinancialContext)
 
 
 def is_valid_contact_email(value: str | None) -> bool:
@@ -219,14 +165,29 @@ def _normalize_field_key(key: str) -> str:
     return SCORING_FIELD_ALIASES.get(normalized, normalized)
 
 
+def _vertical_scoring_defaults(vertical: Vertical) -> tuple[list[str], list[str]]:
+    """Late-bound lookup of per-vertical scoring defaults.
+
+    Avoids a circular import between ``domain.state`` and ``verticals``.
+    """
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    try:
+        spec = get_vertical_spec(vertical)
+    except ValueError:
+        return [], []
+    return list(spec.scoring_criteria), list(spec.required_fields)
+
+
 def _default_scoring_profile(vertical: Vertical) -> ScoringProfile:
+    criteria_defaults, required_defaults = _vertical_scoring_defaults(vertical)
     criteria = [
         {"key": key, "display_order": index}
-        for index, key in enumerate(DEFAULT_SCORING_CRITERIA_BY_VERTICAL.get(vertical, []), start=1)
+        for index, key in enumerate(criteria_defaults, start=1)
     ]
     extraction_fields = [
         {"key": key, "required": True}
-        for key in DEFAULT_REQUIRED_FIELDS_BY_VERTICAL.get(vertical, [])
+        for key in required_defaults
     ]
     return ScoringProfile(criteria=criteria, extraction_fields=extraction_fields)
 
@@ -268,13 +229,15 @@ def _build_criteria_order(profile: ScoringProfile, vertical: Vertical) -> list[s
         keys.append(key)
     if keys:
         return keys
-    return list(DEFAULT_SCORING_CRITERIA_BY_VERTICAL.get(vertical, []))
+    criteria_defaults, _ = _vertical_scoring_defaults(vertical)
+    return list(criteria_defaults)
 
 
 def _build_required_fields(profile: ScoringProfile, vertical: Vertical) -> list[str]:
     explicit = [_normalize_field_key(item.key) for item in profile.extraction_fields if bool(item.required)]
     fallback = [_normalize_field_key(item.key) for item in profile.extraction_fields]
-    candidates = explicit or fallback or DEFAULT_REQUIRED_FIELDS_BY_VERTICAL.get(vertical, [])
+    _, required_defaults = _vertical_scoring_defaults(vertical)
+    candidates = explicit or fallback or required_defaults
     normalized: list[str] = []
     seen: set[str] = set()
     for key in candidates:

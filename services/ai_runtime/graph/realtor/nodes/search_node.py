@@ -7,8 +7,9 @@ from typing import Any
 
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState, SearchFilters
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
+from services.ai_runtime.graph.realtor.turn_frame import merge_seen_properties
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,11 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
         "inventory": [item.model_dump(mode="json") for item in results],
         "search_attempts": graph_state.search_attempts + (1 if not results else 0),
         "turn_outputs": [*graph_state.turn_outputs, output],
+        "seen_properties": merge_seen_properties(
+            graph_state.seen_properties,
+            results,
+            current_turn=graph_state.current_turn,
+        ),
     }
     if not results:
         updates["cards_shown"] = []

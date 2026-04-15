@@ -6,12 +6,13 @@ from typing import Any
 
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState, has_valid_lead_contact
+from services.ai_runtime.domain.state import has_valid_lead_contact
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
 from services.ai_runtime.graph._shared.prompt_context import (
     summarize_messages_for_prompt,
     summarize_property_for_prompt,
 )
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 
 async def collect_appointment_data(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:

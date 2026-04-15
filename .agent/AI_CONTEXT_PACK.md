@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-04T20:46:04Z`
+- Generated UTC: `2026-04-06T19:46:07Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-04-03`
-- Git commit: `7779462`
+- Git branch: `HETZNER-LOCAL-2026-Abril-06`
+- Git commit: `cfa24a8`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-04T20:46:04Z`
+- Generated UTC: `2026-04-06T19:46:07Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-04-03`
-- Git commit: `7779462`
+- Git branch: `HETZNER-LOCAL-2026-Abril-06`
+- Git commit: `cfa24a8`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -52,19 +52,19 @@
 
 ```text
 postgres
-admin-console-api
 redis
+scoring-core
+scoring-core-worker
+test-ui
+admin-console-api
+admin-console-web
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
-etl-docs-worker
-portainer
-scoring-core
-scoring-core-worker
-admin-console-web
 datasyncsa-web
 etl-docs
-test-ui
+etl-docs-worker
+portainer
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -95,17 +95,17 @@ test-ui
 ### Servicios activos del compose
 
 ```text
-datasyncsa-web
 postgres
 redis
 scoring-core
 scoring-core-worker
-test-ui
 admin-console-api
 admin-console-web
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
+test-ui
+datasyncsa-web
 etl-docs
 etl-docs-worker
 portainer
@@ -197,7 +197,8 @@ services:
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
+      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
+      - LLM_ANALYZE_TURN_MODEL=${LLM_ANALYZE_TURN_MODEL}
       - AI_RUNTIME_API_PREFIX=/api/v1
       - PYTHONPATH=/app
     volumes:
@@ -234,7 +235,7 @@ services:
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
+      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
@@ -273,7 +274,7 @@ services:
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - LOG_LEVEL=INFO
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
+      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
       - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
       - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
       - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
@@ -332,11 +333,11 @@ services:
       - internal_network
 
   # ETL Docs Worker (RQ)
-  etl-docs-worker:
 ```
 ### `docker-compose.yml:300-360`
 
 ```
+      - internal_network
 
   # Chat Web Renderer API (Bridge)
   chat-web-renderer-api:
@@ -397,11 +398,11 @@ services:
     container_name: ${ENV_PREFIX}-web-corporate
     restart: unless-stopped
     ports:
-      - "${CORPORATE_WEB_PORT}:80"
 ```
 ### `.env.example:50-120`
 
 ```
+
 # --- AI/SCORING SERVICE DISCOVERY ---
 AI_RUNTIME_API=http://ai-runtime:8000
 AI_RUNTIME_API_PREFIX=/api/v1
@@ -629,7 +630,20 @@ services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
+services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
@@ -637,13 +651,8 @@ services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:16
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:34:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:107:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -662,15 +671,8 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 ```
 
 ## Rutas API Detectadas
@@ -707,25 +709,6 @@ services/web/admin-console/backend/app/modules/roles/router.py:66:@router.get("/
 services/web/admin-console/backend/app/modules/roles/router.py:73:@router.post("", response_model=RoleRow)
 services/web/admin-console/backend/app/modules/roles/router.py:77:@router.put("/{role_id}", response_model=RoleRow)
 services/web/admin-console/backend/app/modules/roles/router.py:84:@router.delete("/{role_id}")
-services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
-services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
-services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
-services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
-services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
-services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/clients/router.py:50:@router.get("/clients", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/clients/router.py:144:@router.get("/clients/data", response_model=List[ClientRow])
 services/web/admin-console/backend/app/modules/clients/router.py:149:@router.get("/clients/simple-list", response_model=List[ClientSimple])
@@ -763,6 +746,25 @@ services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:151:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:529:@router.get("/lookups/verticals")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:534:@router.get("/lookups/models")
@@ -792,8 +794,6 @@ services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:705:@router.post("/prompts", response_model=ScoringPromptRow)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:710:@router.put("/prompts/{item_id}", response_model=ScoringPromptRow)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:718:@router.delete("/prompts/{item_id}")
-services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
 services/web/admin-console/backend/app/modules/leads_v2/router.py:68:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:69:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/router.py:117:@router.get("/data", response_model=List[dict])
@@ -807,13 +807,6 @@ services/web/admin-console/backend/app/modules/users/router.py:106:@router.get("
 services/web/admin-console/backend/app/modules/users/router.py:113:@router.post("", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:117:@router.put("/{item_id}", response_model=UserRow)
 services/web/admin-console/backend/app/modules/users/router.py:121:@router.delete("/{item_id}")
-services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
-services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
-services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
-services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
 services/web/admin-console/backend/app/modules/ai_library/router.py:21:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:22:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/ai_library/router.py:234:@router.get("/pdfs/data", response_model=List[dict])
@@ -828,20 +821,29 @@ services/web/admin-console/backend/app/modules/leads/router.py:146:@router.get("
 services/web/admin-console/backend/app/modules/leads/router.py:196:@router.get("/me", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:235:@router.get("/{lead_id}", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads/router.py:312:@router.get("/{lead_id}/chat", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/main.py:56:@app.get("/health")
+services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
+services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
+services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
+services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
+services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
+services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
-services/web/admin-console/backend/app/main.py:56:@app.get("/health")
-services/web/admin-console/backend/app/dashboards/manager_workspace/router.py:13:@router.get("/manager", response_model=ManagerDashboardSchema)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:14:@router.get("/seller", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:52:@router.get("/leads/{lead_id}", response_model=ClientUserDashboardSchema)
-services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:@router.get("/leads_v2/{lead_id}", response_model=ClientUserDashboardSchema)
 ```
 
 ## AI Runtime
@@ -1494,7 +1496,14 @@ class AISettings:
     mail_provider: str = os.getenv("AI_MAIL_PROVIDER", "placeholder")
     llm_provider: str = os.getenv("AI_LLM_PROVIDER", "auto")
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
-    llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")
+    llm_default_model: str = os.getenv(
+        "LLM_DEFAULT_MODEL",
+        os.getenv("LLM_MODEL", "gemini-2.5-flash-lite"),
+    )
+    llm_analyze_turn_model: str = os.getenv(
+        "LLM_ANALYZE_TURN_MODEL",
+        os.getenv("LLM_DEFAULT_MODEL", os.getenv("LLM_MODEL", "gemini-2.5-flash-lite")),
+    )
     llm_timeout_seconds: int = int(os.getenv("LLM_TIMEOUT_SECS", "30"))
     llm_context_cache_enabled: bool = os.getenv("LLM_CONTEXT_CACHE_ENABLED", "true").lower() == "true"
     llm_context_cache_ttl_seconds: int = int(os.getenv("LLM_CONTEXT_CACHE_TTL_SECONDS", "1800"))
@@ -1651,6 +1660,7 @@ def _reset_turn_scoped_state(base_state: BaseGraphState) -> None:
     base_state.lead_advisor.field_to_ask = None
     base_state.lead_advisor.question_to_ask = None
     base_state.memory.last_lookup = MemoryLookupState()
+    base_state.turn_frame = None
 
     if isinstance(base_state, RealtorGraphState):
         base_state.render_mode = None
@@ -1760,7 +1770,6 @@ class ConversationRuntime:
                 answer=final_state.final_response or "",
                 components=components,
                 sources=sources,
-                ui_payload=getattr(final_state, "ui_payload", None),
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1934,6 +1943,7 @@ class BaseGraphState(BaseModel):
     memory: ConversationMemoryState = Field(default_factory=ConversationMemoryState)
     lead: LeadPlaceholder = Field(default_factory=LeadPlaceholder)
     final_response: str | None = None
+    turn_frame: dict[str, Any] | None = None
 
 
 class GenericGraphState(BaseGraphState):
@@ -1944,7 +1954,6 @@ class GenericGraphState(BaseGraphState):
 
 class RealtorGraphState(BaseGraphState):
     """State for the full realtor graph."""
-
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -1989,6 +1998,7 @@ from services.ai_runtime.graph._shared.nodes import (
     collect_lead_data,
     lead_advisor,
     memory_lookup,
+    prepare_synthesis,
     route_next_intent,
     synthesize,
 )
@@ -2043,6 +2053,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_node("mensajear", _mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
+    workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))
     workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
     workflow.add_edge(START, "analyze_turn")
@@ -2063,15 +2074,15 @@ def build_generic_graph(deps: GraphDependencies):
             "memory_lookup": "memory_lookup",
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
-            "synthesize": "synthesize",
+            "synthesize": "prepare_synthesis",
         },
     )
     workflow.add_conditional_edges(
         "memory_lookup",
         build_traced_router("after_memory_lookup", after_memory_lookup, deps),
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "synthesize"},
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor", "end": END, "synthesize": "prepare_synthesis"},
     )
-    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_edge("collect_lead_data", "prepare_synthesis")
     workflow.add_conditional_edges(
         "route_next_intent",
         build_traced_router("after_route_next_intent", after_route_next_intent, deps),
@@ -2087,7 +2098,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "collect_appointment_data",
         build_traced_router("after_collect_appointment_data", after_collect_appointment_data, deps),
-        {"assign_agent": "assign_agent", "synthesize": "synthesize"},
+        {"assign_agent": "assign_agent", "synthesize": "prepare_synthesis"},
     )
     workflow.add_edge("assign_agent", "mensajear")
     workflow.add_edge("mensajear", "check_queue")
@@ -2096,7 +2107,8 @@ def build_generic_graph(deps: GraphDependencies):
         build_traced_router("after_check_queue", after_check_queue, deps),
         {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
     )
-    workflow.add_edge("lead_advisor", "synthesize")
+    workflow.add_edge("lead_advisor", "prepare_synthesis")
+    workflow.add_edge("prepare_synthesis", "synthesize")
     workflow.add_edge("synthesize", END)
     return workflow.compile()
 ```
@@ -2120,6 +2132,7 @@ from services.ai_runtime.graph._shared.nodes import (
     collect_lead_data,
     lead_advisor,
     memory_lookup,
+    prepare_synthesis,
     route_next_intent,
     synthesize,
 )
@@ -2198,6 +2211,7 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_node("mensajear", _mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
+    workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))
     workflow.add_node("synthesize", build_traced_node("synthesize", synthesize, deps))
 
     workflow.add_edge(START, "analyze_turn")
@@ -2218,7 +2232,7 @@ def build_realtor_graph(deps: GraphDependencies):
             "memory_lookup": "memory_lookup",
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
-            "synthesize": "synthesize",
+            "synthesize": "prepare_synthesis",
         },
     )
     workflow.add_conditional_edges(
@@ -2228,10 +2242,10 @@ def build_realtor_graph(deps: GraphDependencies):
             "route_next_intent": "route_next_intent",
             "lead_advisor": "lead_advisor",
             "end": END,
-            "synthesize": "synthesize",
+            "synthesize": "prepare_synthesis",
         },
     )
-    workflow.add_edge("collect_lead_data", "synthesize")
+    workflow.add_edge("collect_lead_data", "prepare_synthesis")
     workflow.add_conditional_edges(
         "route_next_intent",
         build_traced_router("after_route_next_intent", after_route_next_intent, deps),
@@ -2281,8 +2295,6 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "check_queue",
         build_traced_router("after_check_queue", after_check_queue, deps),
-        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
-    )
 ```
 
 ## Canal Web

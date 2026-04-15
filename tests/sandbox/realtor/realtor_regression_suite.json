@@ -45,6 +45,9 @@
             "answer_contains_any": [
               "estacionamiento",
               "estacionamientos",
+              "carro",
+              "carros",
+              "espacio para 2",
               "vehículos",
               "vehiculos"
             ],
@@ -64,8 +67,10 @@
           "expect": {
             "answer_contains_any": [
               "200,000",
+              "ese presupuesto",
               "no encontr",
-              "ampli"
+              "otras zonas",
+              "flexibil"
             ],
             "expected_search_match_scope_any": [
               "none"

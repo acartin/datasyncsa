@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.ai_runtime.domain.contracts import CardPayload, Property
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.contracts import CardPayload, Property
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
+from services.ai_runtime.graph.realtor.turn_frame import merge_seen_properties
 
 
 def build_card_payload(properties: list[Property]) -> list[dict[str, Any]]:
@@ -48,6 +49,11 @@ async def render_cards(state: dict[str, Any], deps: GraphDependencies) -> dict[s
         "render_mode": "cards",
         "ui_payload": {"property_cards": payload},
         "turn_outputs": [*graph_state.turn_outputs, output],
+        "seen_properties": merge_seen_properties(
+            graph_state.seen_properties,
+            selected,
+            current_turn=graph_state.current_turn,
+        ),
         **complete_active_intent(graph_state, output),
     }
     if len(selected) == 1:

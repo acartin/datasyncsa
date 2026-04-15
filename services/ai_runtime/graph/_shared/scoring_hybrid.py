@@ -15,10 +15,10 @@ from services.ai_runtime.domain.prompts import PromptPayload
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     LeadAdvisorState,
-    RealtorGraphState,
     SCORING_CRITERION_ALIASES,
     SCORING_FIELD_ALIASES,
 )
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.prompt_context import summarize_messages_for_prompt
 
 

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from services.ai_runtime.domain.contracts import FlowName, Vertical
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState, RealtorGraphState
+from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState
 from services.ai_runtime.graph.generic.graph import build_generic_graph
 from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 GraphBuilder = Callable[[GraphDependencies], Any]
 ComponentBuilder = Callable[[BaseGraphState], list[dict[str, object]]]
@@ -48,6 +49,8 @@ class VerticalSpec:
     state_model: type[BaseGraphState]
     graph_builder: GraphBuilder
     component_builder: ComponentBuilder = _build_empty_components
+    scoring_criteria: tuple[str, ...] = ()
+    required_fields: tuple[str, ...] = ()
 
 
 _VERTICAL_SPECS: dict[str, VerticalSpec] = {
@@ -57,24 +60,39 @@ _VERTICAL_SPECS: dict[str, VerticalSpec] = {
         state_model=RealtorGraphState,
         graph_builder=build_realtor_graph,
         component_builder=_build_realtor_components,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=(
+            "nombre",
+            "contacto",
+            "presupuesto",
+            "aprobacion",
+            "fecha_preferida",
+            "appointment_intent",
+        ),
     ),
     "healthcare": VerticalSpec(
         slug="healthcare",
         default_flow="basic_flow",
         state_model=GenericGraphState,
         graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "emergencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "appointment_intent"),
     ),
     "legal": VerticalSpec(
         slug="legal",
         default_flow="basic_flow",
         state_model=GenericGraphState,
         graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "appointment_intent"),
     ),
     "insurance": VerticalSpec(
         slug="insurance",
         default_flow="basic_flow",
         state_model=GenericGraphState,
         graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "presupuesto", "appointment_intent"),
     ),
 }
 
