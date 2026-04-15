@@ -105,6 +105,11 @@ class SDUITransformer:
         if not db_brand:
             return BrandingConfig()
 
+        agent_name = self._normalize_agent_name(
+            db_brand.get("agent_name"),
+            db_brand.get("project"),
+        )
+
         # Si tenemos branding en DB, mapeamos campos
         # lead_brand_configs: primary_color, secondary_color, project (como agent_name)
         return BrandingConfig(
@@ -116,9 +121,9 @@ class SDUITransformer:
             text_on_surface=db_brand.get("text_on_surface", "#f8fafc"),
             
             # Fuentes
-            font_heading_name=db_brand.get("font_heading_name", "Outfit"),
+            font_heading_name=db_brand.get("font_heading_name", "Cormorant Garamond"),
             font_heading_url=db_brand.get("font_heading_url"),
-            font_body_name=db_brand.get("font_body_name", "Inter"),
+            font_body_name=db_brand.get("font_body_name", "DM Sans"),
             font_body_url=db_brand.get("font_body_url"),
             
             # Estética
@@ -129,8 +134,8 @@ class SDUITransformer:
             favicon_base64=db_brand.get("favicon_base64"),
             logo_header_base64=db_brand.get("logo_header_base64"),
             brand_wordmark_base64=db_brand.get("brand_wordmark_base64"),
-            
-            agent_name=db_brand.get("project", db_brand.get("agent_name", "Hommie AI"))
+
+            agent_name=agent_name,
         )
 
     async def _extract_properties_from_sources(self, sources: List[Dict[str, Any]]) -> List[PropertyCard]:
@@ -199,20 +204,188 @@ class SDUITransformer:
     async def extract_property_filters_for_query(self, query_text: str) -> Dict[str, Any]:
         return await asyncio.to_thread(db_manager.extract_property_filters, query_text)
 
+    def _first_non_empty(self, *values: Any) -> Any:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    return cleaned
+                continue
+            if isinstance(value, list):
+                if value:
+                    return value
+                continue
+            return value
+        return None
+
+    def _normalize_list(self, *sources: Any) -> List[str]:
+        seen: set[str] = set()
+        values: List[str] = []
+
+        def push(raw_value: Any) -> None:
+            if raw_value is None:
+                return
+            value = str(raw_value).strip()
+            if not value:
+                return
+            key = value.lower()
+            if key in seen:
+                return
+            seen.add(key)
+            values.append(value)
+
+        for source in sources:
+            if isinstance(source, list):
+                for item in source:
+                    push(item)
+            elif isinstance(source, str):
+                for item in source.split(","):
+                    push(item)
+
+        return values
+
+    def _coerce_int(self, value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(float(value))
+        except Exception:
+            digits = re.sub(r"[^0-9.]", "", str(value))
+            if not digits:
+                return None
+            try:
+                return int(float(digits))
+            except Exception:
+                return None
+
+    def _coerce_float(self, value: Any) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except Exception:
+            digits = re.sub(r"[^0-9.]", "", str(value))
+            if not digits:
+                return None
+            try:
+                return float(digits)
+            except Exception:
+                return None
+
+    def _strip_html(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = re.sub(r"<[^>]+>", " ", str(value))
+        text = re.sub(r"\s+", " ", text).strip()
+        return text or None
+
+    def _build_price_note(self, listing_type: Any) -> str:
+        value = str(listing_type or "").strip().lower()
+        if any(token in value for token in ("alquiler", "renta", "rent")):
+            return "Precio de alquiler"
+        if any(token in value for token in ("venta", "sale")):
+            return "Precio de venta"
+        return "Precio publicado"
+
+    def _humanize_badge(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        normalized = re.sub(r"\s+", " ", text.replace("_", " ")).strip()
+        normalized_lower = normalized.lower()
+        if normalized_lower == "default" or normalized_lower.startswith("default "):
+            return None
+        return normalized.title()
+
+    def _normalize_agent_name(self, *candidates: Any) -> str:
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            text = re.sub(r"\s+", " ", str(candidate).strip())
+            if not text:
+                continue
+            lowered = text.lower()
+            if lowered == "default" or lowered.startswith("default "):
+                continue
+            return text
+        return ""
+
+    def _build_badges(self, features: Dict[str, Any], payload: Dict[str, Any] | None = None) -> tuple[str | None, str | None]:
+        source = payload or {}
+        badge_main = self._humanize_badge(
+            self._first_non_empty(source.get("badge_main"), features.get("badge_main"))
+        )
+        if not badge_main and (features.get("is_featured") or source.get("is_featured")):
+            badge_main = "Destacada"
+
+        badge_sub = self._humanize_badge(
+            self._first_non_empty(
+                source.get("badge_sub"),
+                features.get("badge_sub"),
+                features.get("listing_type"),
+                features.get("property_type"),
+            )
+        )
+        return badge_main, badge_sub
+
     def _map_property_data_to_card(self, prop_data: Dict[str, Any]) -> Union[PropertyCard, None]:
         try:
             title = (prop_data.get("title") or "Propiedad Sugerida").replace("&#8211;", "-")
-            location = f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", ")
             features = prop_data.get("features") if isinstance(prop_data.get("features"), dict) else {}
-            tags = features.get("highlights", []) if isinstance(features, dict) else []
+            location = self._first_non_empty(
+                features.get("address"),
+                f"{prop_data.get('address_city', '')}, {prop_data.get('address_state', '')}".strip(", "),
+            )
+            images = [str(url).strip() for url in (prop_data.get("images") or []) if str(url).strip()]
+            amenities = self._normalize_list(features.get("amenities"))
+            tags = self._normalize_list(features.get("highlights"), amenities)
+            description = self._strip_html(prop_data.get("description") or features.get("description"))
+            bedrooms_clean = self._coerce_int(self._first_non_empty(features.get("bedrooms_clean"), features.get("bedrooms"), prop_data.get("bedrooms")))
+            bathrooms_clean = self._coerce_float(self._first_non_empty(features.get("bathrooms_clean"), features.get("bathrooms"), prop_data.get("bathrooms")))
+            sqm_clean = self._coerce_int(self._first_non_empty(features.get("sqm_clean"), prop_data.get("area_sqm")))
+            garage_clean = self._coerce_int(self._first_non_empty(features.get("garage_clean"), features.get("garage")))
+            badge_main, badge_sub = self._build_badges(features)
+            price_note = self._build_price_note(features.get("listing_type"))
+            feature_payload = dict(features)
+            if location:
+                feature_payload.setdefault("address", location)
+            if bedrooms_clean is not None:
+                feature_payload["bedrooms_clean"] = bedrooms_clean
+            if bathrooms_clean is not None:
+                feature_payload["bathrooms_clean"] = bathrooms_clean
+            if sqm_clean is not None:
+                feature_payload["sqm_clean"] = sqm_clean
+            if garage_clean is not None:
+                feature_payload["garage_clean"] = garage_clean
+            if amenities:
+                feature_payload["amenities"] = amenities
+            if description:
+                feature_payload.setdefault("description", description)
             return PropertyCard(
                 id=str(prop_data.get("id")),
                 title=title,
                 price=float(prop_data.get("price", 0) or 0),
+                currency=str(prop_data.get("currency_id") or "USD"),
+                price_note=price_note,
                 location=location,
-                image_url=prop_data["images"][0] if prop_data.get("images") else None,
+                image_url=images[0] if images else None,
+                image_urls=images,
+                photo_count=len(images),
                 public_url=prop_data.get("public_url"),
-                tags=tags if isinstance(tags, list) else [],
+                features=feature_payload,
+                tags=tags[:8],
+                amenities=amenities[:8],
+                description=description,
+                badge_main=badge_main,
+                badge_sub=badge_sub,
+                bedrooms_clean=bedrooms_clean,
+                bathrooms_clean=bathrooms_clean,
+                sqm_clean=sqm_clean,
+                garage_clean=garage_clean,
             )
         except Exception as e:
             logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
@@ -222,22 +395,84 @@ class SDUITransformer:
         try:
             title = str(payload.get("title") or "Propiedad sugerida").replace("&#8211;", "-")
             property_id = str(payload.get("id") or "").strip()
-            location = str(payload.get("neighborhood") or payload.get("city") or "").strip()
-            rooms = payload.get("rooms")
-            area_display = str(payload.get("area_display") or "").strip()
-            tags: List[str] = []
+            features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
+            location = self._first_non_empty(
+                payload.get("location"),
+                payload.get("neighborhood"),
+                payload.get("city"),
+                features.get("address"),
+                features.get("province"),
+            )
+            rooms = self._first_non_empty(payload.get("rooms"), features.get("bedrooms"))
+            area_display = self._first_non_empty(payload.get("area_display"), features.get("area_display"))
+            image_urls = [
+                str(url).strip()
+                for url in (payload.get("image_urls") or [])
+                if str(url).strip()
+            ]
+            image_url = self._first_non_empty(payload.get("image_url"), image_urls[0] if image_urls else None)
+            if image_url and not image_urls:
+                image_urls = [image_url]
+            amenities = self._normalize_list(payload.get("amenities"), features.get("amenities"))
+            tags = self._normalize_list(payload.get("tags"), payload.get("amenities"), features.get("highlights"), amenities)
             if rooms:
-                tags.append(f"{rooms} hab")
+                tags = self._normalize_list(tags, [f"{rooms} hab"])
             if area_display:
-                tags.append(area_display)
+                tags = self._normalize_list(tags, [area_display])
+            bedrooms_clean = self._coerce_int(self._first_non_empty(payload.get("bedrooms_clean"), features.get("bedrooms_clean"), rooms))
+            bathrooms_clean = self._coerce_float(self._first_non_empty(payload.get("bathrooms_clean"), features.get("bathrooms_clean"), payload.get("bathrooms"), features.get("bathrooms")))
+            sqm_clean = self._coerce_int(self._first_non_empty(payload.get("sqm_clean"), features.get("sqm_clean"), area_display))
+            garage_clean = self._coerce_int(self._first_non_empty(payload.get("garage_clean"), features.get("garage_clean"), payload.get("garage"), features.get("garage")))
+            description = self._strip_html(
+                self._first_non_empty(
+                    payload.get("description"),
+                    payload.get("description_html"),
+                    features.get("description"),
+                )
+            )
+            badge_main, badge_sub = self._build_badges(features, payload)
+            price_note = self._first_non_empty(
+                payload.get("price_note"),
+                features.get("price_note"),
+            ) or self._build_price_note(self._first_non_empty(payload.get("listing_type"), features.get("listing_type")))
+            feature_payload = dict(features)
+            if location:
+                feature_payload.setdefault("address", location)
+            if area_display:
+                feature_payload.setdefault("area_display", area_display)
+            if bedrooms_clean is not None:
+                feature_payload["bedrooms_clean"] = bedrooms_clean
+            if bathrooms_clean is not None:
+                feature_payload["bathrooms_clean"] = bathrooms_clean
+            if sqm_clean is not None:
+                feature_payload["sqm_clean"] = sqm_clean
+            if garage_clean is not None:
+                feature_payload["garage_clean"] = garage_clean
+            if amenities:
+                feature_payload["amenities"] = amenities
+            if description:
+                feature_payload.setdefault("description", description)
             return PropertyCard(
                 id=property_id or None,
                 title=title,
                 price=self._parse_price_value(payload),
+                currency=str(payload.get("currency") or "USD"),
+                price_note=price_note,
                 location=location or None,
-                image_url=payload.get("image_url"),
+                image_url=image_url,
+                image_urls=image_urls,
+                photo_count=self._coerce_int(payload.get("photo_count")) or len(image_urls),
                 public_url=payload.get("cta_url") or payload.get("public_url"),
-                tags=tags,
+                features=feature_payload,
+                tags=tags[:8],
+                amenities=amenities[:8],
+                description=description,
+                badge_main=badge_main,
+                badge_sub=badge_sub,
+                bedrooms_clean=bedrooms_clean,
+                bathrooms_clean=bathrooms_clean,
+                sqm_clean=sqm_clean,
+                garage_clean=garage_clean,
             )
         except Exception as exc:
             logger.warning("Error mapping canonical property card: %s", exc)

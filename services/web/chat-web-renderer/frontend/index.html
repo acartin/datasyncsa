@@ -7,7 +7,7 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Hommie - Asistente Inmobiliario AI</title>
     <!-- Premium Design System -->
-    <link rel="stylesheet" href="index.css?v=3">
+    <link rel="stylesheet" href="index.css?v=202604152445">
 </head>
 
 <body>
@@ -23,17 +23,17 @@
         <!-- Header -->
         <div class="widget-header">
             <div class="avatar-container">
-                <div class="brand-avatar">H</div>
+                <div class="brand-avatar"></div>
                 <div class="status-indicator">
                     <span class="dot"></span>
                     <span>En línea</span>
                 </div>
             </div>
             <div class="header-info">
-                <h3>Hommie AI</h3>
+                <h3></h3>
             </div>
             <button id="new-chat-button" class="new-chat-button" type="button" aria-label="Iniciar chat nuevo">
-                New Chat
+                Nuevo chat
             </button>
             <button class="close-button" onclick="toggleWidget()" aria-label="Cerrar chat">
                 <svg viewBox="0 0 24 24">
@@ -68,11 +68,11 @@
             console.error(`Error en UI: ${msg} en ${url}:${line}`);
         };
 
-        import { ChatRenderer } from './core/renderer.js?t=202604151830';
+        import { ChatRenderer } from './core/renderer.js?t=202604152445';
 
         // Realtor Components
-        import './components/realtor/property-card.js?t=202604151830';
-        import './components/realtor/property-grid.js?t=202604151830';
+        import './components/realtor/property-card.js?t=202604152445';
+        import './components/realtor/property-grid.js?t=202604152445';
         import './components/interactive/action-menu.js';
         import './components/interactive/mortgage-calc.js';
         import './components/media/map-widget.js';
@@ -514,6 +514,31 @@
             });
         };
 
+        const submitPrompt = async (text) => {
+            if (bootstrapInFlight) {
+                return;
+            }
+
+            const normalizedText = String(text || '').trim();
+            if (!normalizedText) {
+                return;
+            }
+
+            try {
+                await sendChatPayload(normalizedText);
+            } catch (err) {
+                console.error("Error runtime:", err);
+                if (err?.name === 'AbortError') {
+                    pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");
+                } else {
+                    const msg = (err?.message || "").trim();
+                    pushSystemMessage(msg || "No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
+                }
+            }
+        };
+
+        window.sendPrompt = (text) => submitPrompt(text);
+
         const setRuntimeStatus = (kind, label, details = '') => {
             if (!statusIndicator || !statusDot || !statusLabel) return;
             statusIndicator.classList.remove('status-ok', 'status-degraded', 'status-down');
@@ -564,10 +589,18 @@
             });
         }
 
+        const normalizeBrandAgentName = (value) => {
+            const text = String(value || '').trim().replace(/\s+/g, ' ');
+            if (!text) return '';
+            const normalized = text.toLowerCase();
+            return normalized === 'default' || normalized.startsWith('default ') ? '' : text;
+        };
+
         const applyBranding = (branding) => {
             console.log("Applying branding:", branding);
             if (!branding) return;
             const root = document.documentElement;
+            const brandName = normalizeBrandAgentName(branding.agent_name);
 
             // 1. Jerarquía de Marca (Primary -> Estructural)
             if (branding.primary_color) {
@@ -602,7 +635,7 @@
                 loadFont(branding.font_body_url);
             }
             if (branding.font_heading_name) {
-                root.style.setProperty('--font-heading', `'${branding.font_heading_name}', sans-serif`);
+                root.style.setProperty('--font-heading', `'${branding.font_heading_name}', serif`);
             }
             if (branding.font_body_name) {
                 root.style.setProperty('--font-body', `'${branding.font_body_name}', sans-serif`);
@@ -619,6 +652,7 @@
             // 6. Logos y Wordmark (Acomodado Premium)
             const titleElement = document.querySelector('.header-info h3');
             if (titleElement) {
+                titleElement.style.padding = '';
                 if (branding.brand_wordmark_base64) {
                     titleElement.innerHTML = '';
                     const img = document.createElement('img');
@@ -632,19 +666,19 @@
                     // Fallback si la imagen no carga
                     img.onerror = () => {
                         console.warn("Logo wordmark falló al cargar. Usando texto.");
-                        titleElement.innerText = branding.agent_name || "Hommie AI";
+                        titleElement.innerText = brandName;
                     };
 
                     titleElement.appendChild(img);
                     titleElement.style.padding = "4px 0";
-                } else if (branding.agent_name) {
-                    titleElement.innerText = branding.agent_name;
+                } else if (brandName) {
+                    titleElement.innerText = brandName;
+                } else {
+                    titleElement.textContent = '';
                 }
             }
 
-            if (branding.agent_name) {
-                renderer.setBotName(branding.agent_name);
-            }
+            renderer.setBotName(brandName);
 
             const avatar = document.querySelector('.brand-avatar');
             if (avatar) {
@@ -659,7 +693,7 @@
                     img.style.objectFit = 'contain';
 
                     img.onerror = () => {
-                        avatar.innerText = (branding.agent_name || "H").charAt(0).toUpperCase();
+                        avatar.innerText = brandName ? brandName.charAt(0).toUpperCase() : '';
                         avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
                     };
 
@@ -667,10 +701,17 @@
                     avatar.style.background = 'transparent';
                     avatar.style.padding = '4px';
                     avatar.style.boxShadow = 'none';
-                } else if (branding.agent_name) {
-                    const initials = branding.agent_name.charAt(0).toUpperCase();
+                } else if (brandName) {
+                    const initials = brandName.charAt(0).toUpperCase();
                     avatar.innerText = initials;
                     avatar.style.background = 'linear-gradient(45deg, var(--brand-accent), var(--brand-secondary))';
+                    avatar.style.padding = '';
+                    avatar.style.boxShadow = '';
+                } else {
+                    avatar.textContent = '';
+                    avatar.style.background = 'transparent';
+                    avatar.style.padding = '';
+                    avatar.style.boxShadow = 'none';
                 }
             }
 
@@ -779,8 +820,7 @@
             };
 
             const text = payloadToText[payload] || `Acción: ${payload}`;
-            input.value = text;
-            form.dispatchEvent(new Event('submit', { cancelable: true }));
+            submitPrompt(text);
         });
 
         document.addEventListener('property-open-map', (event) => {
@@ -792,26 +832,12 @@
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (bootstrapInFlight) {
-                return;
-            }
             const text = input.value;
             if (!text || !text.trim()) {
                 return;
             }
             input.value = '';
-
-            try {
-                await sendChatPayload(text);
-            } catch (err) {
-                console.error("Error runtime:", err);
-                if (err?.name === 'AbortError') {
-                    pushSystemMessage("La respuesta tardó demasiado. Intenta de nuevo en unos segundos.");
-                } else {
-                    const msg = (err?.message || "").trim();
-                    pushSystemMessage(msg || "No pude conectarme al servicio en este momento. Intenta de nuevo en unos segundos.");
-                }
-            }
+            await submitPrompt(text);
         });
 
         // Initial + periodic dependency check for header indicator

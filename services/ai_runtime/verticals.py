@@ -27,14 +27,42 @@ def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, obj
     components: list[dict[str, object]] = []
     ui_payload = final_state.ui_payload or {}
     for card in ui_payload.get("property_cards", []):
+        features = {
+            "bedrooms_clean": card.get("bedrooms_clean"),
+            "bathrooms_clean": card.get("bathrooms_clean"),
+            "sqm_clean": card.get("sqm_clean"),
+            "garage_clean": card.get("garage_clean"),
+            "amenities": card.get("amenities") or [],
+            "address": card.get("address"),
+            "province": card.get("province"),
+        }
         components.append(
             {
                 "type": "property-card",
                 "id": card.get("id"),
                 "title": card.get("title"),
                 "price": card.get("price"),
+                "currency": card.get("currency"),
+                "price_note": card.get("price_note"),
+                "location": card.get("location") or card.get("address") or card.get("province"),
                 "image_url": card.get("primary_image_url"),
+                "image_urls": card.get("image_urls") or [],
+                "photo_count": card.get("photo_count"),
                 "public_url": card.get("public_url"),
+                "tags": card.get("amenities") or [],
+                "amenities": card.get("amenities") or [],
+                "description": card.get("description"),
+                "badge_main": card.get("badge_main"),
+                "badge_sub": card.get("badge_sub"),
+                "bedrooms_clean": card.get("bedrooms_clean"),
+                "bathrooms_clean": card.get("bathrooms_clean"),
+                "sqm_clean": card.get("sqm_clean"),
+                "garage_clean": card.get("garage_clean"),
+                "features": {
+                    key: value
+                    for key, value in features.items()
+                    if value not in (None, "", [])
+                },
                 "city": card.get("province"),
                 "neighborhood": card.get("province"),
             }

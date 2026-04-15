@@ -6,11 +6,11 @@
 export class ChatRenderer {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
-        this.botName = "Hommie AI";
+        this.botName = "";
     }
 
     setBotName(name) {
-        if (name) this.botName = name;
+        this.botName = String(name || '').trim();
     }
 
     scrollToBottom() {
@@ -28,7 +28,7 @@ export class ChatRenderer {
         components.forEach((comp) => {
             const element = this.createComponent(comp);
             if (element) {
-                const bubble = this.wrapInBubble(element, comp.sender || 'bot');
+                const bubble = this.wrapInBubble(element, comp.sender || 'bot', comp.type);
                 this.container.appendChild(bubble);
             }
         });
@@ -50,15 +50,23 @@ export class ChatRenderer {
                 el = document.createElement('property-card-v2');
                 el.title = config.title;
                 el.price = config.price;
+                el.currency = config.currency;
+                el.priceNote = config.price_note;
                 el.location = config.location;
                 el.imageUrl = config.image_url;
+                el.imageUrls = config.image_urls || [];
+                el.photoCount = config.photo_count;
                 el.publicUrl = config.public_url;
-                el.bedrooms = config.bedrooms_clean;
-                el.bathrooms = config.bathrooms_clean;
-                el.sqm = config.sqm_clean;
-                el.garage = config.garage_clean;
-                el.amenities = config.amenities || [];
-                el.description = config.description;
+                el.features = config.features || {};
+                el.tags = config.tags || [];
+                el.badgeMain = config.badge_main;
+                el.badgeSub = config.badge_sub;
+                el.bedrooms = config.bedrooms_clean ?? config.features?.bedrooms_clean ?? config.features?.bedrooms;
+                el.bathrooms = config.bathrooms_clean ?? config.features?.bathrooms_clean ?? config.features?.bathrooms;
+                el.sqm = config.sqm_clean ?? config.features?.sqm_clean ?? config.features?.sqm ?? config.features?.area_display;
+                el.garage = config.garage_clean ?? config.features?.garage_clean ?? config.features?.garage;
+                el.amenities = config.amenities || config.features?.amenities || [];
+                el.description = config.description || config.features?.description || '';
                 break;
 
             case 'property-grid':
@@ -112,18 +120,24 @@ export class ChatRenderer {
         if (indicator) indicator.remove();
     }
 
-    wrapInBubble(element, sender) {
+    wrapInBubble(element, sender, componentType = 'chat') {
         const wrapper = document.createElement('div');
         wrapper.className = `message-wrapper ${sender}`;
+        wrapper.dataset.componentType = componentType;
 
-        const name = document.createElement('div');
-        name.className = 'sender-name';
-        name.innerText = sender === 'user' ? 'Tú' : this.botName;
-
-        wrapper.appendChild(name);
+        const senderLabel = sender === 'user' ? 'Tú' : this.botName;
+        if (senderLabel) {
+            const name = document.createElement('div');
+            name.className = 'sender-name';
+            name.innerText = senderLabel;
+            wrapper.appendChild(name);
+        }
 
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
+        if (componentType !== 'chat') {
+            bubble.classList.add('rich-content', `rich-${componentType}`);
+        }
         bubble.appendChild(element);
         wrapper.appendChild(bubble);
 

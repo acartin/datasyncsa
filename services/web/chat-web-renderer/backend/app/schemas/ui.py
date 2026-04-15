@@ -14,11 +14,23 @@ class PropertyCard(BaseComponent):
     type: str = "property-card"
     title: str
     price: float
+    currency: Optional[str] = "USD"
+    price_note: Optional[str] = None
     location: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: List[str] = Field(default_factory=list)
+    photo_count: Optional[int] = None
     public_url: Optional[str] = None
-    features: Dict[str, Union[int, float, str]] = Field(default_factory=dict)
+    features: Dict[str, Any] = Field(default_factory=dict)
     tags: List[str] = Field(default_factory=list)
+    amenities: List[str] = Field(default_factory=list)
+    description: Optional[str] = None
+    badge_main: Optional[str] = None
+    badge_sub: Optional[str] = None
+    bedrooms_clean: Optional[int] = None
+    bathrooms_clean: Optional[float] = None
+    sqm_clean: Optional[int] = None
+    garage_clean: Optional[int] = None
 
 class MortgageCalculator(BaseComponent):
     type: str = "mortgage-calculator"
@@ -58,9 +70,9 @@ class BrandingConfig(BaseModel):
     text_on_surface: Optional[str] = "#f8fafc"
     
     # Fuentes
-    font_heading_name: Optional[str] = "Outfit"
+    font_heading_name: Optional[str] = "Cormorant Garamond"
     font_heading_url: Optional[str] = None
-    font_body_name: Optional[str] = "Inter"
+    font_body_name: Optional[str] = "DM Sans"
     font_body_url: Optional[str] = None
     
     # Estética

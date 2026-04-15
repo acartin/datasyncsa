@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-06T19:46:07Z`
+- Generated UTC: `2026-04-15T18:37:58Z`
 - Repo root: `/srv/datasyncsa`
 - Git branch: `HETZNER-LOCAL-2026-Abril-06`
-- Git commit: `cfa24a8`
+- Git commit: `62a19c8`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-06T19:46:07Z`
+- Generated UTC: `2026-04-15T18:37:58Z`
 - Repo root: `/srv/datasyncsa`
 - Git branch: `HETZNER-LOCAL-2026-Abril-06`
-- Git commit: `cfa24a8`
+- Git commit: `62a19c8`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -51,20 +51,20 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
+datasyncsa-web
 postgres
 redis
+etl-docs-worker
 scoring-core
 scoring-core-worker
-test-ui
 admin-console-api
-admin-console-web
 ai-runtime
 chat-web-renderer-api
-chat-web-renderer-ui
-datasyncsa-web
 etl-docs
-etl-docs-worker
 portainer
+test-ui
+admin-console-web
+chat-web-renderer-ui
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -99,14 +99,14 @@ postgres
 redis
 scoring-core
 scoring-core-worker
+test-ui
 admin-console-api
 admin-console-web
 ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
-test-ui
-datasyncsa-web
 etl-docs
+datasyncsa-web
 etl-docs-worker
 portainer
 ```
@@ -382,7 +382,7 @@ services:
     ports:
       - "${REALTOR_WEB_PORT}:80"
     volumes:
-      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:ro
+      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:rw
       - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       - TZ=${TZ:-UTC}
@@ -641,17 +641,19 @@ services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main_
 services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
 services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
 services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
-services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
-services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
+services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
+services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
+services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
@@ -671,8 +673,6 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 ```
 
 ## Rutas API Detectadas
@@ -746,25 +746,6 @@ services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
-services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
-services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
-services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
-services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
-services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
-services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:151:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:529:@router.get("/lookups/verticals")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:534:@router.get("/lookups/models")
@@ -844,6 +825,25 @@ services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 ```
 
 ## AI Runtime
@@ -1608,10 +1608,10 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import (
     BaseGraphState,
     MemoryLookupState,
-    RealtorGraphState,
     build_lead_advisor_state,
     build_base_state,
 )
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.runtime.turn_trace import (
     TurnTraceContext,
@@ -1774,7 +1774,7 @@ class ConversationRuntime:
 ### `services/ai_runtime/domain/state.py`
 
 ```
-"""Graph state contracts for generic and realtor assistants."""
+"""Base graph state contracts shared by every vertical."""
 
 from __future__ import annotations
 
@@ -1793,7 +1793,6 @@ from services.ai_runtime.domain.contracts import (
     LeadPlaceholder,
     LeadScores,
     PendingDecision,
-    Property,
     ScoringProfile,
     TenantConfig,
     TurnAnalysis,
@@ -1801,18 +1800,6 @@ from services.ai_runtime.domain.contracts import (
 )
 
 
-DEFAULT_SCORING_CRITERIA_BY_VERTICAL: dict[str, list[str]] = {
-    "realtor": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-    "healthcare": ["apertura", "intencion", "emergencia", "match", "solvencia"],
-    "legal": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-    "insurance": ["apertura", "intencion", "urgencia", "match", "solvencia"],
-}
-DEFAULT_REQUIRED_FIELDS_BY_VERTICAL: dict[str, list[str]] = {
-    "realtor": ["nombre", "contacto", "presupuesto", "aprobacion", "fecha_preferida", "appointment_intent"],
-    "healthcare": ["nombre", "contacto", "appointment_intent"],
-    "legal": ["nombre", "contacto", "appointment_intent"],
-    "insurance": ["nombre", "contacto", "presupuesto", "appointment_intent"],
-}
 SCORING_CRITERION_ALIASES: dict[str, tuple[str, ...]] = {
     "apertura": ("apertura", "engagement", "engage", "openness"),
     "intencion": ("intencion", "intent", "purchase_intent"),
@@ -1845,30 +1832,6 @@ SCORING_FIELD_ALIASES: dict[str, str] = {
     "schedule_intent": "appointment_intent",
 }
 _EMAIL_CONTACT_PATTERN = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", flags=re.IGNORECASE)
-
-
-class SearchFilters(BaseModel):
-    ubicacion: str | None = None
-    habitaciones: int | None = None
-    banos: float | None = None
-    garage: int | None = None
-    precio_max: float | None = None
-    precio_min: float | None = None
-    currency: str | None = None
-    provincia: str | None = None
-    amenidades: list[str] = Field(default_factory=list)
-    tipo: str | None = None
-    operacion: str | None = None
-
-
-class FinancialContext(BaseModel):
-    property_id: str | None = None
-    price: float | None = None
-    currency: str | None = None
-    prima: float | None = None
-    plazo: int | None = None
-    banco: str | None = None
-    resultado: dict[str, Any] | None = None
 
 
 class EscalationState(BaseModel):
@@ -1952,8 +1915,45 @@ class GenericGraphState(BaseGraphState):
     pass
 
 
-class RealtorGraphState(BaseGraphState):
-    """State for the full realtor graph."""
+def is_valid_contact_email(value: str | None) -> bool:
+    if not value:
+        return False
+    return bool(_EMAIL_CONTACT_PATTERN.match(value.strip()))
+
+
+def is_valid_contact_phone(value: str | None) -> bool:
+    if not value:
+        return False
+    digits = re.sub(r"\D", "", value)
+    return 8 <= len(digits) <= 15
+
+
+def has_valid_lead_contact(extracted: LeadExtracted) -> bool:
+    return is_valid_contact_email(extracted.email) or is_valid_contact_phone(extracted.telefono)
+
+
+def _normalize_criterion_key(key: str) -> str:
+    return str(key or "").strip().lower()
+
+
+def _normalize_field_key(key: str) -> str:
+    normalized = str(key or "").strip().lower()
+    return SCORING_FIELD_ALIASES.get(normalized, normalized)
+
+
+def _vertical_scoring_defaults(vertical: Vertical) -> tuple[list[str], list[str]]:
+    """Late-bound lookup of per-vertical scoring defaults.
+
+    Avoids a circular import between ``domain.state`` and ``verticals``.
+    """
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    try:
+        spec = get_vertical_spec(vertical)
+    except ValueError:
+        return [], []
+    return list(spec.scoring_criteria), list(spec.required_fields)
+
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -2123,7 +2123,7 @@ from langgraph.graph import END, START, StateGraph
 
 from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import RealtorGraphState
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes import (
     analyze_turn,
     ask_clarification,

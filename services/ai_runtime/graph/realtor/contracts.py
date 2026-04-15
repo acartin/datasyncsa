@@ -83,6 +83,16 @@ class CardPayload(BaseModel):
     bedrooms_clean: int
     bathrooms_clean: float
     sqm_clean: int | None = None
+    garage_clean: int = 0
+    location: str | None = None
+    address: str | None = None
     primary_image_url: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    photo_count: int = 0
     public_url: str | None = None
     province: str | None = None
+    amenities: list[str] = Field(default_factory=list)
+    description: str | None = None
+    price_note: str | None = None
+    badge_main: str | None = None
+    badge_sub: str | None = None
