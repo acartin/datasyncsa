@@ -342,7 +342,7 @@ services:
     ports:
       - "${REALTOR_WEB_PORT}:80"
     volumes:
-      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:ro
+      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:rw
       - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       - TZ=${TZ:-UTC}

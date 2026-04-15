@@ -19,7 +19,7 @@ export class PropertyGrid extends LitElement {
             padding: 5px;
         }
         ::slotted(property-card) {
-            flex: 0 0 250px;
+            flex: 0 0 280px;
         }
     `;
 
@@ -27,12 +27,18 @@ export class PropertyGrid extends LitElement {
         return html`
             <div class="grid-container">
                 ${this.properties?.map(p => html`
-                    <property-card 
+                    <property-card-v2 
                         .title="${p.title}" 
                         .price="${p.price}" 
                         .location="${p.location}" 
                         .imageUrl="${p.image_url}"
-                        .publicUrl="${p.public_url}">
+                        .publicUrl="${p.public_url}"
+                        .bedrooms="${p.bedrooms_clean}"
+                        .bathrooms="${p.bathrooms_clean}"
+                        .sqm="${p.sqm_clean}"
+                        .garage="${p.garage_clean}"
+                        .amenities="${p.amenities || []}"
+                        .description="${p.description}">
                     </property-card>
                 `)}
             </div>

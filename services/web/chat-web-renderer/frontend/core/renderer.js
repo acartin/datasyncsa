@@ -47,12 +47,18 @@ export class ChatRenderer {
                 break;
 
             case 'property-card':
-                el = document.createElement('property-card');
+                el = document.createElement('property-card-v2');
                 el.title = config.title;
                 el.price = config.price;
                 el.location = config.location;
                 el.imageUrl = config.image_url;
                 el.publicUrl = config.public_url;
+                el.bedrooms = config.bedrooms_clean;
+                el.bathrooms = config.bathrooms_clean;
+                el.sqm = config.sqm_clean;
+                el.garage = config.garage_clean;
+                el.amenities = config.amenities || [];
+                el.description = config.description;
                 break;
 
             case 'property-grid':

@@ -180,6 +180,8 @@ class Appointment(BaseModel):
     tipo: str | None = None
     fecha: str | None = None
     hora: str | None = None
+    propiedad_id: str | None = None
+    contacto: str | None = None
     agente_asignado: str | None = None
     confirmada: bool = False
     datos_completos: bool = False

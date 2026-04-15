@@ -9,7 +9,7 @@ from typing import Sequence
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from services.ai_runtime.domain.contracts import Property
+from services.ai_runtime.graph.realtor.contracts import Property
 
 
 class PropertyRepository:
