@@ -57,7 +57,7 @@ class SDUITransformer:
                 ))
 
         # 3. Detectar Intenciones de Acción (Heurística simple por ahora)
-        if ai_text and ("cita" in ai_text.lower() or "visita" in ai_text.lower()):
+        if ai_text and not property_cards and ("cita" in ai_text.lower() or "visita" in ai_text.lower()):
             components.append(ActionMenu(
                 options=[
                     {"label": "📅 Agendar Visita", "payload": "SCHEDULE_VISIT"},
@@ -93,6 +93,15 @@ class SDUITransformer:
                 text = str(payload.get("text") or "").strip()
                 if text:
                     components.append(ChatMessage(text=text, sender="bot"))
+                continue
+
+            if comp_type == "action-menu":
+                components.append(
+                    ActionMenu(
+                        title=str(payload.get("title") or "").strip() or None,
+                        options=payload.get("options") or [],
+                    )
+                )
                 continue
 
         return components
@@ -332,6 +341,126 @@ class SDUITransformer:
         )
         return badge_main, badge_sub
 
+    def _normalize_stat_items(self, stats: Any) -> List[Dict[str, str]]:
+        normalized: List[Dict[str, str]] = []
+        for raw_item in stats or []:
+            if not isinstance(raw_item, dict):
+                continue
+            icon = str(raw_item.get("icon") or "").strip().lower()
+            value = str(raw_item.get("value") or "").strip()
+            label = str(raw_item.get("label") or "").strip()
+            if not icon or not value or not label:
+                continue
+            normalized.append({"icon": icon, "value": value, "label": label})
+        return normalized[:3]
+
+    def _is_land_property(self, title: Any, features: Dict[str, Any], bedrooms_clean: int | None, bathrooms_clean: float | None) -> bool:
+        hints = " ".join(
+            filter(
+                None,
+                [
+                    str(title or "").strip(),
+                    str(features.get("property_type") or "").strip(),
+                    str(features.get("land_use") or features.get("use") or "").strip(),
+                ],
+            )
+        ).lower()
+        if any(token in hints for token in ("terreno", "lote", "lot", "land", "solar")):
+            return True
+        has_lot_area = bool(self._first_non_empty(features.get("lot_size_sqm"), features.get("lot_size")))
+        return has_lot_area and not (bedrooms_clean or 0) and not (bathrooms_clean or 0)
+
+    def _format_stat_number(self, value: Any) -> str | None:
+        numeric = self._coerce_float(value)
+        if numeric is not None:
+            if float(numeric).is_integer():
+                return str(int(numeric))
+            return f"{numeric:.1f}".rstrip("0").rstrip(".")
+        cleaned = str(value or "").strip()
+        return cleaned or None
+
+    def _format_area_stat(self, value: Any) -> str | None:
+        cleaned = re.sub(r"\b(m2|m²|sqm|sq\.?\s?m)\b", "", str(value or ""), flags=re.IGNORECASE).strip()
+        return cleaned or self._format_stat_number(value)
+
+    def _format_front_stat(self, value: Any) -> str | None:
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            return None
+        if re.search(r"[a-zA-Z]", cleaned):
+            return cleaned
+        compact = self._format_stat_number(cleaned)
+        return f"{compact}m" if compact else None
+
+    def _make_stat(self, icon: str, value: Any, label: str, formatter) -> Dict[str, str] | None:
+        formatted = formatter(value)
+        if not formatted:
+            return None
+        return {"icon": icon, "value": formatted, "label": label}
+
+    def _derive_property_stats(
+        self,
+        *,
+        title: Any,
+        features: Dict[str, Any],
+        bedrooms_clean: int | None,
+        bathrooms_clean: float | None,
+        sqm_clean: int | None,
+        garage_clean: int | None,
+        payload: Dict[str, Any] | None = None,
+    ) -> List[Dict[str, str]]:
+        explicit = self._normalize_stat_items((payload or {}).get("stats"))
+        if explicit:
+            return explicit
+
+        stats: List[Dict[str, str]] = []
+        is_land = self._is_land_property(title, features, bedrooms_clean, bathrooms_clean)
+
+        if is_land:
+            for candidate in (
+                self._make_stat(
+                    "area",
+                    self._first_non_empty(features.get("lot_size_sqm"), sqm_clean, features.get("sqm_clean")),
+                    "m² terreno",
+                    self._format_area_stat,
+                ),
+                self._make_stat(
+                    "front",
+                    self._first_non_empty(
+                        features.get("front"),
+                        features.get("frente"),
+                        features.get("frontage"),
+                        features.get("frontage_m"),
+                    ),
+                    "Frente",
+                    self._format_front_stat,
+                ),
+                self._make_stat(
+                    "use",
+                    self._first_non_empty(features.get("land_use"), features.get("uso_suelo"), features.get("use")),
+                    "Uso suelo",
+                    lambda value: str(value or "").strip() or None,
+                ),
+            ):
+                if candidate:
+                    stats.append(candidate)
+
+        if not stats:
+            area_value = self._first_non_empty(sqm_clean, features.get("sqm_clean"), features.get("lot_size_sqm"))
+            area_label = "m² terreno" if features.get("lot_size_sqm") and not sqm_clean else "m² constr."
+            for candidate in (
+                self._make_stat("bed", bedrooms_clean if (bedrooms_clean or 0) > 0 else None, "Hab.", self._format_stat_number),
+                self._make_stat("bath", bathrooms_clean if (bathrooms_clean or 0) > 0 else None, "Baños", self._format_stat_number),
+                self._make_stat("area", area_value, area_label, self._format_area_stat),
+                self._make_stat("garage", garage_clean if (garage_clean or 0) > 0 else None, "Parqueos", self._format_stat_number),
+            ):
+                if candidate:
+                    stats.append(candidate)
+                if len(stats) >= 3:
+                    break
+
+        return stats[:3]
+
     def _map_property_data_to_card(self, prop_data: Dict[str, Any]) -> Union[PropertyCard, None]:
         try:
             title = (prop_data.get("title") or "Propiedad Sugerida").replace("&#8211;", "-")
@@ -365,6 +494,14 @@ class SDUITransformer:
                 feature_payload["amenities"] = amenities
             if description:
                 feature_payload.setdefault("description", description)
+            stats = self._derive_property_stats(
+                title=title,
+                features=feature_payload,
+                bedrooms_clean=bedrooms_clean,
+                bathrooms_clean=bathrooms_clean,
+                sqm_clean=sqm_clean,
+                garage_clean=garage_clean,
+            )
             return PropertyCard(
                 id=str(prop_data.get("id")),
                 title=title,
@@ -382,10 +519,12 @@ class SDUITransformer:
                 description=description,
                 badge_main=badge_main,
                 badge_sub=badge_sub,
+                stats=stats,
                 bedrooms_clean=bedrooms_clean,
                 bathrooms_clean=bathrooms_clean,
                 sqm_clean=sqm_clean,
                 garage_clean=garage_clean,
+                quick_actions=[],
             )
         except Exception as e:
             logger.warning(f"Error mapeando data de DB a PropertyCard: {e}")
@@ -452,6 +591,15 @@ class SDUITransformer:
                 feature_payload["amenities"] = amenities
             if description:
                 feature_payload.setdefault("description", description)
+            stats = self._derive_property_stats(
+                title=title,
+                features=feature_payload,
+                bedrooms_clean=bedrooms_clean,
+                bathrooms_clean=bathrooms_clean,
+                sqm_clean=sqm_clean,
+                garage_clean=garage_clean,
+                payload=payload,
+            )
             return PropertyCard(
                 id=property_id or None,
                 title=title,
@@ -469,10 +617,12 @@ class SDUITransformer:
                 description=description,
                 badge_main=badge_main,
                 badge_sub=badge_sub,
+                stats=stats,
                 bedrooms_clean=bedrooms_clean,
                 bathrooms_clean=bathrooms_clean,
                 sqm_clean=sqm_clean,
                 garage_clean=garage_clean,
+                quick_actions=payload.get("quick_actions") or [],
             )
         except Exception as exc:
             logger.warning("Error mapping canonical property card: %s", exc)

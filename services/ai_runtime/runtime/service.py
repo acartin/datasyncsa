@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from services.ai_runtime.config.tenant_loader import TenantLoader
@@ -21,6 +22,7 @@ from services.ai_runtime.domain.state import (
 )
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph.registry import GraphRegistry
+from services.ai_runtime.runtime.cta_planner import apply_cta_delivery_plan, build_cta_delivery_plan
 from services.ai_runtime.runtime.turn_trace import (
     TurnTraceContext,
     activate_turn_trace,
@@ -31,6 +33,10 @@ from services.ai_runtime.runtime.turn_trace import (
     utc_now_iso,
 )
 from services.ai_runtime.verticals import get_vertical_spec
+from services.ai_runtime.runtime.state_migrations import apply_migrations
+
+
+logger = logging.getLogger(__name__)
 
 
 def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
@@ -107,8 +113,21 @@ class ConversationRuntime:
         conversation_id = request.conversation_id or str(uuid4())
         existing_payload = await self.dependencies.session_store.get_state(request.client_id, session_id)
 
+        base_state = None
         if existing_payload:
-            base_state = vertical_spec.state_model.model_validate(existing_payload)
+            try:
+                migrated_payload = apply_migrations(dict(existing_payload))
+                base_state = vertical_spec.state_model.model_validate(migrated_payload)
+            except Exception as exc:
+                logger.warning(
+                    "state_hydration_failed client_id=%s session_id=%s error=%s; starting fresh session",
+                    request.client_id,
+                    session_id,
+                    exc,
+                )
+                base_state = None
+
+        if base_state is not None:
             base_state.tenant_config = tenant_config
             base_state.capabilities = list(tenant_config.capabilities)
             base_state.vertical = tenant_config.vertical
@@ -117,7 +136,13 @@ class ConversationRuntime:
             base_state.lead_advisor = build_lead_advisor_state(tenant_config, base_state.lead_advisor)
             _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
-            base_state.messages.append(ChatMessage(role="user", content=request.message))
+            base_state.messages.append(
+                ChatMessage(
+                    role="user",
+                    content=request.message,
+                    metadata=dict(request.metadata or {}),
+                )
+            )
             conversation_id = base_state.conversation_id
         else:
             state = build_base_state(
@@ -129,6 +154,7 @@ class ConversationRuntime:
                 flow=flow,
                 tenant_config=tenant_config,
                 initial_message=request.message,
+                initial_message_metadata=request.metadata,
             )
             base_state = vertical_spec.state_model.model_validate(state.model_dump())
             _reset_turn_scoped_state(base_state)
@@ -158,6 +184,10 @@ class ConversationRuntime:
             final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
             final_state = vertical_spec.state_model.model_validate(final_payload)
             components = vertical_spec.component_builder(final_state)
+            components = apply_cta_delivery_plan(
+                components,
+                build_cta_delivery_plan(final_state),
+            )
             rag_outputs = [
                 item
                 for item in final_state.turn_outputs

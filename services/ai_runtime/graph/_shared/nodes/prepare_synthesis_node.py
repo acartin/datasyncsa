@@ -11,8 +11,6 @@ from typing import Any
 
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
-from services.ai_runtime.graph._shared.turn_frame_builder import build_turn_frame
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +23,13 @@ async def prepare_synthesis(state: dict[str, Any], deps: GraphDependencies) -> d
     """
 
     del deps  # No I/O needed — purely deterministic
-    graph_state: BaseGraphState
-    if state.get("vertical") == "realtor":
-        graph_state = RealtorGraphState.model_validate(state)
-    else:
-        graph_state = BaseGraphState.model_validate(state)
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    vertical_spec = get_vertical_spec(state.get("vertical"))
+    graph_state: BaseGraphState = vertical_spec.state_model.model_validate(state)
 
     try:
-        turn_frame = build_turn_frame(graph_state)
+        turn_frame = vertical_spec.turn_frame_builder(graph_state)
     except Exception:
         logger.error("prepare_synthesis failed to build TurnFrame", exc_info=True)
         raise

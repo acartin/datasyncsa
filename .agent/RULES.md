@@ -7,8 +7,9 @@ Precondicion obligatoria al iniciar cada nueva sesion:
 1. Carga base obligatoria:
    - Leer `.agent/RULES.md`
    - Leer `.agent/PY_EXECUTION_MAP.md`
+   - Leer `.agent/ACTIVE_DB_PROMPTS.md`
 2. Determinar si se requiere regeneracion de contexto:
-   - falta `.agent/BRAIN_MAP.md` o `.agent/AI_CONTEXT_PACK.md`
+   - falta `.agent/BRAIN_MAP.md`, `.agent/AI_CONTEXT_PACK.md` o `.agent/ACTIVE_DB_PROMPTS.md`
    - el commit actual difiere del commit registrado en `.agent/BRAIN_MAP.md`
    - el usuario pide actualizacion completa de contexto
    - hubo un cambio grande de arquitectura o compose
@@ -27,25 +28,34 @@ Orden recomendado de lectura:
 
 1. `.agent/RULES.md`
 2. `.agent/PY_EXECUTION_MAP.md`
-3. `.agent/BRAIN_MAP.md` solo encabezado + mapa operativo
-4. `.agent/AI_CONTEXT_PACK.md` solo secciones necesarias
+3. `.agent/ACTIVE_DB_PROMPTS.md`
+4. `.agent/BRAIN_MAP.md` solo encabezado + mapa operativo
+5. `.agent/AI_CONTEXT_PACK.md` solo secciones necesarias
 
 Para tareas del stack conversacional actual:
 
-5. `.agent/AI_RUNTIME_BOOTSTRAP.md`
-6. `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
-7. `services/ai_runtime/ARCHITECTURE.md`
-8. `docs/AI_RUNTIME_INDEX.md`
+6. `.agent/AI_RUNTIME_BOOTSTRAP.md`
+7. `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
+8. `services/ai_runtime/ARCHITECTURE.md`
+9. `docs/AI_RUNTIME_INDEX.md`
 
-Para tareas que toquen logica conversacional, planner, synthesizer, lead capture, scoring o recomendaciones de arquitectura en `ai-runtime`:
+Regla especial para prompts de BD:
+
+- `.agent/ACTIVE_DB_PROMPTS.md` es el snapshot operativo local de prompts externos al repo.
+- Si la tarea toca `realtor`, lead capture, scoring, `slot_hints`, appointment intent/type o policy conversacional, refrescar ese archivo una vez por sesion con:
+  `bash .agent/refresh_db_prompts.sh`
+- Si el refresh falla pero existe `.agent/ACTIVE_DB_PROMPTS.md`, trabajar con ese snapshot cacheado y reportar explicitamente que no se pudo verificar frescura en BD.
+- Si el refresh falla y no existe `.agent/ACTIVE_DB_PROMPTS.md`, detener implementacion/review y reportar bloqueo.
+
+Para tareas que toquen logica conversacional, prompting por vertical, lead capture, scoring o recomendaciones de arquitectura en `ai-runtime`:
 
 - No basta con leer donde viven los prompts.
 - Es obligatorio leer los prompts activos del tenant en BD o en trazas equivalentes y mantenerlos presentes en el contexto de trabajo antes de recomendar cambios.
 - Minimo obligatorio:
-  - `lead_ai_prompts.slug = 'primary_chat'`
-  - `planner_system`
-  - `synthesizer_system`
+  - `lead_ai_prompts.slug = 'primary_chat'` para `tone_prompt`
+  - prompts activos en codigo del vertical relevante (`analyze_turn`, `intent_detector`, `synthesis_prompt`)
   - si la tarea toca scoring o lead capture: `lead_scoring_prompts.prompt_template` y `extraction_schema`
+- Para `realtor`, lead capture o scoring, tambien es obligatorio leer el snapshot `lead_scoring_prompts.id = '190dc860-9d37-4883-a6f4-c3019fdd882e'` desde `.agent/ACTIVE_DB_PROMPTS.md` o recargarlo desde BD en la sesion actual.
 - Si no se pudieron leer los prompts activos, no proponer cambios de politica conversacional como si fueran hechos; reportar el bloqueo y limitarse a bugs/guardrails duros.
 - Precedencia obligatoria para phrasing de captura:
   - `slot_hints.question` del prompt activo
@@ -58,8 +68,9 @@ Regla de precedencia:
 1. Codigo ejecutable vigente
 2. `.agent/RULES.md`
 3. `.agent/PY_EXECUTION_MAP.md`
-4. `.agent/BRAIN_MAP.md`
-5. `.agent/AI_CONTEXT_PACK.md`
+4. `.agent/ACTIVE_DB_PROMPTS.md` o lectura fresca equivalente desde BD
+5. `.agent/BRAIN_MAP.md`
+6. `.agent/AI_CONTEXT_PACK.md`
 
 ## 2. Scope por Servicio
 
@@ -203,7 +214,8 @@ Antes de empezar trabajo nuevo:
 
 1. aplicar la seccion 1
 2. usar `.agent/RULES.md` + `.agent/PY_EXECUTION_MAP.md` como base
-3. consultar `BRAIN_MAP` y `AI_CONTEXT_PACK` solo lo necesario
+3. cargar `.agent/ACTIVE_DB_PROMPTS.md`
+4. consultar `BRAIN_MAP` y `AI_CONTEXT_PACK` solo lo necesario
 
 En tareas de reorganizacion o documentacion de tests:
 
@@ -219,8 +231,8 @@ Para tareas de alto impacto, dejar claro:
 ## Guardrails de Arquitectura para `ai-runtime`
 
 - `shared` solo puede contener infraestructura y piezas tecnicas neutrales. No puede contener semantica, ejemplos, vocabulario ni reglas de negocio de un vertical.
-- Todo prompt semantico que interprete negocio es `vertical-owned`. Como minimo, `analyze_turn` e `intent_detector` no pueden depender de `planner_system` ni de prompts shared.
-- `planner_system` no absorbe scoring, lead capture, mapas de momentos, reglas de cierre ni side effects. `synthesizer_system` solo redacta. `lead_scoring_prompts` solo gobierna scoring y estrategia de captura.
+- Todo prompt semantico que interprete negocio es `vertical-owned`. Como minimo, `analyze_turn` e `intent_detector` no pueden depender de prompts shared para semantica de negocio.
+- `synthesis_prompt` solo redacta. `lead_scoring_prompts` solo gobierna scoring y estrategia de captura.
 - Si un prompt necesita ejemplos, entidades o capacidades del dominio, no pertenece a `_shared/prompts`. La duplicacion consciente por vertical es preferible a una abstraccion shared falsa.
 - Cada vertical debe poder agregarse o eliminarse sin romper la composicion semantica de los demas.
 - El codigo determinista solo cubre validacion, invariantes, seguridad, side effects y guardrails universales; no debe esconder politica de negocio.

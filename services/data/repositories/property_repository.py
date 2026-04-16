@@ -133,6 +133,23 @@ class PropertyRepository:
                 "bathrooms_clean": bathrooms_clean,
                 "sqm_clean": sqm_clean,
                 "lot_size_sqm": features_raw.get("lot_size_sqm"),
+                "front": (
+                    features_raw.get("front")
+                    or features_raw.get("frente")
+                    or features_raw.get("frontage")
+                    or features_raw.get("frontage_m")
+                    or features_raw.get("frente_m")
+                ),
+                "land_use": (
+                    features_raw.get("land_use")
+                    or features_raw.get("uso_suelo")
+                    or features_raw.get("use")
+                ),
+                "property_type": (
+                    row.get("property_type_name")
+                    or features_raw.get("property_type")
+                    or features_raw.get("tipo")
+                ),
                 "year_built": features_raw.get("year_built"),
                 "amenities": features_raw.get("amenities") or [],
                 "is_featured": bool(features_raw.get("is_featured", False)),

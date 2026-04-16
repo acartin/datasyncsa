@@ -1,5 +1,13 @@
 # AI Runtime File Map
 
+Archivado el `2026-04-16`.
+
+Motivo:
+
+- quedó desalineado tras el refactor `vertical-first`
+- no incluía piezas ahora centrales como `verticals.py`, `domain/policies.py`, `domain/turn_frame.py` y `runtime/state_migrations.py`
+- su función quedó absorbida por `services/ai_runtime/ARCHITECTURE.md` y `docs/AI_RUNTIME_INDEX.md`
+
 Mapa operativo del stack conversacional activo.
 
 ## Runtime

@@ -23,6 +23,9 @@ class PropertyFeatures(BaseModel):
     bathrooms_clean: float
     sqm_clean: int | None = None
     lot_size_sqm: str | None = None
+    front: str | None = None
+    land_use: str | None = None
+    property_type: str | None = None
     year_built: str | None = None
     amenities: list[str] = Field(default_factory=list)
     is_featured: bool = False
@@ -75,6 +78,12 @@ class PropertyComparisonScore(BaseModel):
     dimensions: dict[str, float] = Field(default_factory=dict)
 
 
+class CardStat(BaseModel):
+    icon: str
+    value: str
+    label: str
+
+
 class CardPayload(BaseModel):
     id: str
     title: str
@@ -84,6 +93,10 @@ class CardPayload(BaseModel):
     bathrooms_clean: float
     sqm_clean: int | None = None
     garage_clean: int = 0
+    lot_size_sqm: str | None = None
+    front: str | None = None
+    land_use: str | None = None
+    property_type: str | None = None
     location: str | None = None
     address: str | None = None
     primary_image_url: str | None = None
@@ -96,3 +109,4 @@ class CardPayload(BaseModel):
     price_note: str | None = None
     badge_main: str | None = None
     badge_sub: str | None = None
+    stats: list[CardStat] = Field(default_factory=list)

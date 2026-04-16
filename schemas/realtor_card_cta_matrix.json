@@ -1,0 +1,126 @@
+{
+  "contract": "RealtorCardCtaMatrix",
+  "version": 1,
+  "max_visible": 3,
+  "catalog": {
+    "interest_yes": {
+      "label": "Sí me interesa",
+      "user_text": "Sí me interesa esta opción"
+    },
+    "show_next": {
+      "label": "Mostrame otra",
+      "user_text": "Mostrame otra opción"
+    },
+    "reject_current": {
+      "label": "Busco otra cosa",
+      "user_text": "Busco otra cosa"
+    },
+    "schedule_visit": {
+      "label": "Agendar visita",
+      "user_text": "Quiero agendar una visita"
+    },
+    "ask_price": {
+      "label": "Ajustar precio",
+      "user_text": "Quiero ajustar el precio"
+    },
+    "ask_zone": {
+      "label": "Cambiar zona",
+      "user_text": "Quiero cambiar la zona"
+    },
+    "ask_property_type": {
+      "label": "Otro tipo",
+      "user_text": "Quiero ver otro tipo de propiedad"
+    },
+    "ask_size_needs": {
+      "label": "Más espacio",
+      "user_text": "Quiero ver opciones con más espacio"
+    },
+    "ask_budget_fit": {
+      "label": "Ver algo más económico",
+      "user_text": "Quiero ver algo más económico"
+    },
+    "ask_upgrade": {
+      "label": "Ver algo mejor",
+      "user_text": "Quiero ver una opción mejor"
+    },
+    "ask_financing": {
+      "label": "Calcular cuota",
+      "user_text": "Quiero calcular la cuota"
+    },
+    "ask_availability": {
+      "label": "¿Sigue disponible?",
+      "user_text": "¿Sigue disponible esta propiedad?"
+    },
+    "ask_features": {
+      "label": "Buscar algo parecido",
+      "user_text": "Quiero buscar algo parecido"
+    },
+    "human_handoff": {
+      "label": "Hablar con un asesor",
+      "user_text": "Quiero hablar con un asesor"
+    },
+    "save_followup": {
+      "label": "Enviámela luego",
+      "user_text": "Enviámela luego"
+    }
+  },
+  "fallback": [
+    "interest_yes",
+    "show_next",
+    "reject_current"
+  ],
+  "rows": [
+    {
+      "id": "high_intent_ready_to_convert",
+      "when": {
+        "interest_band": [
+          "high"
+        ],
+        "contact_status": [
+          "valid"
+        ]
+      },
+      "show": [
+        "schedule_visit",
+        "interest_yes",
+        "show_next"
+      ]
+    },
+    {
+      "id": "finance_follow_up",
+      "when": {
+        "interest_band": [
+          "medium",
+          "high"
+        ],
+        "budget_status": [
+          "known"
+        ],
+        "approval_status": [
+          "unknown"
+        ]
+      },
+      "show": [
+        "interest_yes",
+        "ask_financing",
+        "show_next"
+      ]
+    },
+    {
+      "id": "continued_browsing_low_intent",
+      "when": {
+        "interest_band": [
+          "low"
+        ],
+        "browsing_stage": [
+          "exploring"
+        ]
+      },
+      "show": [
+        "show_next",
+        "reject_current",
+        "ask_price"
+      ]
+    }
+  ]
+}

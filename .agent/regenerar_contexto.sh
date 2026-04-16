@@ -12,6 +12,8 @@ MAX_FILE_SIZE_KB="${MAX_FILE_SIZE_KB:-256}"
 OUT_DIR=".agent"
 BRAIN_FILE="$OUT_DIR/BRAIN_MAP.md"
 OUT_FILE="$OUT_DIR/AI_CONTEXT_PACK.md"
+DB_PROMPTS_FILE="$OUT_DIR/ACTIVE_DB_PROMPTS.md"
+DB_PROMPTS_REFRESH_SCRIPT="$OUT_DIR/refresh_db_prompts.sh"
 
 mkdir -p "$OUT_DIR"
 
@@ -75,6 +77,24 @@ append_range_excerpt() {
   append '```'
   sed -n "${start},${end}p" "$file" >> "$tmp_file"
   append '```'
+}
+
+refresh_db_prompts_snapshot() {
+  if [[ ! -f "$DB_PROMPTS_REFRESH_SCRIPT" ]]; then
+    return 0
+  fi
+
+  if bash "$DB_PROMPTS_REFRESH_SCRIPT" >/dev/null 2>&1; then
+    echo "OK: DB prompts snapshot refrescado en '$DB_PROMPTS_FILE'"
+    return 0
+  fi
+
+  if [[ -f "$DB_PROMPTS_FILE" ]]; then
+    echo "WARN: no se pudo refrescar '$DB_PROMPTS_FILE'; se reutiliza snapshot cacheado" >&2
+    return 0
+  fi
+
+  echo "WARN: no se pudo generar '$DB_PROMPTS_FILE' y no existe cache local" >&2
 }
 
 compose_services() {
@@ -175,6 +195,7 @@ $(compose_services)
 - \`services/ai_runtime/ARCHITECTURE.md\`
 - \`.agent/RULES.md\`
 - \`.agent/PY_EXECUTION_MAP.md\`
+- \`.agent/ACTIVE_DB_PROMPTS.md\`
 
 ## 7. ENTIDADES Y CAPAS CRITICAS
 
@@ -184,6 +205,8 @@ $(compose_services)
 - Scoring: \`lead_scorecards\`, \`lead_score_items\`, \`lead_scoring_models\`, \`lead_scoring_prompts\`
 - RAG: FAQ por tenant y documentos por tenant en Postgres/pgvector
 EOF
+
+refresh_db_prompts_snapshot
 
 append "# AI Context Pack"
 append ""
@@ -195,6 +218,13 @@ append "- Policy: high-signal only; enfocado en stack actual."
 
 append_section "Contexto Maestro"
 append_file_excerpt "$BRAIN_FILE"
+
+append_section "Prompts DB Activos"
+if [[ -f "$DB_PROMPTS_FILE" ]]; then
+  append_file_excerpt "$DB_PROMPTS_FILE"
+else
+  append "- Snapshot no disponible. Intentar: \`bash .agent/refresh_db_prompts.sh\`"
+fi
 
 append_section "Compose y Variables"
 append "### Servicios activos del compose"
@@ -216,7 +246,8 @@ append_codeblock text "$(active_routes)"
 
 append_section "AI Runtime"
 append_file_excerpt ".agent/AI_RUNTIME_BOOTSTRAP.md"
-append_file_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md"
+append_range_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md" 1 29
+append_range_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md" 33 180
 append_file_excerpt "services/ai_runtime/ARCHITECTURE.md"
 append_file_excerpt "services/ai_runtime/main.py"
 append_file_excerpt "services/ai_runtime/api.py"

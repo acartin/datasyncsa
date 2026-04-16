@@ -92,6 +92,8 @@ async def test_transform_builds_property_card_from_sources(monkeypatch):
     assert property_card.price_note == "Precio de venta"
     assert property_card.badge_main == "Destacada"
     assert property_card.bedrooms_clean == 3
+    assert property_card.stats[0].icon == "bed"
+    assert property_card.stats[2].label == "m² constr."
 
 
 @pytest.mark.asyncio
@@ -129,6 +131,7 @@ async def test_search_properties_for_query_maps_property_cards(monkeypatch):
     assert cards[0].public_url == "https://example.com/p-2"
     assert cards[0].bedrooms_clean == 2
     assert cards[0].photo_count == 1
+    assert cards[0].stats[0].label == "Hab."
 
 
 def test_parse_canonical_components_preserves_expanded_property_fields():
@@ -154,6 +157,11 @@ def test_parse_canonical_components_preserves_expanded_property_fields():
             "badge_main": "Nuevo",
             "badge_sub": "Exclusivo",
             "description": "Casa familiar con excelente iluminación.",
+            "stats": [
+                {"icon": "bed", "value": "4", "label": "Hab."},
+                {"icon": "bath", "value": "3", "label": "Baños"},
+                {"icon": "area", "value": "285", "label": "m² constr."},
+            ],
             "bedrooms_clean": 4,
             "bathrooms_clean": 3,
             "sqm_clean": 285,
@@ -177,3 +185,81 @@ def test_parse_canonical_components_preserves_expanded_property_fields():
     assert card.badge_sub == "Exclusivo"
     assert card.bedrooms_clean == 4
     assert card.features["garage_clean"] == 2
+    assert card.stats[2].label == "m² constr."
+
+
+def test_parse_canonical_components_preserves_quick_actions():
+    transformer = SDUITransformer()
+
+    components = transformer.parse_canonical_components([
+        {
+            "type": "property-card",
+            "id": "p-9",
+            "title": "Casa conversión",
+            "price": 310000,
+            "currency": "USD",
+            "quick_actions": [
+                {"id": "interest_yes", "label": "Sí me interesa", "user_text": "Sí me interesa esta opción"},
+                {"id": "show_next", "label": "Mostrame otra", "user_text": "Mostrame otra opción"},
+            ],
+        }
+    ])
+
+    assert len(components) == 1
+    card = components[0]
+    assert card.type == "property-card"
+    assert len(card.quick_actions) == 2
+    assert card.quick_actions[0].id == "interest_yes"
+    assert card.quick_actions[1].label == "Mostrame otra"
+
+
+def test_parse_canonical_components_builds_land_friendly_stats_when_available():
+    transformer = SDUITransformer()
+
+    components = transformer.parse_canonical_components([
+        {
+            "type": "property-card",
+            "id": "lot-1",
+            "title": "Terreno residencial",
+            "price": 99000,
+            "currency": "USD",
+            "location": "Heredia",
+            "features": {
+                "property_type": "Terreno",
+                "lot_size_sqm": "650 m²",
+                "front": "18m",
+                "land_use": "Residencial",
+            },
+        }
+    ])
+
+    assert len(components) == 1
+    card = components[0]
+    assert card.type == "property-card"
+    assert [stat.label for stat in card.stats] == ["m² terreno", "Frente", "Uso suelo"]
+    assert card.stats[0].value == "650"
+
+
+def test_parse_canonical_components_supports_action_menu():
+    transformer = SDUITransformer()
+
+    components = transformer.parse_canonical_components([
+        {
+            "type": "action-menu",
+            "title": "Si querés, seguí por una de estas opciones.",
+            "options": [
+                {
+                    "label": "Sí me interesa",
+                    "payload": "interest_yes",
+                    "action_id": "interest_yes",
+                    "user_text": "Sí me interesa esta opción",
+                }
+            ],
+        }
+    ])
+
+    assert len(components) == 1
+    menu = components[0]
+    assert menu.type == "action-menu"
+    assert menu.title == "Si querés, seguí por una de estas opciones."
+    assert menu.options[0].payload == "interest_yes"

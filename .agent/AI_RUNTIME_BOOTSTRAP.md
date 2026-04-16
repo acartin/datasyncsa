@@ -34,6 +34,14 @@ Lectura adicional segun el caso:
 - `services/web/chat-web-renderer/backend/app/core/runtime_client.py`
 - `services/web/chat-web-renderer/backend/app/core/memory_reset.py`
 
+## Prompts DB obligatorios
+
+- Antes de tocar `realtor`, lead capture, scoring, `slot_hints`, appointment intent/type o policy conversacional, leer `.agent/ACTIVE_DB_PROMPTS.md`.
+- Refrescar ese snapshot al menos una vez por sesion con `bash .agent/refresh_db_prompts.sh`.
+- El baseline minimo obligatorio para realtor es `lead_scoring_prompts.id = '190dc860-9d37-4883-a6f4-c3019fdd882e'` (`Realtor Default`, prompt v4).
+- Si no se pudo refrescar desde BD pero existe el snapshot local, usarlo como cache y reportar la falta de verificacion de frescura.
+- Si no existe snapshot local y no se pudo leer la BD, no recomendar cambios de phrasing o politica conversacional como si fueran hechos.
+
 ## Supuestos Operativos
 
 - `ai-runtime` es la unica autoridad conversacional del compose actual
@@ -42,8 +50,8 @@ Lectura adicional segun el caso:
 - el estado del grafo vive en Redis y se persiste por sesion
 - el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
 - `shared` solo contiene infraestructura y piezas tecnicas neutrales
-- `analyze_turn` e `intent_detector` son responsabilidad semantica del vertical
-- `planner_system`, `synthesizer_system` y `lead_scoring_prompts` tienen ownership separado y no deben invadir responsabilidades ajenas
+- `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
+- `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
 ## Restricciones de Cambio
@@ -52,6 +60,6 @@ Lectura adicional segun el caso:
 - no reintroducir dependencias hacia componentes legacy como `services/legacy/agent-core` o `services/legacy/inference-stack-v2`
 - no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
 - no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
-- no colgar `analyze_turn` ni `intent_detector` de `planner_system` ni de prompts shared
+- no colgar `analyze_turn` ni `intent_detector` de prompts shared
 - no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
 - si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`

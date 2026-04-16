@@ -1,5 +1,13 @@
 # AI Runtime Hybrid Scoring + Moment Rules
 
+Archivado el `2026-04-16`.
+
+Motivo:
+
+- describía una topología anterior basada en `moment_rules.py`
+- hoy esa lógica está repartida entre `lead_advisor_node`, `verticals.py` y policies por vertical
+- conservarlo en `docs/` activo inducía a error
+
 ## Objetivo
 
 Documentar el refactor que combina:
@@ -94,4 +102,3 @@ En esta fase:
 Fase siguiente sugerida:
 
 - persistir scorecard final al cierre de conversacion o hito de negocio.
-

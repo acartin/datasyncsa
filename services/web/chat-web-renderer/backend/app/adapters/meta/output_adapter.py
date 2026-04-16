@@ -113,7 +113,7 @@ class MetaOutputAdapter:
                 return {"type": "image", "image": {"link": image_url}}
             return {"type": "text", "text": component.get("text", "Imagen no disponible")}
         
-        elif comp_type == "property_card":
+        elif comp_type in ["property_card", "property-card"]:
             return self._adapt_property_card(component, fallback_text)
         
         elif comp_type in ["gallery", "photo-carousel"]:
@@ -194,14 +194,17 @@ class MetaOutputAdapter:
     ) -> Optional[Dict[str, Any]]:
         """Adapta un menú de acciones a quick replies o list."""
         options = menu.get("options", [])
-        
+        body_text = str(menu.get("title") or fallback_text or "Opciones disponibles").strip()
+
         if not options:
-            return {"type": "text", "text": fallback_text or "Opciones disponibles"}
-        
+            return {"type": "text", "text": body_text}
+
         if self.channel == MetaChannel.WHATSAPP:
-            return self._build_list_payload(options, fallback_text)
-        
-        return self._build_button_payload(options, fallback_text)
+            if len(options) <= self.limits["button_elements"]:
+                return self._build_button_payload(options, body_text)
+            return self._build_list_payload(options, body_text)
+
+        return self._build_button_payload(options, body_text)
 
     def _build_button_payload(
         self, 

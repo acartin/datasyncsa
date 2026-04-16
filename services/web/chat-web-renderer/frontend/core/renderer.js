@@ -48,6 +48,7 @@ export class ChatRenderer {
 
             case 'property-card':
                 el = document.createElement('property-card-v2');
+                el.propertyId = config.id;
                 el.title = config.title;
                 el.price = config.price;
                 el.currency = config.currency;
@@ -61,12 +62,14 @@ export class ChatRenderer {
                 el.tags = config.tags || [];
                 el.badgeMain = config.badge_main;
                 el.badgeSub = config.badge_sub;
+                el.stats = config.stats || [];
                 el.bedrooms = config.bedrooms_clean ?? config.features?.bedrooms_clean ?? config.features?.bedrooms;
                 el.bathrooms = config.bathrooms_clean ?? config.features?.bathrooms_clean ?? config.features?.bathrooms;
                 el.sqm = config.sqm_clean ?? config.features?.sqm_clean ?? config.features?.sqm ?? config.features?.area_display;
                 el.garage = config.garage_clean ?? config.features?.garage_clean ?? config.features?.garage;
                 el.amenities = config.amenities || config.features?.amenities || [];
                 el.description = config.description || config.features?.description || '';
+                el.quickActions = config.quick_actions || [];
                 break;
 
             case 'property-grid':
@@ -77,6 +80,7 @@ export class ChatRenderer {
 
             case 'action-menu':
                 el = document.createElement('action-menu');
+                el.title = config.title || '';
                 el.options = config.options;
                 break;
 

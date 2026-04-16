@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/co
 
 class PropertyCard extends LitElement {
   static properties = {
+    propertyId: { type: String, attribute: 'property-id' },
     title: { type: String },
     price: { type: Number },
     currency: { type: String },
@@ -13,6 +14,7 @@ class PropertyCard extends LitElement {
     publicUrl: { type: String },
     features: { type: Object },
     tags: { type: Array },
+    stats: { type: Array },
     bedrooms: { type: Object },
     bathrooms: { type: Object },
     sqm: { type: Object },
@@ -21,7 +23,7 @@ class PropertyCard extends LitElement {
     description: { type: String },
     badgeMain: { type: String, attribute: 'badge-main' },
     badgeSub: { type: String, attribute: 'badge-sub' },
-    _liked: { state: true },
+    quickActions: { type: Array },
   };
 
   static styles = css`
@@ -117,7 +119,7 @@ class PropertyCard extends LitElement {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      max-width: calc(100% - 76px);
+      max-width: calc(100% - 28px);
     }
 
     .hm-badge {
@@ -139,39 +141,6 @@ class PropertyCard extends LitElement {
       background: rgba(255, 255, 255, 0.13);
       color: rgba(255, 255, 255, 0.9);
       border: 0.5px solid rgba(255, 255, 255, 0.22);
-    }
-
-    .hm-fav {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      z-index: 2;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border: 0.5px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-
-    .hm-fav:hover {
-      background: rgba(239, 68, 68, 0.45);
-      transform: scale(1.1);
-    }
-
-    .hm-fav.hm-fav--liked {
-      background: rgba(239, 68, 68, 0.82);
-    }
-
-    .hm-fav svg {
-      width: 15px;
-      height: 15px;
     }
 
     .hm-img-bottom {
@@ -297,14 +266,14 @@ class PropertyCard extends LitElement {
     .hm-stat-lbl {
       color: var(--text-muted, #94a3b8);
       font-size: 10px;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
+      letter-spacing: 0.01em;
+      text-align: center;
     }
 
     .hm-tags {
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
+      gap: 6px;
     }
 
     .hm-tag {
@@ -322,42 +291,83 @@ class PropertyCard extends LitElement {
 
     .hm-footer {
       display: flex;
-      gap: 8px;
-      padding: 12px 18px 14px;
+      align-items: center;
+      gap: 14px;
+      padding: 6px 18px 18px;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .hm-footer::before {
+      content: '';
+      display: block;
+      width: 100%;
       border-top: 1px solid var(--hm-line);
     }
 
-    .hm-btn-sec {
-      flex: 1;
-      padding: 10px 0;
-      border-radius: 12px;
-      border: 1px solid var(--hm-line);
-      background: var(--hm-surface-soft);
+    .hm-quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0 18px 10px;
+    }
+
+    .hm-chip {
+      min-height: 42px;
+      border: 1px solid var(--hm-line-strong);
+      background: rgba(42, 58, 82, 0.07);
+      color: var(--text-on-surface, #f8fafc);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-family: var(--font-body, 'DM Sans', sans-serif);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    }
+
+    .hm-chip:first-child {
+      background: rgba(248, 250, 252, 0.14);
+      border-color: rgba(248, 250, 252, 0.22);
+    }
+
+    .hm-chip:hover {
+      background: rgba(248, 250, 252, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .hm-chip:active {
+      transform: scale(0.98);
+    }
+
+    .hm-link-btn {
+      padding: 0;
+      border: none;
+      background: transparent;
       color: var(--hm-text-soft);
       cursor: pointer;
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 6px;
       font-family: var(--font-body, 'DM Sans', sans-serif);
-      font-size: 12.5px;
+      font-size: 12px;
       font-weight: 500;
-      transition: background 0.2s ease, transform 0.15s ease, color 0.2s ease;
+      transition: color 0.2s ease, transform 0.15s ease;
     }
 
-    .hm-btn-sec svg {
-      width: 13px;
-      height: 13px;
+    .hm-link-btn svg {
+      width: 12px;
+      height: 12px;
       fill: currentColor;
     }
 
-    .hm-btn-sec:hover {
-      background: var(--hm-surface-pill);
+    .hm-link-btn:hover {
       color: var(--text-on-surface, #f8fafc);
       transform: translateY(-1px);
     }
 
-    .hm-btn-sec:active {
+    .hm-link-btn:active {
       transform: scale(0.98);
     }
 
@@ -389,15 +399,16 @@ class PropertyCard extends LitElement {
         font-weight: 500;
       }
 
-      .hm-btn-sec {
-        border-color: var(--hm-line-strong);
-        background: rgba(42, 58, 82, 0.05);
-        color: #6a7c97;
-        font-size: 13.5px;
+      .hm-quick-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .hm-link-btn {
+        font-size: 13px;
         font-weight: 600;
       }
 
-      .hm-btn-sec svg {
+      .hm-link-btn svg {
         width: 14px;
         height: 14px;
         opacity: 0.92;
@@ -408,6 +419,7 @@ class PropertyCard extends LitElement {
   constructor() {
     super();
     this.title = '';
+    this.propertyId = '';
     this.price = 0;
     this.currency = 'USD';
     this.priceNote = '';
@@ -418,6 +430,7 @@ class PropertyCard extends LitElement {
     this.publicUrl = '';
     this.features = {};
     this.tags = [];
+    this.stats = [];
     this.bedrooms = null;
     this.bathrooms = null;
     this.sqm = null;
@@ -426,7 +439,7 @@ class PropertyCard extends LitElement {
     this.description = '';
     this.badgeMain = '';
     this.badgeSub = '';
-    this._liked = false;
+    this.quickActions = [];
   }
 
   _normalizedFeatures() {
@@ -514,18 +527,18 @@ class PropertyCard extends LitElement {
 
   _formatBathrooms(value) {
     if (value == null || value === '') {
-      return 'N/D';
+      return null;
     }
     if (typeof value === 'number' && Number.isFinite(value)) {
       return Number.isInteger(value) ? String(value) : value.toFixed(1);
     }
     const cleaned = String(value).trim();
-    return cleaned || 'N/D';
+    return cleaned || null;
   }
 
   _formatArea(value) {
     if (value == null || value === '') {
-      return 'N/D';
+      return null;
     }
     if (typeof value === 'number' && Number.isFinite(value)) {
       return String(Math.round(value));
@@ -533,7 +546,22 @@ class PropertyCard extends LitElement {
     const cleaned = String(value)
       .replace(/m2|m²|sqm|sq\.?\s?m/gi, '')
       .trim();
-    return cleaned || 'N/D';
+    return cleaned || null;
+  }
+
+  _coerceNumber(value) {
+    if (value == null || value === '') {
+      return null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    const cleaned = String(value).replace(/[^0-9.,-]/g, '').replace(',', '.');
+    if (!cleaned) {
+      return null;
+    }
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   _formatPrice() {
@@ -650,7 +678,134 @@ class PropertyCard extends LitElement {
       this.amenities,
       features.highlights,
       features.amenities,
-    ).slice(0, 6);
+    ).slice(0, 2);
+  }
+
+  _isLikelyLand(features) {
+    const hints = [
+      this.title,
+      features.property_type,
+      features.land_use,
+      features.use,
+      features.tipo,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (/(terreno|lote|lot|land|solar)/.test(hints)) {
+      return true;
+    }
+    const hasLotArea = this._firstNonEmpty(features.lot_size_sqm, features.lotSizeSqm);
+    const bedrooms = this._coerceNumber(this._firstNonEmpty(this.bedrooms, features.bedrooms_clean, features.bedrooms));
+    const bathrooms = this._coerceNumber(this._firstNonEmpty(this.bathrooms, features.bathrooms_clean, features.bathrooms));
+    return Boolean(hasLotArea) && !(bedrooms > 0) && !(bathrooms > 0);
+  }
+
+  _normalizeStats() {
+    if (Array.isArray(this.stats)) {
+      const explicit = this.stats
+        .map((item) => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+          const icon = String(item.icon || '').trim().toLowerCase();
+          const value = String(item.value || '').trim();
+          const label = String(item.label || '').trim();
+          if (!icon || !value || !label) {
+            return null;
+          }
+          return { icon, value, label };
+        })
+        .filter(Boolean)
+        .slice(0, 3);
+      if (explicit.length) {
+        return explicit;
+      }
+    }
+
+    const features = this._normalizedFeatures();
+    const isLand = this._isLikelyLand(features);
+    const stats = [];
+
+    if (isLand) {
+      const lotArea = this._formatArea(this._firstNonEmpty(features.lot_size_sqm, features.lotSizeSqm, this.sqm, features.sqm_clean));
+      const front = this._firstNonEmpty(features.front, features.frente, features.frontage, features.frontage_m);
+      const landUse = this._firstNonEmpty(features.land_use, features.uso_suelo, features.use);
+
+      if (lotArea) {
+        stats.push({ icon: 'area', value: lotArea, label: 'm² terreno' });
+      }
+      if (front) {
+        const normalizedFront = /[a-z]/i.test(String(front)) ? String(front).trim() : `${this._formatNumericValue(front) || front}m`;
+        stats.push({ icon: 'front', value: normalizedFront, label: 'Frente' });
+      }
+      if (landUse) {
+        stats.push({ icon: 'use', value: String(landUse).trim(), label: 'Uso suelo' });
+      }
+      if (stats.length) {
+        return stats.slice(0, 3);
+      }
+    }
+
+    const beds = this._formatNumericValue(this._firstNonEmpty(this.bedrooms, features.bedrooms_clean, features.bedrooms));
+    const baths = this._formatBathrooms(this._firstNonEmpty(this.bathrooms, features.bathrooms_clean, features.bathrooms));
+    const area = this._formatArea(this._firstNonEmpty(this.sqm, features.sqm_clean, features.sqm, features.area_display, features.lot_size_sqm));
+    const garage = this._formatNumericValue(this._firstNonEmpty(this.garage, features.garage_clean, features.garage));
+
+    if (beds && this._coerceNumber(beds) > 0) {
+      stats.push({ icon: 'bed', value: beds, label: 'Hab.' });
+    }
+    if (baths && this._coerceNumber(baths) > 0) {
+      stats.push({ icon: 'bath', value: baths, label: 'Baños' });
+    }
+    if (area) {
+      const label = features.lot_size_sqm && !this._firstNonEmpty(this.sqm, features.sqm_clean) ? 'm² terreno' : 'm² constr.';
+      stats.push({ icon: 'area', value: area, label });
+    }
+    if (garage && this._coerceNumber(garage) > 0) {
+      stats.push({ icon: 'garage', value: garage, label: 'Parqueos' });
+    }
+
+    return stats.slice(0, 3);
+  }
+
+  _renderStatIcon(icon) {
+    switch (String(icon || '').trim().toLowerCase()) {
+      case 'bed':
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"></path></svg>`;
+      case 'bath':
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M7 6h2V4H7v2zm0 4h2V8H7v2zm4-4h2V4h-2v2zm0 4h2V8h-2v2zm-8 4h18v2H3v-2zm2 4h14v2H5v-2zm-2-8h2v-1c0-.55.45-1 1-1h10c.55 0 1 .45 1 1v1h2v-1c0-1.65-1.35-3-3-3H5C3.35 9 2 10.35 2 12v1z"></path></svg>`;
+      case 'garage':
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M5 11l7-6 7 6v9h-2v-2H7v2H5v-9zm3 5h8v-4H8v4zm2-9h4l-2-1.71L10 7z"></path></svg>`;
+      case 'front':
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M4 6h16v2H4V6zm0 10h16v2H4v-2zm2-7h2v6H6V9zm10 0h2v6h-2V9zm-5 0h2v6h-2V9z"></path></svg>`;
+      case 'use':
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm2 4h14v10H5V9zm3 2v6h2v-6H8zm4 0v6h2v-6h-2z"></path></svg>`;
+      case 'area':
+      default:
+        return html`<svg class="hm-stat-icon" viewBox="0 0 24 24"><path d="M3 3v18h18V3H3zm16 16H5V5h14v14z"></path></svg>`;
+    }
+  }
+
+  _normalizedQuickActions() {
+    if (!Array.isArray(this.quickActions)) {
+      return [];
+    }
+    return this.quickActions
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+        const id = String(item.id || '').trim();
+        const label = String(item.label || '').trim();
+        const userText = String(item.user_text || item.userText || label).trim();
+        if (!id || !label) {
+          return null;
+        }
+        return { id, label, userText };
+      })
+      .filter(Boolean)
+      .slice(0, 3);
   }
 
   _detailPrompt() {
@@ -675,10 +830,21 @@ class PropertyCard extends LitElement {
     console.log('[property-card-v2] sendPrompt ->', text);
   }
 
-  _toggleFav(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    this._liked = !this._liked;
+  _emitQuickAction(action) {
+    this.dispatchEvent(new CustomEvent('chat-action', {
+      detail: {
+        payload: {
+          type: 'realtor_quick_action',
+          actionId: action.id,
+          actionLabel: action.label,
+          userText: action.userText,
+          propertyId: this.propertyId || null,
+          title: this.title || null,
+        }
+      },
+      bubbles: true,
+      composed: true,
+    }));
   }
 
   render() {
@@ -689,9 +855,8 @@ class PropertyCard extends LitElement {
     const badgeSub = this._deriveBadgeSub();
     const photoCount = this._derivePhotoCount();
     const tags = this._deriveTags();
-    const beds = this._formatNumericValue(this._firstNonEmpty(this.bedrooms, features.bedrooms_clean, features.bedrooms)) || 'N/D';
-    const baths = this._formatBathrooms(this._firstNonEmpty(this.bathrooms, features.bathrooms_clean, features.bathrooms));
-    const sqm = this._formatArea(this._firstNonEmpty(this.sqm, features.sqm_clean, features.sqm, features.area_display));
+    const stats = this._normalizeStats();
+    const quickActions = this._normalizedQuickActions();
 
     return html`
       <div class="hm-root">
@@ -721,18 +886,6 @@ class PropertyCard extends LitElement {
                   </div>
                 `
               : ''}
-
-            <button
-              class="hm-fav ${this._liked ? 'hm-fav--liked' : ''}"
-              type="button"
-              aria-label="Guardar propiedad"
-              aria-pressed=${this._liked ? 'true' : 'false'}
-              @click=${this._toggleFav}
-            >
-              <svg viewBox="0 0 24 24" fill=${this._liked ? 'white' : 'none'} stroke="white" stroke-width="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-              </svg>
-            </button>
 
             <div class="hm-img-bottom">
               <div>
@@ -767,29 +920,19 @@ class PropertyCard extends LitElement {
                 `
               : ''}
 
-            <div class="hm-stats">
-              <div class="hm-stat">
-                <svg class="hm-stat-icon" viewBox="0 0 24 24">
-                  <path d="M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"></path>
-                </svg>
-                <span class="hm-stat-val">${beds}</span>
-                <span class="hm-stat-lbl">Hab.</span>
-              </div>
-              <div class="hm-stat">
-                <svg class="hm-stat-icon" viewBox="0 0 24 24">
-                  <path d="M7 6h2V4H7v2zm0 4h2V8H7v2zm4-4h2V4h-2v2zm0 4h2V8h-2v2zm-8 4h18v2H3v-2zm2 4h14v2H5v-2zm-2-8h2v-1c0-.55.45-1 1-1h10c.55 0 1 .45 1 1v1h2v-1c0-1.65-1.35-3-3-3H5C3.35 9 2 10.35 2 12v1z"></path>
-                </svg>
-                <span class="hm-stat-val">${baths}</span>
-                <span class="hm-stat-lbl">Baños</span>
-              </div>
-              <div class="hm-stat">
-                <svg class="hm-stat-icon" viewBox="0 0 24 24">
-                  <path d="M3 3v18h18V3H3zm16 16H5V5h14v14z"></path>
-                </svg>
-                <span class="hm-stat-val">${sqm}</span>
-                <span class="hm-stat-lbl">m²</span>
-              </div>
-            </div>
+            ${stats.length
+              ? html`
+                  <div class="hm-stats" style=${`grid-template-columns: repeat(${Math.min(stats.length, 3)}, minmax(0, 1fr));`}>
+                    ${stats.map((stat) => html`
+                      <div class="hm-stat">
+                        ${this._renderStatIcon(stat.icon)}
+                        <span class="hm-stat-val">${stat.value}</span>
+                        <span class="hm-stat-lbl">${stat.label}</span>
+                      </div>
+                    `)}
+                  </div>
+                `
+              : ''}
 
             ${tags.length
               ? html`
@@ -800,14 +943,26 @@ class PropertyCard extends LitElement {
               : ''}
           </div>
 
+          ${quickActions.length
+            ? html`
+                <div class="hm-quick-actions">
+                  ${quickActions.map((action) => html`
+                    <button class="hm-chip" type="button" @click=${() => this._emitQuickAction(action)}>
+                      ${action.label}
+                    </button>
+                  `)}
+                </div>
+              `
+            : ''}
+
           <div class="hm-footer">
-            <button class="hm-btn-sec" type="button" @click=${() => this._emit(this._detailPrompt())}>
+            <button class="hm-link-btn" type="button" @click=${() => this._emit(this._detailPrompt())}>
               <svg viewBox="0 0 24 24">
                 <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path>
               </svg>
               Ver detalles
             </button>
-            <button class="hm-btn-sec" type="button" @click=${() => this._emit(this._locationPrompt())}>
+            <button class="hm-link-btn" type="button" @click=${() => this._emit(this._locationPrompt())}>
               <svg viewBox="0 0 24 24">
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"></path>
               </svg>

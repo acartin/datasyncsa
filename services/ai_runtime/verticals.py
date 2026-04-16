@@ -6,21 +6,28 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from services.ai_runtime.domain.contracts import FlowName, Vertical
+from services.ai_runtime.domain.policies import NullVerticalPolicy, VerticalPolicy
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState
+from services.ai_runtime.domain.turn_frame import BaseTurnFrame
 from services.ai_runtime.graph.generic.graph import build_generic_graph
+from services.ai_runtime.graph._shared.turn_frame_builder import build_turn_frame
 from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+from services.ai_runtime.graph.realtor.policies import RealtorPolicy
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
+from services.ai_runtime.graph.realtor.turn_frame import RealtorTurnFrame
+from services.ai_runtime.graph.realtor.turn_frame_builder import build_realtor_turn_frame
 
 GraphBuilder = Callable[[GraphDependencies], Any]
 ComponentBuilder = Callable[[BaseGraphState], list[dict[str, object]]]
+TurnFrameBuilder = Callable[[BaseGraphState], BaseTurnFrame]
 
 
 def _build_empty_components(_: BaseGraphState) -> list[dict[str, object]]:
     return []
 
 
-def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, object]]:
+def _build_realtor_base_components(final_state: BaseGraphState) -> list[dict[str, object]]:
     if not isinstance(final_state, RealtorGraphState):
         return []
 
@@ -32,6 +39,10 @@ def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, obj
             "bathrooms_clean": card.get("bathrooms_clean"),
             "sqm_clean": card.get("sqm_clean"),
             "garage_clean": card.get("garage_clean"),
+            "lot_size_sqm": card.get("lot_size_sqm"),
+            "front": card.get("front"),
+            "land_use": card.get("land_use"),
+            "property_type": card.get("property_type"),
             "amenities": card.get("amenities") or [],
             "address": card.get("address"),
             "province": card.get("province"),
@@ -54,6 +65,7 @@ def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, obj
                 "description": card.get("description"),
                 "badge_main": card.get("badge_main"),
                 "badge_sub": card.get("badge_sub"),
+                "stats": card.get("stats") or [],
                 "bedrooms_clean": card.get("bedrooms_clean"),
                 "bathrooms_clean": card.get("bathrooms_clean"),
                 "sqm_clean": card.get("sqm_clean"),
@@ -63,11 +75,16 @@ def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, obj
                     for key, value in features.items()
                     if value not in (None, "", [])
                 },
+                "quick_actions": [],
                 "city": card.get("province"),
                 "neighborhood": card.get("province"),
             }
         )
     return components
+
+
+def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, object]]:
+    return _build_realtor_base_components(final_state)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +94,9 @@ class VerticalSpec:
     state_model: type[BaseGraphState]
     graph_builder: GraphBuilder
     component_builder: ComponentBuilder = _build_empty_components
+    policy: VerticalPolicy = field(default_factory=NullVerticalPolicy)
+    turn_frame_model: type[BaseTurnFrame] = BaseTurnFrame
+    turn_frame_builder: TurnFrameBuilder = build_turn_frame
     scoring_criteria: tuple[str, ...] = ()
     required_fields: tuple[str, ...] = ()
 
@@ -88,6 +108,9 @@ _VERTICAL_SPECS: dict[str, VerticalSpec] = {
         state_model=RealtorGraphState,
         graph_builder=build_realtor_graph,
         component_builder=_build_realtor_components,
+        policy=RealtorPolicy(),
+        turn_frame_model=RealtorTurnFrame,
+        turn_frame_builder=build_realtor_turn_frame,
         scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
         required_fields=(
             "nombre",

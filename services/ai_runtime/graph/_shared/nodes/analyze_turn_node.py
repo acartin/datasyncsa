@@ -9,21 +9,13 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.contracts import (
     IntentDefinition,
     IntentPlanItem,
+    PendingDecision,
     ReferenceDecision,
     TurnAnalysis,
 )
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.domain.state import BaseGraphState
-from services.ai_runtime.graph.realtor.contracts import Property
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
+from services.ai_runtime.domain.state import BaseGraphState, build_lead_advisor_state
 from services.ai_runtime.graph._shared.prompt_context import summarize_message_for_prompt, summarize_messages_for_prompt
-from services.ai_runtime.graph.realtor.turn_policies import (
-    REALTOR_INTERNAL_INTENTS,
-    apply_realtor_turn_policies,
-    build_realtor_fallback_intent_plan,
-    derive_realtor_pending_decision,
-    merge_realtor_filters,
-)
 
 MEMORY_QUERY_PATTERN = re.compile(
     r"\b(como me llamo|cual es mi nombre|que edad tengo|cuantos anos tengo|cual era mi presupuesto|que presupuesto te dije|cual es mi correo|cual es mi email|cual es mi telefono|cual es mi numero|record[aá]s|recuerdas|te acord[aá]s)\b",
@@ -44,21 +36,100 @@ VISIBLE_ORDINAL_PATTERNS = (
 )
 
 
-def _load_properties(raw_items: list[dict[str, Any]] | list[Property] | None) -> list[Property]:
-    return [Property.model_validate(item) for item in raw_items or []]
+def _policy_for_state(graph_state: BaseGraphState):
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    return get_vertical_spec(graph_state.vertical).policy
 
 
-def _visible_reference_items(graph_state: BaseGraphState) -> list[Property]:
+def _coerce_property_dict(raw_item: Any) -> dict[str, Any] | None:
+    if raw_item is None:
+        return None
+    if isinstance(raw_item, dict):
+        return raw_item
+    model_dump = getattr(raw_item, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    return None
+
+
+def _load_properties(raw_items: list[Any] | None) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for raw_item in raw_items or []:
+        item = _coerce_property_dict(raw_item)
+        if item:
+            items.append(item)
+    return items
+
+
+def _prop_get(item: dict[str, Any], *path: str) -> Any:
+    current: Any = item
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _prop_id(item: dict[str, Any]) -> str:
+    return str(item.get("id") or "").strip()
+
+
+def _prop_price(item: dict[str, Any]) -> float:
+    try:
+        return float(item.get("price") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _prop_area(item: dict[str, Any]) -> float:
+    try:
+        return float(_prop_get(item, "features", "sqm_clean") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _prop_is_featured(item: dict[str, Any]) -> bool:
+    return bool(_prop_get(item, "features", "is_featured"))
+
+
+def _property_snapshot(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item.get("id"),
+        "title": item.get("title"),
+        "price": item.get("price"),
+        "currency": item.get("currency"),
+        "province": _prop_get(item, "location", "province"),
+        "bedrooms_clean": _prop_get(item, "features", "bedrooms_clean"),
+        "bathrooms_clean": _prop_get(item, "features", "bathrooms_clean"),
+        "garage_clean": _prop_get(item, "features", "garage_clean"),
+        "sqm_clean": _prop_get(item, "features", "sqm_clean"),
+    }
+
+
+def _dump_search_filters(graph_state: BaseGraphState) -> dict[str, Any]:
+    raw_filters = getattr(graph_state, "search_filters", None)
+    if raw_filters is None:
+        return {}
+    if isinstance(raw_filters, dict):
+        return raw_filters
+    model_dump = getattr(raw_filters, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    return {}
+
+
+def _visible_reference_items(graph_state: BaseGraphState) -> list[dict[str, Any]]:
     visible_ids = [str(item) for item in getattr(graph_state, "cards_shown", []) if item]
     if not visible_ids:
         return []
     search_items = _load_properties(getattr(graph_state, "last_search_results", []))
     inventory_items = _load_properties(getattr(graph_state, "inventory", []))
-    by_id = {item.id: item for item in [*search_items, *inventory_items]}
+    by_id = {_prop_id(item): item for item in [*search_items, *inventory_items] if _prop_id(item)}
     return [by_id[item_id] for item_id in visible_ids if item_id in by_id]
 
 
-def _select_reference_candidate(items: list[Property], decision: ReferenceDecision) -> Property | None:
+def _select_reference_candidate(items: list[dict[str, Any]], decision: ReferenceDecision) -> dict[str, Any] | None:
     if not items:
         return None
     if decision.kind == "ORDINAL" and decision.ordinal_index:
@@ -67,17 +138,17 @@ def _select_reference_candidate(items: list[Property], decision: ReferenceDecisi
     if decision.kind == "BY_ATTRIBUTE":
         key = (decision.attribute_key or "").lower()
         if key == "cheapest":
-            return min(items, key=lambda item: item.price)
+            return min(items, key=_prop_price)
         if key == "largest":
-            return max(items, key=lambda item: item.features.sqm_clean or 0)
+            return max(items, key=_prop_area)
         if key == "featured":
-            featured = [item for item in items if item.features.is_featured]
+            featured = [item for item in items if _prop_is_featured(item)]
             return featured[0] if featured else None
     if decision.kind == "CONTEXT_LOCATION" and decision.location_hint:
         needle = decision.location_hint.lower()
         for item in items:
-            province = (item.location.province or "").lower()
-            address = (item.address or "").lower()
+            province = str(_prop_get(item, "location", "province") or "").lower()
+            address = str(item.get("address") or "").lower()
             if needle in province or needle in address:
                 return item
     return None
@@ -100,8 +171,10 @@ async def _resolve_reference(
     has_session_reference_context = bool(visible_items or fallback_items or getattr(graph_state, "last_mentioned", None))
 
     if decision.kind == "LAST_MENTIONED" and getattr(graph_state, "last_mentioned", None):
-        property_item = Property.model_validate(graph_state.last_mentioned)
-        return [{"kind": "property", "property_id": property_item.id}], None
+        last_mentioned = _coerce_property_dict(getattr(graph_state, "last_mentioned", None))
+        property_id = _prop_id(last_mentioned or {})
+        if property_id:
+            return [{"kind": "property", "property_id": property_id}], None
 
     if decision.kind == "ANAPHORIC_HISTORY":
         history = await deps.conversation_repository.load_history(
@@ -119,12 +192,12 @@ async def _resolve_reference(
     if visible_items and decision.kind in {"ORDINAL", "BY_ATTRIBUTE", "CONTEXT_LOCATION"}:
         candidate = _select_reference_candidate(visible_items, decision)
         if candidate:
-            return [{"kind": "property", "property_id": candidate.id}], None
+            return [{"kind": "property", "property_id": _prop_id(candidate)}], None
         return [], decision.clarification_target or "me ayudas a ubicar cual de las opciones visibles queres decir"
 
     candidate = _select_reference_candidate(fallback_items, decision)
     if candidate:
-        return [{"kind": "property", "property_id": candidate.id}], None
+        return [{"kind": "property", "property_id": _prop_id(candidate)}], None
     return [], decision.clarification_target or "me ayudas a ubicar la referencia exacta"
 
 
@@ -149,15 +222,11 @@ def _fallback_intent_plan(
             )
         ]
 
-    if isinstance(graph_state, RealtorGraphState):
-        return build_realtor_fallback_intent_plan(graph_state, analysis)
-    return []
+    return list(_policy_for_state(graph_state).build_fallback_intent_plan(graph_state, analysis))
 
 
 def _internal_intents_for_state(graph_state: BaseGraphState) -> set[str]:
-    if isinstance(graph_state, RealtorGraphState):
-        return set(REALTOR_INTERNAL_INTENTS)
-    return set()
+    return set(_policy_for_state(graph_state).internal_intents())
 
 
 def _build_intent_queue(
@@ -250,57 +319,308 @@ def _normalize_visible_reference_scope(graph_state: BaseGraphState, analysis: Tu
     )
 
 
+def _latest_user_metadata(graph_state: BaseGraphState) -> dict[str, Any]:
+    if not graph_state.messages:
+        return {}
+    latest = graph_state.messages[-1]
+    if getattr(latest, "role", None) != "user":
+        return {}
+    metadata = getattr(latest, "metadata", None)
+    return dict(metadata or {})
+
+
+def _single_intent(
+    intent_type: str,
+    *,
+    condition: dict[str, Any] | None = None,
+) -> list[IntentPlanItem]:
+    return [
+        IntentPlanItem(
+            type=intent_type,
+            priority=1,
+            depends_on=[],
+            condition=condition,
+            skip_if_failed=False,
+        )
+    ]
+
+
+def _property_references_from_quick_action(
+    graph_state: BaseGraphState,
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidate_ids: list[str] = []
+    for key in ("target_property_id", "property_id"):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            candidate_ids.append(value)
+
+    if not candidate_ids:
+        last_mentioned = _coerce_property_dict(getattr(graph_state, "last_mentioned", None))
+        property_id = _prop_id(last_mentioned or {})
+        if property_id:
+            candidate_ids.append(property_id)
+
+    if not candidate_ids:
+        visible_items = _visible_reference_items(graph_state)
+        if visible_items:
+            candidate_ids.append(_prop_id(visible_items[0]))
+
+    if not candidate_ids:
+        search_items = _load_properties(getattr(graph_state, "last_search_results", []))
+        if search_items:
+            candidate_ids.append(_prop_id(search_items[0]))
+
+    references: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate_id in candidate_ids:
+        normalized = str(candidate_id or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        references.append({"kind": "property", "property_id": normalized})
+        seen.add(normalized)
+    return references
+
+
+def _lead_advisor_with_positive_intent(graph_state: BaseGraphState) -> dict[str, Any] | None:
+    current_intent = str(graph_state.lead_advisor.lead_extracted.appointment_intent or "").strip().lower()
+    if current_intent == "positive":
+        return None
+    updated_extracted = graph_state.lead_advisor.lead_extracted.model_copy(
+        update={"appointment_intent": "positive"}
+    )
+    updated_advisor = graph_state.lead_advisor.model_copy(update={"lead_extracted": updated_extracted})
+    return build_lead_advisor_state(
+        graph_state.tenant_config,
+        updated_advisor,
+    ).model_dump(mode="json")
+
+
+def _schedule_cita_update(
+    graph_state: BaseGraphState,
+    references: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    property_id = next(
+        (
+            str(item.get("property_id") or "").strip()
+            for item in references
+            if item.get("kind") == "property" and str(item.get("property_id") or "").strip()
+        ),
+        "",
+    )
+    cita_updates: dict[str, Any] = {}
+    if not str(graph_state.cita.tipo or "").strip():
+        cita_updates["tipo"] = "visita"
+    if property_id and not str(graph_state.cita.propiedad_id or "").strip():
+        cita_updates["propiedad_id"] = property_id
+    if not cita_updates:
+        return None
+    return graph_state.cita.model_copy(update=cita_updates).model_dump(mode="json")
+
+
+def _quick_action_turn(graph_state: BaseGraphState) -> dict[str, Any] | None:
+    metadata = _latest_user_metadata(graph_state)
+    action_id = str(metadata.get("action_id") or "").strip().lower()
+    if not action_id:
+        return None
+
+    default_reference = ReferenceDecision(kind="NONE", confidence=1.0)
+    property_references = _property_references_from_quick_action(graph_state, metadata)
+
+    if action_id == "interest_yes":
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="select_result",
+                confidence=1.0,
+                reference=default_reference,
+                intent_plan=_single_intent("focus_property", condition={"requires_reference": "resolved_property"}),
+            ),
+            "resolved_references": property_references,
+            "pending_decision": None,
+            "lead_advisor": _lead_advisor_with_positive_intent(graph_state),
+            "cita": None,
+        }
+
+    if action_id == "show_next":
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="confirm_previous",
+                confidence=1.0,
+                reference=default_reference,
+                intent_plan=_single_intent("show_result_cards", condition={"min_search_results": 1}),
+                reuse_current_filters=True,
+            ),
+            "resolved_references": [],
+            "pending_decision": None,
+            "lead_advisor": None,
+            "cita": None,
+        }
+
+    if action_id == "schedule_visit":
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="schedule",
+                confidence=1.0,
+                reference=default_reference,
+                intent_plan=_single_intent("agendar"),
+            ),
+            "resolved_references": property_references,
+            "pending_decision": None,
+            "lead_advisor": _lead_advisor_with_positive_intent(graph_state),
+            "cita": _schedule_cita_update(graph_state, property_references),
+        }
+
+    if action_id == "ask_financing":
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="calculate",
+                confidence=1.0,
+                reference=default_reference,
+                intent_plan=_single_intent("calcular"),
+            ),
+            "resolved_references": property_references,
+            "pending_decision": None,
+            "lead_advisor": None,
+            "cita": None,
+        }
+
+    if action_id == "human_handoff":
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="lead_capture",
+                confidence=1.0,
+                reference=default_reference,
+                intent_plan=_single_intent("escalar"),
+            ),
+            "resolved_references": property_references,
+            "pending_decision": None,
+            "lead_advisor": _lead_advisor_with_positive_intent(graph_state),
+            "cita": None,
+        }
+
+    refinement_questions = {
+        "reject_current": (
+            "quick_refine_choice",
+            "Perfecto. ¿Qué querés ajustar primero: precio, zona o tipo de propiedad?",
+            ["precio", "zona", "tipo de propiedad"],
+        ),
+        "ask_price": (
+            "quick_refine_price",
+            "Perfecto. ¿Qué presupuesto máximo te gustaría manejar?",
+            [],
+        ),
+        "ask_zone": (
+            "quick_refine_zone",
+            "Claro. ¿Qué zona te gustaría explorar ahora?",
+            [],
+        ),
+        "ask_property_type": (
+            "quick_refine_type",
+            "Perfecto. ¿Qué tipo de propiedad preferís ver?",
+            [],
+        ),
+        "ask_size_needs": (
+            "quick_refine_size",
+            "Claro. ¿Buscás más habitaciones, más baños o más metros cuadrados?",
+            [],
+        ),
+        "ask_budget_fit": (
+            "quick_refine_budget_fit",
+            "Entiendo. ¿Hasta qué monto te gustaría bajar el presupuesto?",
+            [],
+        ),
+        "ask_upgrade": (
+            "quick_refine_upgrade",
+            "Perfecto. ¿Querés subir presupuesto, ver más metros o más habitaciones?",
+            [],
+        ),
+        "ask_features": (
+            "quick_refine_features",
+            "Claro. ¿Qué querés mantener sí o sí en la siguiente opción: zona, presupuesto o habitaciones?",
+            ["zona", "presupuesto", "habitaciones"],
+        ),
+        "save_followup": (
+            "quick_followup_contact",
+            "Perfecto. ¿A qué correo o WhatsApp te la envío luego?",
+            [],
+        ),
+    }
+    if action_id in refinement_questions:
+        kind, question, options = refinement_questions[action_id]
+        return {
+            "analysis": TurnAnalysis(
+                dialogue_act="refine_search",
+                confidence=1.0,
+                reference=default_reference,
+            ),
+            "resolved_references": property_references,
+            "pending_decision": PendingDecision(
+                kind=kind,
+                question=question,
+                options=options,
+                metadata={"source": "quick_action", "action_id": action_id},
+            ),
+            "lead_advisor": None,
+            "cita": None,
+        }
+
+    return None
+
+
 async def analyze_turn(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     """Analyze the full turn once, then let deterministic code normalize and route the result."""
 
-    graph_state = (
-        RealtorGraphState.model_validate(state)
-        if state.get("vertical") == "realtor"
-        else BaseGraphState.model_validate(state)
-    )
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    vertical_spec = get_vertical_spec(state.get("vertical"))
+    graph_state = vertical_spec.state_model.model_validate(state)
+    policy = vertical_spec.policy
+    quick_action_turn = _quick_action_turn(graph_state)
+    if quick_action_turn is not None:
+        analysis = quick_action_turn["analysis"]
+        pending_decision = quick_action_turn["pending_decision"]
+        updates: dict[str, Any] = {
+            "turn_analysis": analysis.model_dump(mode="json"),
+            "resolved_references": quick_action_turn["resolved_references"],
+            "pending_clarification": None,
+            "pending_decision": pending_decision.model_dump(mode="json") if pending_decision else None,
+            "intent_queue": [],
+            "active_intent": None,
+        }
+        if quick_action_turn.get("lead_advisor") is not None:
+            updates["lead_advisor"] = quick_action_turn["lead_advisor"]
+        if quick_action_turn.get("cita") is not None:
+            updates["cita"] = quick_action_turn["cita"]
+        if not pending_decision:
+            updates["intent_queue"] = _build_intent_queue(
+                graph_state,
+                analysis,
+                resolved_references=quick_action_turn["resolved_references"],
+            )
+        return updates
+
     result_snapshots = []
     for item in getattr(graph_state, "last_search_results", [])[:6]:
-        result_snapshots.append(
-            {
-                "id": item.id,
-                "title": item.title,
-                "price": item.price,
-                "currency": item.currency,
-                "province": item.location.province,
-                "bedrooms_clean": item.features.bedrooms_clean,
-                "bathrooms_clean": item.features.bathrooms_clean,
-                "garage_clean": item.features.garage_clean,
-                "sqm_clean": item.features.sqm_clean,
-            }
-        )
+        item_data = _coerce_property_dict(item)
+        if item_data:
+            result_snapshots.append(_property_snapshot(item_data))
     last_mentioned = getattr(graph_state, "last_mentioned", None)
+    last_mentioned_data = _coerce_property_dict(last_mentioned)
     last_mentioned_snapshot = (
         {
-            "id": last_mentioned.id,
-            "title": last_mentioned.title,
-            "price": last_mentioned.price,
-            "currency": last_mentioned.currency,
-            "province": last_mentioned.location.province,
-            "garage_clean": last_mentioned.features.garage_clean,
+            "id": last_mentioned_data.get("id"),
+            "title": last_mentioned_data.get("title"),
+            "price": last_mentioned_data.get("price"),
+            "currency": last_mentioned_data.get("currency"),
+            "province": _prop_get(last_mentioned_data, "location", "province"),
+            "garage_clean": _prop_get(last_mentioned_data, "features", "garage_clean"),
         }
-        if last_mentioned
+        if last_mentioned_data
         else None
     )
     visible_result_snapshots = []
     for item in _visible_reference_items(graph_state)[:6]:
-        visible_result_snapshots.append(
-            {
-                "id": item.id,
-                "title": item.title,
-                "price": item.price,
-                "currency": item.currency,
-                "province": item.location.province,
-                "bedrooms_clean": item.features.bedrooms_clean,
-                "bathrooms_clean": item.features.bathrooms_clean,
-                "garage_clean": item.features.garage_clean,
-                "sqm_clean": item.features.sqm_clean,
-            }
-        )
+        visible_result_snapshots.append(_property_snapshot(item))
     recent_messages = summarize_messages_for_prompt(graph_state.messages, limit=8)
     prompt = compose(
         "analyze_turn",
@@ -317,7 +637,7 @@ async def analyze_turn(state: dict[str, Any], deps: GraphDependencies) -> dict[s
             "last_turn_output_types": list(graph_state.last_turn_output_types or []),
             "last_turn_search_summary": graph_state.last_turn_search_summary,
             "capabilities": graph_state.capabilities,
-            "current_filters": getattr(graph_state, "search_filters", SearchFilters()).model_dump(mode="json"),
+            "current_filters": _dump_search_filters(graph_state),
             "cards_shown": list(getattr(graph_state, "cards_shown", []) or []),
             "visible_cards": visible_result_snapshots,
             "last_search_results": result_snapshots,
@@ -331,11 +651,8 @@ async def analyze_turn(state: dict[str, Any], deps: GraphDependencies) -> dict[s
     )
     analysis = _sanitize_analysis(graph_state.messages[-1].content, await deps.llm.analyze_turn(prompt))
     analysis = _normalize_visible_reference_scope(graph_state, analysis)
-    compare_target_ids: list[str] = []
-    pending_decision = None
-    if isinstance(graph_state, RealtorGraphState):
-        analysis, compare_target_ids = apply_realtor_turn_policies(graph_state, analysis)
-        pending_decision = derive_realtor_pending_decision(graph_state, analysis)
+    analysis, compare_target_ids = policy.apply_turn_policies(graph_state, analysis)
+    pending_decision = policy.derive_pending_decision(graph_state, analysis)
     decision = analysis.reference if isinstance(analysis.reference, ReferenceDecision) else ReferenceDecision.model_validate(analysis.reference)
     resolved_references, clarification_target = await _resolve_reference(graph_state, decision, deps)
     if compare_target_ids:
@@ -366,8 +683,10 @@ async def analyze_turn(state: dict[str, Any], deps: GraphDependencies) -> dict[s
             resolved_references=resolved_references,
         )
 
-    if isinstance(graph_state, RealtorGraphState) and analysis.dialogue_act in {"new_search", "refine_search"}:
-        updates["search_filters"] = await merge_realtor_filters(graph_state, analysis, deps)
-        if any(intent.get("type") == "buscar" for intent in updates["intent_queue"]):
-            updates["search_attempts"] = 0
+    if analysis.dialogue_act in {"new_search", "refine_search"}:
+        merged_filters = await policy.merge_filters(graph_state, analysis, deps)
+        if merged_filters is not None:
+            updates["search_filters"] = merged_filters
+            if any(intent.get("type") == "buscar" for intent in updates["intent_queue"]):
+                updates["search_attempts"] = 0
     return updates

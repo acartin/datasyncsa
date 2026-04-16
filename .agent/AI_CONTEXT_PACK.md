@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-15T18:37:58Z`
+- Generated UTC: `2026-04-16T19:23:17Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-06`
-- Git commit: `62a19c8`
+- Git branch: `HETZNER-LOCAL-2026-Abril-16`
+- Git commit: `b893ce7`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-15T18:37:58Z`
+- Generated UTC: `2026-04-16T19:23:17Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-06`
-- Git commit: `62a19c8`
+- Git branch: `HETZNER-LOCAL-2026-Abril-16`
+- Git commit: `b893ce7`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -51,20 +51,20 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
-datasyncsa-web
 postgres
-redis
-etl-docs-worker
-scoring-core
-scoring-core-worker
 admin-console-api
+redis
 ai-runtime
 chat-web-renderer-api
-etl-docs
-portainer
-test-ui
-admin-console-web
 chat-web-renderer-ui
+datasyncsa-web
+etl-docs
+etl-docs-worker
+admin-console-web
+portainer
+scoring-core
+scoring-core-worker
+test-ui
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -80,6 +80,7 @@ chat-web-renderer-ui
 - `services/ai_runtime/ARCHITECTURE.md`
 - `.agent/RULES.md`
 - `.agent/PY_EXECUTION_MAP.md`
+- `.agent/ACTIVE_DB_PROMPTS.md`
 
 ## 7. ENTIDADES Y CAPAS CRITICAS
 
@@ -90,6 +91,193 @@ chat-web-renderer-ui
 - RAG: FAQ por tenant y documentos por tenant en Postgres/pgvector
 ```
 
+## Prompts DB Activos
+
+### `.agent/ACTIVE_DB_PROMPTS.md`
+
+```
+# Active DB Prompts
+
+- Generated UTC: `2026-04-16T19:23:18Z`
+- Source: `postgres.public.lead_scoring_prompts`
+- Refresh command: `bash .agent/refresh_db_prompts.sh`
+- Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.
+
+## Uso obligatorio
+
+- Leer este archivo en el bootstrap de cada sesion junto con `.agent/RULES.md` y `.agent/PY_EXECUTION_MAP.md`.
+- Para tareas en `realtor`, lead capture, scoring, `slot_hints`, appointment intent/type o cambios de policy conversacional, refrescar primero desde BD.
+- Si el refresh falla pero este archivo existe, usarlo como snapshot cacheado y reportar la falta de verificacion de frescura.
+- Si este archivo no existe y tampoco se pudo leer la BD, no avanzar con cambios de phrasing o politica conversacional.
+
+## Realtor Scoring Prompt V4
+
+- prompt_id: `190dc860-9d37-4883-a6f4-c3019fdd882e`
+- prompt_version: `4`
+- is_active: `t`
+- updated_at: `2026-03-31 02:13:29.934315+00`
+- model_id: `53fe9e76-09e6-46af-a934-bc2c602c256b`
+- model_name: `Realtor Default`
+- model_version: `1`
+- model_prompt_version: `4`
+- vertical_id: `1`
+- vertical_name: `Real Estate`
+- business_domain: `(null)`
+
+### Query canonica
+
+```sql
+select p.id, p.version, p.is_active, p.updated_at,
+       m.id as model_id, m.name as model_name, m.version as model_version, m.prompt_version as model_prompt_version,
+       v.id as vertical_id, v.name as vertical_name,
+       p.prompt_template, p.extraction_schema
+from lead_scoring_prompts p
+join lead_scoring_models m on m.id = p.model_id
+join lead_client_verticals v on v.id = m.vertical_id
+where p.id = '190dc860-9d37-4883-a6f4-c3019fdd882e';
+```
+
+### prompt_template
+
+```text
+
+Eres un evaluador experto de leads para real estate.
+
+Tu salida debe ser UNICAMENTE un JSON valido (sin markdown, sin texto extra, sin comentarios).
+
+CONTEXTO
+- vertical_name: {vertical_name}
+- business_domain: {business_domain}
+- locale: {locale}
+- timestamp_utc: {timestamp_utc}
+
+CRITERIOS ACTIVOS (referencia)
+{criteria_text}
+
+OBJETIVO
+Evaluar el estado ACTUAL del lead y devolver:
+1) scores por criterio (siempre los 5),
+2) extracted_data,
+3) reasoning breve,
+4) confidence.
+
+REGLAS OBLIGATORIAS
+- Debes incluir siempre estas 5 llaves en "scores":
+  - intencion
+  - apertura
+  - match
+  - plazo
+  - solvencia
+- Rango permitido por criterio: 0 a 10.
+- Nunca uses escala 0..1 en scores.
+- Si falta evidencia para un criterio: asigna score bajo por desconocimiento (1.0 a 2.0) y justificalo.
+- Reserva 0.0-1.0 para evidencia negativa explicita (rechazo, no califica, sin capacidad declarada, no desea avanzar).
+- Prioriza evidencia mas RECIENTE sobre mensajes antiguos.
+- Negaciones explicitas del usuario (ej: "no quiero agendar", "no necesito visita") deben reflejarse en intencion bajo.
+- No inventes informacion.
+
+GUIA RAPIDA POR CRITERIO
+- apertura:
+  - 8-10: participa activamente y aporta datos utiles.
+  - 5-7: participacion media.
+  - 0-4: respuestas vagas o minimas.
+- intencion:
+  - 8-10: expresa accion clara para avanzar/agendar/comprar/rentar.
+  - 5-7: interes general sin compromiso claro.
+  - 0-4: curiosidad o rechazo de avance.
+- plazo:
+  - 8-10: urgencia explicita (hoy, esta semana, pronto).
+  - 5-7: horizonte mediano.
+  - 0-4: indefinido o sin prisa.
+  - si no hay evidencia temporal explicita: 1.0.
+- match:
+  - 8-10: requerimiento claro y fit alto declarado.
+  - 5-7: fit parcial/incompleto.
+  - 0-4: fit debil o ambiguo.
+  - si falta evidencia de fit: 1.0.
+- solvencia:
+  - 8-10: capacidad clara (preaprobado, fondos claros, banco confirmado).
+  - 5-7: capacidad posible pero incompleta.
+  - 0-4: capacidad debil o senales negativas.
+  - si falta evidencia financiera: 1.0.
+
+EXTRACTED_DATA (OBLIGATORIO, TODAS LAS LLAVES)
+- extracted_name
+- extracted_email
+- extracted_phone
+- extracted_appointment_intent
+- extracted_appointment_type
+- extracted_approval
+- extracted_budget
+- extracted_preferred_date
+- extracted_preference
+
+REGLAS DE EXTRACCION
+- Si no aparece explicitamente, usar null.
+- Mantener texto cercano a lo dicho por el usuario.
+- Clasifica extracted_appointment_intent con la postura MAS RECIENTE del usuario: positive | negative | uncertain.
+- Si hay negacion explicita de agendar/visitar (ej: "no quiero agendar", "no necesito visita", "por ahora no"), entonces extracted_appointment_intent = "negative" y extracted_appointment_type = null.
+- Solo reporta extracted_appointment_type cuando extracted_appointment_intent sea "positive".
+
+VALIDACIONES FINALES
+- Respuesta valida JSON.
+- Incluir solo las llaves definidas por el schema.
+- Sin texto fuera del JSON.
+
+
+SLOT_HINTS CONVERSACIONALES
+- Cuando exista un siguiente dato claro que ayude a avanzar sin sonar a formulario, puedes agregar una llave opcional `slot_hints`.
+- Formato permitido:
+  "slot_hints": {
+    "next_field": "nombre|presupuesto|aprobacion|fecha_preferida|contacto|tipo_cita|appointment_intent|email|telefono|preferencias",
+    "question": "pregunta natural, unica y breve"
+  }
+- Si no hay una siguiente pregunta clara, omite `slot_hints`.
+- Usa una sola pregunta por turno y evita sonar a formulario.
+- Usa `dynamic_context.capture_exposure_count` y `dynamic_context.capture_unlocked` como guardrails conversacionales.
+- Si `dynamic_context.capture_exposure_count < 2`, NO devuelvas `slot_hints` para pedir nombre ni ningun otro dato de lead.
+- La primera captura de lead, incluido `nombre`, solo puede comenzar a partir de la segunda muestra util de opciones, cards o datos de propiedades/casos.
+- Considera muestra util cuando el usuario ya vio resultados, cards, detalle de propiedad, comparacion o recomendacion concreta.
+- Si `dynamic_context.capture_unlocked = true` y `nombre` sigue vacio, prioriza `nombre` como primer dato a capturar, salvo que el usuario haya dado otro dato personal en este mismo turno o haga falta contacto para confirmar una cita ya definida.
+- No pidas datos de contacto en saludo puro ni en el mismo turno en que el usuario acaba de dar otro dato personal, salvo que sea estrictamente necesario para confirmar una cita ya definida.
+- Mapa de momentos sugerido para realtor:
+  - `nombre`: despues de la primera reaccion positiva o interes concreto del usuario por una busqueda, calculo, recomendacion o propiedad. Nunca en saludo puro.
+  - `presupuesto`: despues de mostrar opciones, precios o cuando el usuario reacciona a rango/capacidad.
+  - `aprobacion`: cuando el usuario pregunta por cuota, financiamiento o ya muestra capacidad financiera en la conversacion.
+  - `fecha_preferida`: cuando hay urgencia/plazo relevante o el usuario ya piensa en mudanza/tiempos.
+  - `contacto`: cerca del cierre, cuando el usuario selecciono una opcion, pidio seguimiento detallado o hay intencion positiva de cita. Para confirmar cita, prioriza contacto.
+  - `tipo_cita`: cuando la intencion de agendar es positiva y ya hay suficiente interes/match para proponer visita, llamada o video.
+- Si el usuario acaba de entregar `nombre`, `email`, `telefono` u otro dato de lead en este mismo turno, no encadenes automaticamente el siguiente campo.
+- Alinea `next_field` con la evidencia mas reciente, los scores actuales, los datos ya capturados y el estado de la conversacion.
+
+```
+
+### extraction_schema
+
+```json
+{
+    "mode": "llm_scoring_primary",
+    "fields": [
+        {
+            "key": "extracted_name",
+            "type": "string",
+            "question": "¿Con quién tengo el gusto?",
+            "description": "Nombre del lead"
+        },
+        {
+            "key": "extracted_email",
+            "type": "string",
+            "question": "¿Qué correo te queda mejor compartir?",
+            "description": "Email del lead"
+        },
+        {
+            "key": "extracted_phone",
+            "type": "string",
+            "question": "¿Qué número te queda mejor compartir?",
+            "description": "Telefono del lead"
+        },
+```
+
 ## Compose y Variables
 
 ### Servicios activos del compose
@@ -97,18 +285,18 @@ chat-web-renderer-ui
 ```text
 postgres
 redis
+etl-docs
+portainer
 scoring-core
+ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
+etl-docs-worker
 scoring-core-worker
 test-ui
 admin-console-api
 admin-console-web
-ai-runtime
-chat-web-renderer-api
-chat-web-renderer-ui
-etl-docs
 datasyncsa-web
-etl-docs-worker
-portainer
 ```
 ### `docker-compose.yml:1-220`
 
@@ -630,31 +818,22 @@ services/scoring-core/main.py:44:app = FastAPI(
 services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=settings.api_prefix, tags=["scoring"])
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
-services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
-services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
-services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
-services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
+services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:162:if __name__ == "__main__":
+services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_vertical_policies.py:46:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -673,6 +852,21 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 ```
 
 ## Rutas API Detectadas
@@ -740,6 +934,25 @@ services/web/admin-console/backend/app/modules/countries/router.py:87:@router.po
 services/web/admin-console/backend/app/modules/countries/router.py:91:@router.get("/countries/{country_id}", response_model=CountryRow)
 services/web/admin-console/backend/app/modules/countries/router.py:99:@router.put("/countries/{country_id}", response_model=CountryRow)
 services/web/admin-console/backend/app/modules/countries/router.py:106:@router.delete("/countries/{country_id}")
+services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
+services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
+services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
+services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
+services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
+services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
+services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
+services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
+services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
+services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
+services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
+services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
+services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
+services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
+services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
+services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
+services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
+services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
+services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
@@ -811,39 +1024,20 @@ services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
 services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:284:@router.get("/health")
+services/web/chat-web-renderer/backend/app/api/external.py:290:@router.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
 services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
 services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/reset")
 services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
-services/web/chat-web-renderer/backend/app/main.py:378:@app.get("/")
-services/web/chat-web-renderer/backend/app/main.py:392:@app.post("/internal/memory/reset")
+services/web/chat-web-renderer/backend/app/main.py:383:@app.get("/")
+services/web/chat-web-renderer/backend/app/main.py:397:@app.post("/internal/memory/reset")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
 services/etl-docs/main.py:107:@app.get("/documents/jobs/{job_id}")
 services/etl-docs/main.py:121:@app.delete("/documents/{client_id}/{content_id}")
 services/etl-docs/main.py:137:@app.delete("/documents/client/{client_id}")
-services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
-services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
-services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
-services/ai_runtime/api.py:152:@router.post("/internal/session/reset", response_model=InternalSessionResetResponse)
-services/ai_runtime/api.py:161:@router.get("/debug/turn-trace")
-services/ai_runtime/api.py:166:@router.get("/debug/turn-trace/")
-services/ai_runtime/api.py:171:@router.get("/debug/turn-trace/assets/{asset_path:path}")
-services/ai_runtime/api.py:179:@router.get("/debug/turn-traces/clients/{client_id}/sessions")
-services/ai_runtime/api.py:187:@router.get("/debug/turn-traces/config")
-services/ai_runtime/api.py:195:@router.get("/debug/turn-traces/clients")
-services/ai_runtime/api.py:202:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns")
-services/ai_runtime/api.py:211:@router.delete("/debug/turn-traces/clients/{client_id}/sessions/{session_id}")
-services/ai_runtime/api.py:225:@router.get("/debug/turn-traces/clients/{client_id}/sessions/{session_id}/turns/{turn}")
-services/ai_runtime/api.py:238:@router.get("/debug/conversation-suites")
-services/ai_runtime/api.py:243:@router.get("/debug/conversation-suites/")
-services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{asset_path:path}")
-services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
-services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
-services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
 ```
 
 ## AI Runtime
@@ -887,6 +1081,14 @@ Lectura adicional segun el caso:
 - `services/web/chat-web-renderer/backend/app/core/runtime_client.py`
 - `services/web/chat-web-renderer/backend/app/core/memory_reset.py`
 
+## Prompts DB obligatorios
+
+- Antes de tocar `realtor`, lead capture, scoring, `slot_hints`, appointment intent/type o policy conversacional, leer `.agent/ACTIVE_DB_PROMPTS.md`.
+- Refrescar ese snapshot al menos una vez por sesion con `bash .agent/refresh_db_prompts.sh`.
+- El baseline minimo obligatorio para realtor es `lead_scoring_prompts.id = '190dc860-9d37-4883-a6f4-c3019fdd882e'` (`Realtor Default`, prompt v4).
+- Si no se pudo refrescar desde BD pero existe el snapshot local, usarlo como cache y reportar la falta de verificacion de frescura.
+- Si no existe snapshot local y no se pudo leer la BD, no recomendar cambios de phrasing o politica conversacional como si fueran hechos.
+
 ## Supuestos Operativos
 
 - `ai-runtime` es la unica autoridad conversacional del compose actual
@@ -895,8 +1097,8 @@ Lectura adicional segun el caso:
 - el estado del grafo vive en Redis y se persiste por sesion
 - el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
 - `shared` solo contiene infraestructura y piezas tecnicas neutrales
-- `analyze_turn` e `intent_detector` son responsabilidad semantica del vertical
-- `planner_system`, `synthesizer_system` y `lead_scoring_prompts` tienen ownership separado y no deben invadir responsabilidades ajenas
+- `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
+- `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
 ## Restricciones de Cambio
@@ -905,11 +1107,11 @@ Lectura adicional segun el caso:
 - no reintroducir dependencias hacia componentes legacy como `services/legacy/agent-core` o `services/legacy/inference-stack-v2`
 - no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
 - no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
-- no colgar `analyze_turn` ni `intent_detector` de `planner_system` ni de prompts shared
+- no colgar `analyze_turn` ni `intent_detector` de prompts shared
 - no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
 - si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`
 ```
-### `docs/AI_RUNTIME_PROMPT_RUNTIME.md`
+### `docs/AI_RUNTIME_PROMPT_RUNTIME.md:1-29`
 
 ```
 # AI Runtime Prompt Runtime
@@ -941,9 +1143,10 @@ El runtime actual separa prompts en tres grupos:
 
 Importante:
 
-- `planner_system` y `synthesizer_system` pueden seguir existiendo en BD como residuo historico, pero ya no forman parte del runtime activo.
-- El runtime ya no carga `system_prompts` ni `ai_system_prompts` para planner/synthesizer.
+```
+### `docs/AI_RUNTIME_PROMPT_RUNTIME.md:33-180`
 
+```
 ## Fuente canonica por tipo de prompt
 
 ### 1. Prompts semanticos core
@@ -1594,6 +1797,7 @@ runtime = ConversationRuntime(
 
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from services.ai_runtime.config.tenant_loader import TenantLoader
@@ -1613,6 +1817,7 @@ from services.ai_runtime.domain.state import (
 )
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph.registry import GraphRegistry
+from services.ai_runtime.runtime.cta_planner import apply_cta_delivery_plan, build_cta_delivery_plan
 from services.ai_runtime.runtime.turn_trace import (
     TurnTraceContext,
     activate_turn_trace,
@@ -1623,6 +1828,10 @@ from services.ai_runtime.runtime.turn_trace import (
     utc_now_iso,
 )
 from services.ai_runtime.verticals import get_vertical_spec
+from services.ai_runtime.runtime.state_migrations import apply_migrations
+
+
+logger = logging.getLogger(__name__)
 
 
 def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
@@ -1699,8 +1908,21 @@ class ConversationRuntime:
         conversation_id = request.conversation_id or str(uuid4())
         existing_payload = await self.dependencies.session_store.get_state(request.client_id, session_id)
 
+        base_state = None
         if existing_payload:
-            base_state = vertical_spec.state_model.model_validate(existing_payload)
+            try:
+                migrated_payload = apply_migrations(dict(existing_payload))
+                base_state = vertical_spec.state_model.model_validate(migrated_payload)
+            except Exception as exc:
+                logger.warning(
+                    "state_hydration_failed client_id=%s session_id=%s error=%s; starting fresh session",
+                    request.client_id,
+                    session_id,
+                    exc,
+                )
+                base_state = None
+
+        if base_state is not None:
             base_state.tenant_config = tenant_config
             base_state.capabilities = list(tenant_config.capabilities)
             base_state.vertical = tenant_config.vertical
@@ -1709,7 +1931,13 @@ class ConversationRuntime:
             base_state.lead_advisor = build_lead_advisor_state(tenant_config, base_state.lead_advisor)
             _reset_turn_scoped_state(base_state)
             base_state.current_turn += 1
-            base_state.messages.append(ChatMessage(role="user", content=request.message))
+            base_state.messages.append(
+                ChatMessage(
+                    role="user",
+                    content=request.message,
+                    metadata=dict(request.metadata or {}),
+                )
+            )
             conversation_id = base_state.conversation_id
         else:
             state = build_base_state(
@@ -1721,6 +1949,7 @@ class ConversationRuntime:
                 flow=flow,
                 tenant_config=tenant_config,
                 initial_message=request.message,
+                initial_message_metadata=request.metadata,
             )
             base_state = vertical_spec.state_model.model_validate(state.model_dump())
             _reset_turn_scoped_state(base_state)
@@ -1744,32 +1973,6 @@ class ConversationRuntime:
             trace_context,
             request_metadata=request.metadata,
             state_summary=summarize_state(base_state.model_dump(mode="json")),
-        )
-        graph = self.graph_registry.get_graph(vertical_spec.slug, flow, self.dependencies)
-        try:
-            final_payload = await graph.ainvoke(base_state.model_dump(mode="json"))
-            final_state = vertical_spec.state_model.model_validate(final_payload)
-            components = vertical_spec.component_builder(final_state)
-            rag_outputs = [
-                item
-                for item in final_state.turn_outputs
-                if item.get("type") in {"rag_agencia", "rag_docs"}
-            ]
-            sources = [chunk for output in rag_outputs for chunk in output.get("chunks", [])]
-            await self.dependencies.session_store.set_state(
-                request.client_id,
-                session_id,
-                final_state.model_dump(mode="json"),
-                tenant_config.redis_ttl_seconds,
-            )
-            response = ChatResponse(
-                session_id=session_id,
-                conversation_id=conversation_id,
-                client_id=request.client_id,
-                vertical=tenant_config.vertical,
-                answer=final_state.final_response or "",
-                components=components,
-                sources=sources,
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -1798,6 +2001,9 @@ from services.ai_runtime.domain.contracts import (
     TurnAnalysis,
     Vertical,
 )
+
+
+CURRENT_SCHEMA_VERSION = 1
 
 
 SCORING_CRITERION_ALIASES: dict[str, tuple[str, ...]] = {
@@ -1884,6 +2090,7 @@ class BaseGraphState(BaseModel):
     client_id: str
     vertical: Vertical
     flow: FlowName
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION)
     current_turn: int = 1
     messages: list[ChatMessage] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
@@ -1950,10 +2157,6 @@ def _vertical_scoring_defaults(vertical: Vertical) -> tuple[list[str], list[str]
 
     try:
         spec = get_vertical_spec(vertical)
-    except ValueError:
-        return [], []
-    return list(spec.scoring_criteria), list(spec.required_fields)
-
 ```
 ### `services/ai_runtime/graph/registry.py`
 
@@ -2358,7 +2561,12 @@ class InferenceClient:
             "wbraid": session.get("wbraid"),
             "referrer_url": session.get("referrer_url"),
             "property_id": session.get("property_id"),
-            "landing_page_url": session.get("landing_page_url")
+            "landing_page_url": session.get("landing_page_url"),
+            "action_id": session.get("action_id"),
+            "action_label": session.get("action_label"),
+            "action_type": session.get("action_type"),
+            "target_property_id": session.get("target_property_id"),
+            "target_property_title": session.get("target_property_title"),
         }
         user_metadata = {k: v for k, v in user_metadata.items() if v is not None}
 

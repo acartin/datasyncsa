@@ -24,6 +24,9 @@ from services.ai_runtime.domain.contracts import (
 )
 
 
+CURRENT_SCHEMA_VERSION = 1
+
+
 SCORING_CRITERION_ALIASES: dict[str, tuple[str, ...]] = {
     "apertura": ("apertura", "engagement", "engage", "openness"),
     "intencion": ("intencion", "intent", "purchase_intent"),
@@ -108,6 +111,7 @@ class BaseGraphState(BaseModel):
     client_id: str
     vertical: Vertical
     flow: FlowName
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION)
     current_turn: int = 1
     messages: list[ChatMessage] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
@@ -293,8 +297,12 @@ def _dynamic_scores_from_legacy(criteria_order: list[str], lead_scores: LeadScor
     return resolved
 
 
-def _field_has_value(extracted: LeadExtracted, field_key: str) -> bool:
+def _field_has_value(extracted: LeadExtracted, field_key: str, policy: Any | None = None) -> bool:
     key = _normalize_field_key(field_key)
+    if policy is not None:
+        policy_result = policy.field_has_value(extracted, key)
+        if policy_result is not None:
+            return policy_result
     if key == "contacto":
         return has_valid_lead_contact(extracted)
     if key == "nombre":
@@ -323,7 +331,10 @@ def build_lead_advisor_state(
     tenant_config: TenantConfig,
     previous: LeadAdvisorState | None = None,
 ) -> LeadAdvisorState:
+    from services.ai_runtime.verticals import get_vertical_spec
+
     profile = _resolve_scoring_profile(tenant_config)
+    policy = get_vertical_spec(tenant_config.vertical).policy
     criteria_order = _build_criteria_order(profile, tenant_config.vertical)
     previous_dynamic_scores = dict((previous.criteria_scores if previous else {}) or {})
     previous_reasons = dict((previous.criteria_reasons if previous else {}) or {})
@@ -340,7 +351,7 @@ def build_lead_advisor_state(
     }
     lead_extracted = previous.lead_extracted if previous else LeadExtracted()
     required_fields = _build_required_fields(profile, tenant_config.vertical)
-    completed_fields = [field for field in required_fields if _field_has_value(lead_extracted, field)]
+    completed_fields = [field for field in required_fields if _field_has_value(lead_extracted, field, policy=policy)]
     lead_complete = bool(required_fields) and len(completed_fields) >= len(required_fields)
     return LeadAdvisorState(
         lead_scores=_legacy_scores_from_dynamic(criteria_scores),
@@ -373,6 +384,7 @@ def build_base_state(
     flow: FlowName,
     tenant_config: TenantConfig,
     initial_message: str,
+    initial_message_metadata: dict[str, Any] | None = None,
 ) -> BaseGraphState:
     """Bootstrap the canonical base state for a new session."""
 
@@ -385,7 +397,13 @@ def build_base_state(
         flow=flow,
         capabilities=list(tenant_config.capabilities),
         tenant_config=tenant_config,
-        messages=[ChatMessage(role="user", content=initial_message)],
+        messages=[
+            ChatMessage(
+                role="user",
+                content=initial_message,
+                metadata=dict(initial_message_metadata or {}),
+            )
+        ],
         cita=Appointment(client_id=client_id),
         lead_advisor=build_lead_advisor_state(tenant_config),
     )

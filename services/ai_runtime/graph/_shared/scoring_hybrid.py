@@ -18,7 +18,6 @@ from services.ai_runtime.domain.state import (
     SCORING_CRITERION_ALIASES,
     SCORING_FIELD_ALIASES,
 )
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.prompt_context import summarize_messages_for_prompt
 
 
@@ -361,6 +360,25 @@ def _build_scoring_cache_key(stable_prefix: str) -> str:
     return hashlib.sha256(stable_prefix.encode("utf-8")).hexdigest()
 
 
+def _property_summary(item: Any) -> dict[str, Any] | None:
+    if item is None:
+        return None
+    if hasattr(item, "model_dump"):
+        item = item.model_dump(mode="json")
+    if not isinstance(item, dict):
+        return None
+    features = item.get("features") if isinstance(item.get("features"), dict) else {}
+    location = item.get("location") if isinstance(item.get("location"), dict) else {}
+    return {
+        "id": item.get("id"),
+        "price": item.get("price"),
+        "currency": item.get("currency"),
+        "province": location.get("province"),
+        "bedrooms_clean": features.get("bedrooms_clean"),
+        "bathrooms_clean": features.get("bathrooms_clean"),
+    }
+
+
 def _build_scoring_prompt(
     graph_state: BaseGraphState,
     advisor_state: LeadAdvisorState,
@@ -386,18 +404,18 @@ def _build_scoring_prompt(
         "last_turn_output_types": list(graph_state.last_turn_output_types or []),
         "last_turn_search_summary": graph_state.last_turn_search_summary,
     }
-    if isinstance(graph_state, RealtorGraphState):
-        dynamic_context["search_filters"] = graph_state.search_filters.model_dump(mode="json")
+    raw_filters = getattr(graph_state, "search_filters", None)
+    if raw_filters is not None:
+        if hasattr(raw_filters, "model_dump"):
+            dynamic_context["search_filters"] = raw_filters.model_dump(mode="json")
+        elif isinstance(raw_filters, dict):
+            dynamic_context["search_filters"] = raw_filters
+    raw_results = getattr(graph_state, "last_search_results", None)
+    if raw_results:
         dynamic_context["last_search_results_summary"] = [
-            {
-                "id": item.id,
-                "price": item.price,
-                "currency": item.currency,
-                "province": item.location.province,
-                "bedrooms_clean": item.features.bedrooms_clean,
-                "bathrooms_clean": item.features.bathrooms_clean,
-            }
-            for item in graph_state.last_search_results[:4]
+            summary
+            for summary in (_property_summary(item) for item in list(raw_results)[:4])
+            if summary is not None
         ]
     dynamic_context = json.dumps(
         dynamic_context,

@@ -10,6 +10,25 @@ class ChatMessage(BaseComponent):
     text: str
     sender: str  # "bot" or "user"
 
+class QuickAction(BaseModel):
+    id: str
+    label: str
+    user_text: Optional[str] = None
+
+
+class ActionOption(BaseModel):
+    label: str
+    payload: str
+    description: Optional[str] = None
+    action_id: Optional[str] = None
+    user_text: Optional[str] = None
+
+
+class PropertyStat(BaseModel):
+    icon: str
+    value: str
+    label: str
+
 class PropertyCard(BaseComponent):
     type: str = "property-card"
     title: str
@@ -27,10 +46,12 @@ class PropertyCard(BaseComponent):
     description: Optional[str] = None
     badge_main: Optional[str] = None
     badge_sub: Optional[str] = None
+    stats: List[PropertyStat] = Field(default_factory=list)
     bedrooms_clean: Optional[int] = None
     bathrooms_clean: Optional[float] = None
     sqm_clean: Optional[int] = None
     garage_clean: Optional[int] = None
+    quick_actions: List[QuickAction] = Field(default_factory=list)
 
 class MortgageCalculator(BaseComponent):
     type: str = "mortgage-calculator"
@@ -54,7 +75,7 @@ class PropertyMap(BaseComponent):
 class ActionMenu(BaseComponent):
     type: str = "action-menu"
     title: Optional[str] = None
-    options: List[Dict[str, str]]  # [{"label": "Ver Más", "payload": "HOUSE_123"}]
+    options: List[ActionOption] = Field(default_factory=list)
 
 class PhotoCarousel(BaseComponent):
     type: str = "photo-carousel"

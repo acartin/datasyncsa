@@ -4,12 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.ai_runtime.domain.contracts import TurnAnalysis
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
 from services.ai_runtime.graph.realtor.contracts import Property
 from services.ai_runtime.graph.realtor.nodes.render_cards_node import build_card_payload
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
+from services.ai_runtime.graph.realtor.turn_frame import merge_seen_properties
+
+
+def _latest_action_id(graph_state: RealtorGraphState) -> str:
+    if not graph_state.messages:
+        return ""
+    latest = graph_state.messages[-1]
+    if latest.role != "user":
+        return ""
+    return str((latest.metadata or {}).get("action_id") or "").strip().lower()
 
 
 def _select_properties(graph_state: RealtorGraphState) -> list[Property]:
@@ -17,6 +26,12 @@ def _select_properties(graph_state: RealtorGraphState) -> list[Property]:
         item.id: item
         for item in [*graph_state.last_search_results, *graph_state.inventory]
     }
+    action_id = _latest_action_id(graph_state)
+    if action_id == "show_next" and graph_state.last_search_results:
+        seen_ids = set(str(item_id) for item_id in (graph_state.seen_properties or {}).keys())
+        selected = [item for item in graph_state.last_search_results if item.id not in seen_ids]
+        if selected:
+            return selected[:1]
     if graph_state.cards_shown:
         selected: list[Property] = []
         for property_id in graph_state.cards_shown:
@@ -26,7 +41,7 @@ def _select_properties(graph_state: RealtorGraphState) -> list[Property]:
         if selected:
             return selected
     if graph_state.last_search_results:
-        return list(graph_state.last_search_results[:2])
+        return list(graph_state.last_search_results[:1])
     return []
 
 
@@ -48,7 +63,6 @@ def _build_narrative(properties: list[Property]) -> str:
 async def show_result_cards(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     del deps
     graph_state = RealtorGraphState.model_validate(state)
-    analysis = TurnAnalysis.model_validate(graph_state.turn_analysis or {})
     properties = _select_properties(graph_state)
     payload = build_card_payload(properties)
     narrative = _build_narrative(properties)
@@ -66,8 +80,13 @@ async def show_result_cards(state: dict[str, Any], deps: GraphDependencies) -> d
         "cards_mode": mode if payload else None,
         "ui_payload": {"property_cards": payload} if payload else None,
         "cards_shown": [item["id"] for item in payload],
+        "seen_properties": merge_seen_properties(
+            graph_state.seen_properties,
+            properties,
+            current_turn=graph_state.current_turn,
+        ),
         **complete_active_intent(graph_state, output),
     }
-    if len(properties) == 1 and analysis.detail_attribute_key == "foto":
+    if len(properties) == 1:
         updates["last_mentioned"] = properties[0].model_dump(mode="json")
     return updates

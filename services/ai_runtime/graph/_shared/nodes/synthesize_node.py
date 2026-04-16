@@ -14,8 +14,6 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
 from services.ai_runtime.domain.turn_frame import BaseTurnFrame
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
-from services.ai_runtime.graph.realtor.turn_frame import RealtorTurnFrame
 
 
 # ---------------------------------------------------------------------------
@@ -142,11 +140,10 @@ def _apply_lead_question(answer: str, turn_frame: BaseTurnFrame) -> tuple[str, s
 async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     """Render the final user-facing answer from the pre-computed TurnFrame."""
 
-    graph_state: BaseGraphState
-    if state.get("vertical") == "realtor":
-        graph_state = RealtorGraphState.model_validate(state)
-    else:
-        graph_state = BaseGraphState.model_validate(state)
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    vertical_spec = get_vertical_spec(state.get("vertical"))
+    graph_state: BaseGraphState = vertical_spec.state_model.model_validate(state)
 
     # --- Read TurnFrame from state (written by prepare_synthesis) ---
     turn_frame_data = state.get("turn_frame")
@@ -156,11 +153,7 @@ async def synthesize(state: dict[str, Any], deps: GraphDependencies) -> dict[str
             "prepare_synthesis must run before synthesize"
         )
 
-    turn_frame: BaseTurnFrame
-    if isinstance(graph_state, RealtorGraphState):
-        turn_frame = RealtorTurnFrame.model_validate(turn_frame_data)
-    else:
-        turn_frame = BaseTurnFrame.model_validate(turn_frame_data)
+    turn_frame: BaseTurnFrame = vertical_spec.turn_frame_model.model_validate(turn_frame_data)
 
     # --- Policy responses (deterministic, skip LLM) ---
     if turn_frame.framing in POLICY_RESPONSES:

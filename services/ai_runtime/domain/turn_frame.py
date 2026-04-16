@@ -4,9 +4,8 @@ The TurnFrame is built deterministically by ``prepare_synthesis`` and consumed
 read-only by ``synthesize``.  It is **frozen** — no downstream node may modify
 it once written to the graph state.
 
-This module owns the vertical-agnostic pieces only.  Realtor extensions
-(``PropertySummary``, ``RealtorTurnFrame`` and ``seen_properties`` helpers)
-live in ``services/ai_runtime/graph/realtor/turn_frame``.
+This module owns the vertical-agnostic pieces only. Vertical extensions live
+inside each runtime package under ``services/ai_runtime/graph/<vertical>/``.
 """
 
 from __future__ import annotations

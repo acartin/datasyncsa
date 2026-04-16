@@ -11,7 +11,6 @@ from services.ai_runtime.domain.state import (
     SCORING_FIELD_ALIASES,
     build_lead_advisor_state,
 )
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.scoring_hybrid import enrich_lead_advisor_with_llm_scoring
 
 EXPOSURE_OUTPUT_TYPES = {
@@ -73,6 +72,8 @@ def _coerce_budget_hint(value: Any) -> float | None:
 
 
 def _sync_lead_extracted_from_state(graph_state: BaseGraphState, advisor_state: LeadAdvisorState) -> LeadAdvisorState:
+    from services.ai_runtime.verticals import get_vertical_spec
+
     payload = advisor_state.lead_extracted.model_dump(mode="json")
 
     latest_entities: dict[str, Any] = {}
@@ -102,10 +103,7 @@ def _sync_lead_extracted_from_state(graph_state: BaseGraphState, advisor_state: 
                 payload["presupuesto"] = candidate
                 break
 
-    if isinstance(graph_state, RealtorGraphState) and payload.get("presupuesto") is None:
-        candidate = graph_state.search_filters.precio_max or graph_state.search_filters.precio_min
-        if candidate is not None:
-            payload["presupuesto"] = float(candidate)
+    payload = get_vertical_spec(graph_state.vertical).policy.extra_lead_sync(graph_state, payload)
 
     if not payload.get("tipo_cita") and graph_state.cita.tipo:
         payload["tipo_cita"] = str(graph_state.cita.tipo)

@@ -89,6 +89,7 @@ export class PropertyGrid extends LitElement {
                                     .tags=${p.tags || []}
                                     .badgeMain=${p.badge_main}
                                     .badgeSub=${p.badge_sub}
+                                    .stats=${p.stats || []}
                                     .bedrooms=${p.bedrooms_clean ?? features.bedrooms_clean ?? features.bedrooms}
                                     .bathrooms=${p.bathrooms_clean ?? features.bathrooms_clean ?? features.bathrooms}
                                     .sqm=${p.sqm_clean ?? features.sqm_clean ?? features.sqm ?? features.area_display}

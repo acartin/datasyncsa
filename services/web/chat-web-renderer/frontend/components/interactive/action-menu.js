@@ -11,6 +11,13 @@ export class ActionMenu extends LitElement {
             display: block;
             margin-top: 10px;
         }
+        .menu-title {
+            margin-bottom: 8px;
+            color: var(--text-on-surface, white);
+            font-family: var(--font-body, sans-serif);
+            font-size: 13px;
+            font-weight: 600;
+        }
         .menu-container {
             display: flex;
             flex-wrap: wrap;
@@ -35,9 +42,10 @@ export class ActionMenu extends LitElement {
 
     render() {
         return html`
+            ${this.title ? html`<div class="menu-title">${this.title}</div>` : ''}
             <div class="menu-container">
                 ${this.options?.map(opt => html`
-                    <button @click="${() => this._handleAction(opt.payload)}">
+                    <button @click="${() => this._handleAction(opt)}">
                         ${opt.label}
                     </button>
                 `)}
@@ -45,9 +53,25 @@ export class ActionMenu extends LitElement {
         `;
     }
 
-    _handleAction(payload) {
+    _handleAction(option) {
+        if (option && typeof option === 'object' && (option.action_id || option.user_text)) {
+            this.dispatchEvent(new CustomEvent('chat-action', {
+                detail: {
+                    payload: {
+                        type: 'action_menu_option',
+                        actionId: option.action_id || option.payload || null,
+                        actionLabel: option.label || null,
+                        userText: option.user_text || option.label || '',
+                    }
+                },
+                bubbles: true,
+                composed: true
+            }));
+            return;
+        }
+
         this.dispatchEvent(new CustomEvent('chat-action', {
-            detail: { payload },
+            detail: { payload: option?.payload ?? option },
             bubbles: true,
             composed: true
         }));

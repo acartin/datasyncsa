@@ -112,6 +112,9 @@ class RealtorRendererPolicy:
         else:
             pre_cards_text = ai_text
 
+        if any(isinstance(component, PropertyCard) and component.quick_actions for component in components):
+            post_cards_text = ""
+
         if pre_cards_text:
             final_components.append(ChatMessage(text=pre_cards_text, sender="bot"))
 

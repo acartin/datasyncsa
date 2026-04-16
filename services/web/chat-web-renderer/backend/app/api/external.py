@@ -230,6 +230,12 @@ async def external_chat(req: ExternalChatRequest, request: Request):
                     "title": comp_data.get("title"),
                     "count": len(comp_data.get("properties", [])),
                 })
+            elif comp_type == "action-menu":
+                components.append({
+                    "type": "action_menu",
+                    "title": comp_data.get("title"),
+                    "count": len(comp_data.get("options", [])),
+                })
             else:
                 components.append({"type": comp_type})
         

@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-15T18:37:58Z`
+- Generated UTC: `2026-04-16T19:23:17Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-06`
-- Git commit: `62a19c8`
+- Git branch: `HETZNER-LOCAL-2026-Abril-16`
+- Git commit: `b893ce7`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -38,20 +38,20 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
-datasyncsa-web
 postgres
-redis
-etl-docs-worker
-scoring-core
-scoring-core-worker
 admin-console-api
+redis
 ai-runtime
 chat-web-renderer-api
-etl-docs
-portainer
-test-ui
-admin-console-web
 chat-web-renderer-ui
+datasyncsa-web
+etl-docs
+etl-docs-worker
+admin-console-web
+portainer
+scoring-core
+scoring-core-worker
+test-ui
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -67,6 +67,7 @@ chat-web-renderer-ui
 - `services/ai_runtime/ARCHITECTURE.md`
 - `.agent/RULES.md`
 - `.agent/PY_EXECUTION_MAP.md`
+- `.agent/ACTIVE_DB_PROMPTS.md`
 
 ## 7. ENTIDADES Y CAPAS CRITICAS
 

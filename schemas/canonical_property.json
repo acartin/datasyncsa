@@ -19,6 +19,9 @@
       "bathrooms_clean": "number",
       "sqm_clean": "integer",
       "lot_size_sqm": "string",
+      "front": "string",
+      "land_use": "string",
+      "property_type": "string",
       "year_built": "string",
       "amenities": [
         "string"

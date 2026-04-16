@@ -814,6 +814,21 @@
             const payload = event.detail?.payload;
             if (!payload) return;
 
+            if (typeof payload === 'object' && payload !== null) {
+                const text = String(payload.userText || payload.actionLabel || '').trim();
+                if (!text) return;
+                sendChatPayload(text, {
+                    metadata: {
+                        action_id: payload.actionId || null,
+                        action_label: payload.actionLabel || null,
+                        action_type: payload.type || null,
+                        target_property_id: payload.propertyId || null,
+                        target_property_title: payload.title || null
+                    }
+                });
+                return;
+            }
+
             const payloadToText = {
                 SCHEDULE_VISIT: 'Quiero agendar una visita',
                 CALL_AGENT: 'Quiero hablar con un asesor',

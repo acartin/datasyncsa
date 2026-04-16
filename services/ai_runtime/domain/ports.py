@@ -1,15 +1,14 @@
 """Abstract integration ports used by the AI runtime.
 
-Vertical-specific ports (e.g. realtor's ``PropertyRepositoryPort``) are defined
-inside their own vertical package.  They are referenced here only as forward
-type annotations under ``TYPE_CHECKING`` to keep the domain layer free of
-vertical semantics while still type-checking the dependency container.
+Vertical-specific adapters may be attached to the dependency container as
+optional opaque fields, but their concrete protocols live inside each
+vertical package instead of this shared module.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, Sequence
+from typing import Any, Protocol, Sequence
 
 from services.ai_runtime.domain.contracts import (
     AgentRecord,
@@ -20,9 +19,6 @@ from services.ai_runtime.domain.contracts import (
     TextToSQLResult,
 )
 from services.ai_runtime.domain.prompts import PromptInput
-
-if TYPE_CHECKING:
-    from services.ai_runtime.graph.realtor.ports import PropertyRepositoryPort
 
 
 class LLMPort(Protocol):
@@ -147,7 +143,7 @@ class GraphDependencies:
     tenant_cache: TenantCachePort
     tenant_repository: TenantRepositoryPort
     conversation_repository: ConversationRepositoryPort
-    property_repository: "PropertyRepositoryPort"
+    property_repository: Any
     agent_repository: AgentRepositoryPort
     agency_rag_repository: VectorRepositoryPort
     documents_rag_repository: VectorRepositoryPort

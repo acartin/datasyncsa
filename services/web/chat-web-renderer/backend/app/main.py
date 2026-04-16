@@ -306,7 +306,9 @@ async def chat_interaction(req: InternalChatRequest):
                             properties=property_cards
                         ))
         
-        if "cita" in ai_text.lower() or "visita" in ai_text.lower():
+        has_property_card = any(getattr(component, "type", None) == "property-card" for component in extracted_components)
+        has_action_menu = any(getattr(component, "type", None) == "action-menu" for component in extracted_components)
+        if not has_property_card and not has_action_menu and ("cita" in ai_text.lower() or "visita" in ai_text.lower()):
             from app.schemas.ui import ActionMenu
             extracted_components.append(ActionMenu(
                 options=[
@@ -339,6 +341,9 @@ async def chat_interaction(req: InternalChatRequest):
             elif comp_type == "property-grid":
                 from app.schemas.ui import PropertyGrid
                 final_components.append(PropertyGrid(**comp_data))
+            elif comp_type == "action-menu":
+                from app.schemas.ui import ActionMenu
+                final_components.append(ActionMenu(**comp_data))
             else:
                 from app.schemas.ui import ChatMessage
                 final_components.append(ChatMessage(text=comp_data.get("text", ""), sender="bot"))
