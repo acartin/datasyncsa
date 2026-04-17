@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
 
 from services.ai_runtime.domain.contracts import TurnAnalysis
@@ -15,6 +17,38 @@ from services.ai_runtime.graph.realtor.turn_policies import (
     derive_realtor_pending_decision,
     merge_realtor_filters,
 )
+
+_NEGATIVE_APPOINTMENT_PATTERNS = (
+    re.compile(
+        r"\bno\s+(?:quiero|deseo|necesito)\s+(?:agendar|agenda|coordinar|cita|visita|visitar)\b"
+    ),
+    re.compile(
+        r"\b(?:por\s+ahora|todavia|aun)\s+no\s+(?:quiero\s+)?(?:agendar|coordinar|cita|visita|visitar)\b"
+    ),
+    re.compile(r"\bprefiero\s+no\s+(?:agendar|coordinar|cita|visita|visitar)\b"),
+)
+
+
+def _normalize_text(value: Any) -> str:
+    raw = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    return "".join(char for char in raw if not unicodedata.combining(char))
+
+
+def _latest_user_message(graph_state: BaseGraphState) -> str:
+    for message in reversed(graph_state.messages):
+        if str(getattr(message, "role", "")).strip().lower() != "user":
+            continue
+        content = str(getattr(message, "content", "")).strip()
+        if content:
+            return content
+    return ""
+
+
+def _has_explicit_negative_appointment_intent(message: str) -> bool:
+    normalized = _normalize_text(message)
+    if not normalized:
+        return False
+    return any(pattern.search(normalized) for pattern in _NEGATIVE_APPOINTMENT_PATTERNS)
 
 
 def _coerce_realtor_state(graph_state: BaseGraphState) -> RealtorGraphState:
@@ -65,12 +99,17 @@ class RealtorPolicy(VerticalPolicy):
         lead_payload: dict[str, Any],
     ) -> dict[str, Any]:
         payload = dict(lead_payload)
-        if payload.get("presupuesto") is not None:
-            return payload
         realtor_state = _coerce_realtor_state(graph_state)
-        candidate = realtor_state.search_filters.precio_max or realtor_state.search_filters.precio_min
-        if candidate is not None:
-            payload["presupuesto"] = float(candidate)
+        if payload.get("presupuesto") is None:
+            candidate = realtor_state.search_filters.precio_max or realtor_state.search_filters.precio_min
+            if candidate is not None:
+                payload["presupuesto"] = float(candidate)
+
+        # Guardrail realtor: explicit "no quiero agendar" style turns must
+        # persist as appointment_intent=negative even if LLM extraction omits it.
+        if _has_explicit_negative_appointment_intent(_latest_user_message(realtor_state)):
+            payload["appointment_intent"] = "negative"
+            payload["tipo_cita"] = None
         return payload
 
     def select_semantic_ctas(

@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-16T19:23:17Z`
+- Generated UTC: `2026-04-17T18:10:47Z`
 - Repo root: `/srv/datasyncsa`
 - Git branch: `HETZNER-LOCAL-2026-Abril-16`
-- Git commit: `b893ce7`
+- Git commit: `97ee52d`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-16T19:23:17Z`
+- Generated UTC: `2026-04-17T18:10:47Z`
 - Repo root: `/srv/datasyncsa`
 - Git branch: `HETZNER-LOCAL-2026-Abril-16`
-- Git commit: `b893ce7`
+- Git commit: `97ee52d`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -52,19 +52,19 @@
 
 ```text
 postgres
-admin-console-api
 redis
-ai-runtime
-chat-web-renderer-api
-chat-web-renderer-ui
+scoring-core
+scoring-core-worker
+admin-console-api
+admin-console-web
 datasyncsa-web
 etl-docs
 etl-docs-worker
-admin-console-web
-portainer
-scoring-core
-scoring-core-worker
 test-ui
+ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
+portainer
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -98,7 +98,7 @@ test-ui
 ```
 # Active DB Prompts
 
-- Generated UTC: `2026-04-16T19:23:18Z`
+- Generated UTC: `2026-04-17T18:10:48Z`
 - Source: `postgres.public.lead_scoring_prompts`
 - Refresh command: `bash .agent/refresh_db_prompts.sh`
 - Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.
@@ -115,7 +115,7 @@ test-ui
 - prompt_id: `190dc860-9d37-4883-a6f4-c3019fdd882e`
 - prompt_version: `4`
 - is_active: `t`
-- updated_at: `2026-03-31 02:13:29.934315+00`
+- updated_at: `2026-04-17 18:01:06.288827+00`
 - model_id: `53fe9e76-09e6-46af-a934-bc2c602c256b`
 - model_name: `Realtor Default`
 - model_version: `1`
@@ -173,7 +173,8 @@ REGLAS OBLIGATORIAS
 - Si falta evidencia para un criterio: asigna score bajo por desconocimiento (1.0 a 2.0) y justificalo.
 - Reserva 0.0-1.0 para evidencia negativa explicita (rechazo, no califica, sin capacidad declarada, no desea avanzar).
 - Prioriza evidencia mas RECIENTE sobre mensajes antiguos.
-- Negaciones explicitas del usuario (ej: "no quiero agendar", "no necesito visita") deben reflejarse en intencion bajo.
+- Negaciones explicitas del usuario (ej: "no quiero agendar", "no necesito visita") deben reflejarse en extracted_appointment_intent = "negative" y tipo_cita = null.
+- No bajes automaticamente intencion si el interes comercial sigue alto (ej: quiere mas fotos o comparar antes de visitar).
 - No inventes informacion.
 
 GUIA RAPIDA POR CRITERIO
@@ -247,6 +248,7 @@ SLOT_HINTS CONVERSACIONALES
   - `fecha_preferida`: cuando hay urgencia/plazo relevante o el usuario ya piensa en mudanza/tiempos.
   - `contacto`: cerca del cierre, cuando el usuario selecciono una opcion, pidio seguimiento detallado o hay intencion positiva de cita. Para confirmar cita, prioriza contacto.
   - `tipo_cita`: cuando la intencion de agendar es positiva y ya hay suficiente interes/match para proponer visita, llamada o video.
+- Si appointment_intent = "negative" con motivo contextual (ej: "primero quiero ver mas fotos"), captura ese motivo en `extracted_preference` cuando aplique y no repreguntes visita/tipo_cita dentro del mismo hilo, salvo que el usuario reactive ese tema explicitamente.
 - Si el usuario acaba de entregar `nombre`, `email`, `telefono` u otro dato de lead en este mismo turno, no encadenes automaticamente el siguiente campo.
 - Alinea `next_field` con la evidencia mas reciente, los scores actuales, los datos ya capturados y el estado de la conversacion.
 
@@ -274,8 +276,6 @@ SLOT_HINTS CONVERSACIONALES
             "key": "extracted_phone",
             "type": "string",
             "question": "¿Qué número te queda mejor compartir?",
-            "description": "Telefono del lead"
-        },
 ```
 
 ## Compose y Variables
@@ -288,14 +288,14 @@ redis
 etl-docs
 portainer
 scoring-core
-ai-runtime
-chat-web-renderer-api
-chat-web-renderer-ui
-etl-docs-worker
 scoring-core-worker
 test-ui
 admin-console-api
 admin-console-web
+ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
+etl-docs-worker
 datasyncsa-web
 ```
 ### `docker-compose.yml:1-220`
@@ -389,12 +389,17 @@ services:
       - LLM_ANALYZE_TURN_MODEL=${LLM_ANALYZE_TURN_MODEL}
       - AI_RUNTIME_API_PREFIX=/api/v1
       - PYTHONPATH=/app
+      - SCORING_CORE_API=http://scoring-core:8000
+      - SCORING_CORE_API_PREFIX=/api/v1
+      - SCORING_ENQUEUE_ENABLED=${SCORING_ENQUEUE_ENABLED:-true}
+      - SCORING_ENQUEUE_TIMEOUT_SECS=${SCORING_ENQUEUE_TIMEOUT_SECS:-2.0}
     volumes:
       - ./schemas:/app/schemas:ro
       - ./log:/app/log
     depends_on:
       - postgres
       - redis
+      - scoring-core
     networks:
       - internal_network
 
@@ -516,15 +521,15 @@ services:
       - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # ETL Docs Worker (RQ)
 ```
 ### `docker-compose.yml:300-360`
 
 ```
+      - API_HOST=${ENV_PREFIX}-web-admin-console-api
+      - APP_VERSION=${APP_VERSION}
+    depends_on:
+      - admin-console-api
+    networks:
       - internal_network
 
   # Chat Web Renderer API (Bridge)
@@ -581,11 +586,6 @@ services:
       - internal_network
 
   # Corporate Website (Static)
-  datasyncsa-web:
-    image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-corporate
-    restart: unless-stopped
-    ports:
 ```
 ### `.env.example:50-120`
 
@@ -614,6 +614,8 @@ SCORING_JOB_DEBOUNCE_SECS=1.5
 SCORING_RETRY_DELAY_SECS=5
 SCORING_ALLOW_HEURISTIC_FALLBACK=false
 SCORING_V2_ENABLED=false
+SCORING_ENQUEUE_ENABLED=true
+SCORING_ENQUEUE_TIMEOUT_SECS=2.0
 ADMIN_DYNAMIC_SCORING_UI=false
 LEGACY_SCORING_READ_COMPAT=true
 
@@ -819,6 +821,24 @@ services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=setti
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_vertical_policies.py:46:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_progressive_profile.py:171:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
@@ -826,14 +846,11 @@ services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:16
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_vertical_policies.py:46:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -852,21 +869,7 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 ```
 
 ## Rutas API Detectadas
@@ -1100,6 +1103,26 @@ Lectura adicional segun el caso:
 - `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
 - `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
+
+## Integracion ai-runtime ↔ scoring-core (activada)
+
+Al finalizar cada turno, `service.py` ejecuta dos operaciones best-effort:
+
+1. `conversation_repository.upsert_turn(...)` — persiste el par user/bot en
+   `lead_conversations` (schema legacy: `messages jsonb`, `context_snapshot`,
+   contadores). Crea o reutiliza el `lead_id` en `lead_leads`. El `lead_id`
+   resuelto se pasa al paso 2.
+
+2. `worker_dispatcher.fire_and_forget("scoring_enqueue", {...})` — dispara
+   `POST scoring-core/api/v1/scoring/jobs/enqueue` como `asyncio.create_task`
+   (no bloquea el turno). Si falla: log warning, `scoring_status="disabled"`.
+   Si ok: `scoring_status="queued"` en `ChatResponse`.
+
+El dispatcher vive en `runtime/bootstrap.py → InlineWorkerDispatcher`.
+El enqueue HTTP usa `SCORING_CORE_API` + `SCORING_CORE_API_PREFIX` del entorno.
+`SCORING_ENQUEUE_ENABLED=false` desactiva el disparo sin tocar codigo.
+
+Ambas operaciones son best-effort: un fallo no aborta la respuesta al usuario.
 
 ## Restricciones de Cambio
 
@@ -1713,6 +1736,11 @@ class AISettings:
     llm_context_cache_min_stable_chars: int = int(os.getenv("LLM_CONTEXT_CACHE_MIN_STABLE_CHARS", "2000"))
     turn_trace_enabled: bool = os.getenv("AI_TURN_TRACE_ENABLED", "true").lower() == "true"
     turn_trace_dir: str = os.getenv("AI_TURN_TRACE_DIR", "/app/log/turn-traces")
+    scoring_core_api: str = os.getenv("SCORING_CORE_API", "http://scoring-core:8000").rstrip("/")
+    scoring_core_api_prefix: str = os.getenv("SCORING_CORE_API_PREFIX", "/api/v1")
+    scoring_enqueue_enabled: bool = os.getenv("SCORING_ENQUEUE_ENABLED", "true").lower() == "true"
+    scoring_enqueue_timeout_secs: float = float(os.getenv("SCORING_ENQUEUE_TIMEOUT_SECS", "2.0"))
+    internal_api_token: str = os.getenv("INTERNAL_API_TOKEN", "")
 
 
 settings = AISettings()
@@ -1723,6 +1751,11 @@ settings = AISettings()
 """Dependency bootstrap for the AI runtime."""
 
 from __future__ import annotations
+
+import asyncio
+import logging
+
+import httpx
 
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import MailDispatchResult
@@ -1743,6 +1776,8 @@ from services.data.repositories.conversation_repository import ConversationRepos
 from services.data.repositories.property_repository import PropertyRepository
 from services.data.repositories.tenant_repository import TenantRepository
 
+logger = logging.getLogger("ai_runtime.worker_dispatcher")
+
 
 class PlaceholderMailer:
     async def send(self, payload: dict[str, object]):
@@ -1753,9 +1788,66 @@ class PlaceholderMailer:
         )
 
 
+async def _do_scoring_enqueue(
+    *,
+    url: str,
+    payload: dict[str, object],
+    token: str,
+    timeout: float,
+) -> None:
+    """Fire-and-forget HTTP call to scoring-core enqueue endpoint."""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Internal-Token"] = token
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            logger.debug(
+                "scoring_enqueue ok job_id=%s conversation_id=%s",
+                data.get("id"),
+                payload.get("conversation_id"),
+            )
+    except Exception:
+        logger.warning(
+            "scoring_enqueue failed (fire-and-forget, non-blocking) "
+            "conversation_id=%s",
+            payload.get("conversation_id"),
+            exc_info=True,
+        )
+
+
 class InlineWorkerDispatcher:
+    """Dispatcher that handles fire-and-forget background tasks."""
+
+    def __init__(
+        self,
+        *,
+        scoring_enqueue_url: str,
+        scoring_enqueue_enabled: bool,
+        internal_token: str,
+        enqueue_timeout: float,
+    ) -> None:
+        self._scoring_enqueue_url = scoring_enqueue_url
+        self._scoring_enqueue_enabled = scoring_enqueue_enabled
+        self._internal_token = internal_token
+        self._enqueue_timeout = enqueue_timeout
+
     async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> None:
-        return None
+        if task_name == "scoring_enqueue" and self._scoring_enqueue_enabled:
+            task = asyncio.create_task(
+                _do_scoring_enqueue(
+                    url=self._scoring_enqueue_url,
+                    payload=payload,
+                    token=self._internal_token,
+                    timeout=self._enqueue_timeout,
+                )
+            )
+            # Suppress "Task exception was never retrieved" warnings
+            task.add_done_callback(
+                lambda t: t.exception() if not t.cancelled() else None
+            )
 
 
 engine = build_engine()
@@ -1769,6 +1861,11 @@ tenant_loader = TenantLoader(
     tenant_cache=tenant_cache,
 )
 llm = TracingLLMPort(build_llm_port(settings), trace_store)
+
+_scoring_enqueue_url = (
+    f"{settings.scoring_core_api}{settings.scoring_core_api_prefix}/scoring/jobs/enqueue"
+)
+
 dependencies = GraphDependencies(
     llm=llm,
     session_store=SessionStore(),
@@ -1781,7 +1878,12 @@ dependencies = GraphDependencies(
     agency_rag_repository=AgencyRAGRepository(engine),
     documents_rag_repository=DocumentsRAGRepository(engine),
     mailer=PlaceholderMailer(),
-    worker_dispatcher=InlineWorkerDispatcher(),
+    worker_dispatcher=InlineWorkerDispatcher(
+        scoring_enqueue_url=_scoring_enqueue_url,
+        scoring_enqueue_enabled=settings.scoring_enqueue_enabled,
+        internal_token=settings.internal_api_token,
+        enqueue_timeout=settings.scoring_enqueue_timeout_secs,
+    ),
     trace_store=trace_store,
 )
 runtime = ConversationRuntime(
@@ -1832,6 +1934,26 @@ from services.ai_runtime.runtime.state_migrations import apply_migrations
 
 
 logger = logging.getLogger(__name__)
+
+_CHANNEL_MAP: dict[str, str] = {
+    "web_html": "webchat",
+    "api": "webchat",
+    "web": "webchat",
+    "webchat": "webchat",
+    "meta_whatsapp": "whatsapp",
+    "whatsapp": "whatsapp",
+    "meta_ig": "instagram",
+    "instagram": "instagram",
+    "messenger": "messenger",
+    "meta_messenger": "messenger",
+    "telegram": "telegram",
+    "meta_telegram": "telegram",
+}
+
+
+def _channel_to_platform(metadata: dict[str, object]) -> str:
+    raw = str(metadata.get("channel") or "").strip().lower()
+    return _CHANNEL_MAP.get(raw, "webchat")
 
 
 def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
@@ -1953,26 +2075,6 @@ class ConversationRuntime:
             )
             base_state = vertical_spec.state_model.model_validate(state.model_dump())
             _reset_turn_scoped_state(base_state)
-            conversation_id = base_state.conversation_id
-
-        trace_context = TurnTraceContext(
-            trace_id=str(uuid4()),
-            client_id=request.client_id,
-            session_id=session_id,
-            conversation_id=conversation_id,
-            vertical=tenant_config.vertical,
-            flow=flow,
-            turn=base_state.current_turn,
-            user_id=user_id,
-            user_message=request.message,
-            started_at=utc_now_iso(),
-        )
-        token = activate_turn_trace(trace_context)
-        state_token = activate_latest_turn_state(base_state.model_dump(mode="json"))
-        self.dependencies.trace_store.start_turn(
-            trace_context,
-            request_metadata=request.metadata,
-            state_summary=summarize_state(base_state.model_dump(mode="json")),
 ```
 ### `services/ai_runtime/domain/state.py`
 
@@ -3481,6 +3583,7 @@ tests/sandbox/realtor/realtor_generated_suite_01.json
 tests/sandbox/realtor/realtor_regression_suite.json
 tests/sandbox/realtor/run_realtor_conversation_suite.py
 tests/sandbox/realtor/simulate_chat_realtor.py
+tests/sandbox/realtor/simulate_multichat_realtor.py
 tests/scripts/check_no_hardcoded_realtor_copy.sh
 tests/system/__pycache__/test_active_chat_scoring_e2e.cpython-312.pyc
 tests/system/__pycache__/test_chat_e2e.cpython-312.pyc

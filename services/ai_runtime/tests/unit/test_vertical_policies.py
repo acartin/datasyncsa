@@ -35,6 +35,30 @@ class VerticalPoliciesTests(unittest.TestCase):
 
         self.assertEqual(payload["presupuesto"], 275000.0)
 
+    def test_realtor_policy_marks_negative_appointment_intent_from_user_message(self) -> None:
+        policy = RealtorPolicy()
+        state = RealtorGraphState(
+            session_id="session-1",
+            conversation_id="conversation-1",
+            user_id="user-1",
+            client_id="client-1",
+            vertical="realtor",
+            flow="realtor_flow",
+            tenant_config=_tenant_config("realtor"),
+            messages=[ChatMessage(role="user", content="No quiero agendar todavia, solo estoy comparando")],
+            capabilities=[],
+            cita=Appointment(client_id="client-1"),
+            search_filters=SearchFilters(),
+        )
+
+        payload = policy.extra_lead_sync(
+            state,
+            {"appointment_intent": None, "tipo_cita": "visita"},
+        )
+
+        self.assertEqual(payload.get("appointment_intent"), "negative")
+        self.assertIsNone(payload.get("tipo_cita"))
+
     def test_vertical_registry_exposes_realtor_specific_hooks(self) -> None:
         spec = get_vertical_spec("realtor")
 

@@ -1,6 +1,6 @@
 # Active DB Prompts
 
-- Generated UTC: `2026-04-16T19:23:18Z`
+- Generated UTC: `2026-04-17T18:10:48Z`
 - Source: `postgres.public.lead_scoring_prompts`
 - Refresh command: `bash .agent/refresh_db_prompts.sh`
 - Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.
@@ -17,7 +17,7 @@
 - prompt_id: `190dc860-9d37-4883-a6f4-c3019fdd882e`
 - prompt_version: `4`
 - is_active: `t`
-- updated_at: `2026-03-31 02:13:29.934315+00`
+- updated_at: `2026-04-17 18:01:06.288827+00`
 - model_id: `53fe9e76-09e6-46af-a934-bc2c602c256b`
 - model_name: `Realtor Default`
 - model_version: `1`
@@ -75,7 +75,8 @@ REGLAS OBLIGATORIAS
 - Si falta evidencia para un criterio: asigna score bajo por desconocimiento (1.0 a 2.0) y justificalo.
 - Reserva 0.0-1.0 para evidencia negativa explicita (rechazo, no califica, sin capacidad declarada, no desea avanzar).
 - Prioriza evidencia mas RECIENTE sobre mensajes antiguos.
-- Negaciones explicitas del usuario (ej: "no quiero agendar", "no necesito visita") deben reflejarse en intencion bajo.
+- Negaciones explicitas del usuario (ej: "no quiero agendar", "no necesito visita") deben reflejarse en extracted_appointment_intent = "negative" y tipo_cita = null.
+- No bajes automaticamente intencion si el interes comercial sigue alto (ej: quiere mas fotos o comparar antes de visitar).
 - No inventes informacion.
 
 GUIA RAPIDA POR CRITERIO
@@ -149,6 +150,7 @@ SLOT_HINTS CONVERSACIONALES
   - `fecha_preferida`: cuando hay urgencia/plazo relevante o el usuario ya piensa en mudanza/tiempos.
   - `contacto`: cerca del cierre, cuando el usuario selecciono una opcion, pidio seguimiento detallado o hay intencion positiva de cita. Para confirmar cita, prioriza contacto.
   - `tipo_cita`: cuando la intencion de agendar es positiva y ya hay suficiente interes/match para proponer visita, llamada o video.
+- Si appointment_intent = "negative" con motivo contextual (ej: "primero quiero ver mas fotos"), captura ese motivo en `extracted_preference` cuando aplique y no repreguntes visita/tipo_cita dentro del mismo hilo, salvo que el usuario reactive ese tema explicitamente.
 - Si el usuario acaba de entregar `nombre`, `email`, `telefono` u otro dato de lead en este mismo turno, no encadenes automaticamente el siguiente campo.
 - Alinea `next_field` con la evidencia mas reciente, los scores actuales, los datos ya capturados y el estado de la conversacion.
 
@@ -381,7 +383,56 @@ SLOT_HINTS CONVERSACIONALES
             "solvencia"
         ],
         "recency_policy": "latest_user_turn_priority",
-        "negation_policy": "explicit_negation_overrides_positive",
+        "negation_policy": "appointment_intent_negative_not_equal_intent_negative",
+        "progressive_profile": {
+            "contact_policy": {
+                "default": "channel_aware",
+                "by_channel": {
+                    "webchat": "email_first",
+                    "telegram": "phone_first",
+                    "whatsapp": "phone_first",
+                    "meta_whatsapp": "phone_first"
+                }
+            },
+            "journey_source": "search_filters.operacion",
+            "journey_field_orders": {
+                "rent": [
+                    "fecha_preferida",
+                    "presupuesto",
+                    "appointment_intent",
+                    "tipo_cita",
+                    "contacto",
+                    "email",
+                    "telefono",
+                    "preferencias",
+                    "nombre"
+                ],
+                "sale": [
+                    "presupuesto",
+                    "aprobacion",
+                    "fecha_preferida",
+                    "appointment_intent",
+                    "tipo_cita",
+                    "contacto",
+                    "email",
+                    "telefono",
+                    "preferencias",
+                    "nombre"
+                ],
+                "default": [
+                    "appointment_intent",
+                    "tipo_cita",
+                    "contacto",
+                    "email",
+                    "telefono",
+                    "presupuesto",
+                    "aprobacion",
+                    "fecha_preferida",
+                    "preferencias",
+                    "nombre"
+                ]
+            }
+        },
         "missing_score_fallback_mode": "min_score",
         "missing_evidence_default_range": {
             "max": 2,

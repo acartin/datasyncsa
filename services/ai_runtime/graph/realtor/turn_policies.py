@@ -327,6 +327,7 @@ def apply_realtor_turn_policies(
     analysis = _coerce_inventory_probe(graph_state, analysis)
     analysis = _coerce_search_restart(graph_state, analysis)
     analysis = _coerce_countrywide_scope(graph_state, analysis)
+    analysis = _coerce_financial_query_reference(graph_state, analysis)
     analysis = _coerce_affirmative_after_no_results(graph_state, analysis)
     analysis = _coerce_single_ordinal_selection(graph_state, analysis)
     analysis = _coerce_visual_request(graph_state, analysis)
@@ -457,6 +458,66 @@ def _is_explicit_financial_query(message: str) -> bool:
     if not normalized:
         return False
     return bool(FINANCIAL_QUERY_PATTERN.search(normalized))
+
+
+def _has_referenceable_property_context(graph_state: RealtorGraphState) -> bool:
+    if graph_state.last_mentioned is not None:
+        return True
+    if graph_state.cards_shown:
+        return True
+    return bool(graph_state.last_search_results or graph_state.inventory)
+
+
+def _coerce_financial_query_reference(
+    graph_state: RealtorGraphState,
+    analysis: TurnAnalysis,
+) -> TurnAnalysis:
+    latest_message = graph_state.messages[-1].content.strip()
+    if not _is_explicit_financial_query(latest_message):
+        return analysis
+    if analysis.dialogue_act not in {"calculate", "unknown", "ask_detail", "confirm_previous", "select_result"}:
+        return analysis
+    if not _has_referenceable_property_context(graph_state):
+        return analysis
+
+    reference = analysis.reference
+    needs_reference_override = reference.kind in {"NONE", "AMBIGUOUS"} or reference.confidence < 0.7
+    if reference.kind == "CONTEXT_LOCATION":
+        hint = (reference.location_hint or "").strip().lower()
+        if hint in {"current_results", "cards_shown", "last_search_results", "current_result_set", "visible_results"}:
+            needs_reference_override = True
+
+    if needs_reference_override:
+        if graph_state.last_mentioned is not None:
+            reference = ReferenceDecision(
+                kind="LAST_MENTIONED",
+                confidence=max(analysis.reference.confidence, 0.92),
+            )
+        else:
+            reference = ReferenceDecision(
+                kind="ORDINAL",
+                confidence=max(analysis.reference.confidence, 0.9),
+                ordinal_index=1,
+            )
+
+    return analysis.model_copy(
+        update={
+            "dialogue_act": "calculate",
+            "confidence": max(analysis.confidence, 0.9),
+            "needs_clarification": False,
+            "clarification_target": None,
+            "reference": reference,
+            "intent_plan": [
+                IntentPlanItem(
+                    type="calcular",
+                    priority=1,
+                    depends_on=[],
+                    condition={"requires_reference": "resolved_property"},
+                    skip_if_failed=False,
+                )
+            ],
+        }
+    )
 
 
 def _coerce_result_set_detail(

@@ -9,9 +9,10 @@ from services.ai_runtime.domain.contracts import (
     TenantConfig,
     TurnAnalysis,
 )
+from services.ai_runtime.graph.realtor.contracts import Property
 from services.ai_runtime.graph._shared.pending_decisions import render_pending_decision_question
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
-from services.ai_runtime.graph.realtor.turn_policies import derive_realtor_pending_decision
+from services.ai_runtime.graph.realtor.turn_policies import apply_realtor_turn_policies, derive_realtor_pending_decision
 
 
 def _tenant_config() -> TenantConfig:
@@ -40,6 +41,38 @@ def _state(*messages: tuple[str, str]) -> RealtorGraphState:
             precio_max=200000,
             tipo="Casa de Habitacion",
         ),
+    )
+
+
+def _property(property_id: str, title: str, price: float) -> Property:
+    return Property.model_validate(
+        {
+            "id": property_id,
+            "client_id": "client-1",
+            "title": title,
+            "description_html": "<p>Propiedad de prueba.</p>",
+            "price": price,
+            "currency": "USD",
+            "address": "Heredia, Costa Rica",
+            "features": {
+                "garage_clean": 2,
+                "bedrooms_clean": 3,
+                "bathrooms_clean": 2,
+                "sqm_clean": 180,
+                "amenities": ["Seguridad"],
+                "is_featured": False,
+            },
+            "media": {
+                "primary_image_url": "https://example.com/main.jpg",
+                "image_urls": ["https://example.com/main.jpg"],
+            },
+            "location": {
+                "province": "Heredia",
+            },
+            "meta": {
+                "public_url": f"https://example.com/listing/{property_id}",
+            },
+        }
     )
 
 
@@ -118,6 +151,49 @@ class PendingDecisionTests(unittest.TestCase):
         decision = derive_realtor_pending_decision(graph_state, analysis)
 
         self.assertIsNone(decision)
+
+    def test_apply_turn_policies_coerces_financial_query_to_last_mentioned_reference(self) -> None:
+        graph_state = _state(
+            ("assistant", "La casa en Heredia es una buena opcion para vos."),
+            ("user", "Si la financio, cuanto seria la cuota aproximada?"),
+        )
+        prop = _property("prop-1", "Casa en Heredia", 165000)
+        graph_state.last_mentioned = prop
+        graph_state.last_search_results = [prop]
+        graph_state.cards_shown = [prop.id]
+
+        analysis = TurnAnalysis(
+            dialogue_act="calculate",
+            confidence=0.95,
+            needs_clarification=False,
+            clarification_target=None,
+            reference=ReferenceDecision(
+                kind="CONTEXT_LOCATION",
+                confidence=0.9,
+                location_hint="current_results",
+            ),
+            intent_plan=[
+                {
+                    "type": "calcular",
+                    "priority": 1,
+                    "depends_on": [],
+                    "condition": None,
+                    "skip_if_failed": False,
+                }
+            ],
+            detail_scope="current_result_set",
+            detail_attribute_key="cuota_aproximada",
+        )
+
+        updated, compare_target_ids = apply_realtor_turn_policies(graph_state, analysis)
+
+        self.assertFalse(updated.needs_clarification)
+        self.assertIsNone(updated.clarification_target)
+        self.assertEqual(updated.dialogue_act, "calculate")
+        self.assertEqual(updated.reference.kind, "LAST_MENTIONED")
+        self.assertTrue(updated.intent_plan)
+        self.assertEqual(updated.intent_plan[0].type, "calcular")
+        self.assertEqual(compare_target_ids, [])
 
 
 if __name__ == "__main__":
