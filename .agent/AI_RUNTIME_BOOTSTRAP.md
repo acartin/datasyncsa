@@ -54,6 +54,26 @@ Lectura adicional segun el caso:
 - `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
+## Integracion ai-runtime ↔ scoring-core (activada)
+
+Al finalizar cada turno, `service.py` ejecuta dos operaciones best-effort:
+
+1. `conversation_repository.upsert_turn(...)` — persiste el par user/bot en
+   `lead_conversations` (schema legacy: `messages jsonb`, `context_snapshot`,
+   contadores). Crea o reutiliza el `lead_id` en `lead_leads`. El `lead_id`
+   resuelto se pasa al paso 2.
+
+2. `worker_dispatcher.fire_and_forget("scoring_enqueue", {...})` — dispara
+   `POST scoring-core/api/v1/scoring/jobs/enqueue` como `asyncio.create_task`
+   (no bloquea el turno). Si falla: log warning, `scoring_status="disabled"`.
+   Si ok: `scoring_status="queued"` en `ChatResponse`.
+
+El dispatcher vive en `runtime/bootstrap.py → InlineWorkerDispatcher`.
+El enqueue HTTP usa `SCORING_CORE_API` + `SCORING_CORE_API_PREFIX` del entorno.
+`SCORING_ENQUEUE_ENABLED=false` desactiva el disparo sin tocar codigo.
+
+Ambas operaciones son best-effort: un fallo no aborta la respuesta al usuario.
+
 ## Restricciones de Cambio
 
 - no mover logica de negocio desde `ai-runtime` hacia frontend o componentes legacy

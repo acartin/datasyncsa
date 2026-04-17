@@ -333,6 +333,7 @@ class ChatResponse(BaseModel):
     cards_mode: str | None = None
     escalated: bool = False
     scoring_status: str = "disabled"
+    scoring_job_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

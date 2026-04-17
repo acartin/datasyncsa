@@ -306,52 +306,75 @@ def _transform_leads_to_dynamic_rows(leads: List[dict], schema: Optional[Scoring
     rows = []
     
     for lead in leads:
+        score_total = float(lead.get('score_total') or 0)
+
+        # Derive identity color: use prio_color from DB only if present (legacy path).
+        # For v2 leads (no prio_color column), send empty string so JS falls through
+        # to resolveScoreTierColor(score) which uses ac-score-high/medium/low tokens
+        # (teal / yellow / blue-purple — correct for lead quality visualization).
+        prio_color = lead.get('prio_color') or ""
+
         row = {
             "id": str(lead['id']),
             "identity": {
                 "name": lead['full_name'] or "",
-                "score": lead['score_total'] or 0,
-                "color": lead.get('prio_color') or "thermal-none"
+                "score": score_total,
+                "color": prio_color,
             },
             "full_name": lead['full_name'] or "",
             "email": lead['email'] or "-",
             "phone": lead['phone'] or "-",
             "created": lead['created_at'].strftime("%Y-%m-%d") if lead['created_at'] else "-"
         }
-        
-        # Add dynamic scoring columns
-        if schema and schema.criteria and lead.get('score_items'):
+
+        # Add dynamic scoring columns.
+        # score_items comes from json_agg — may arrive as a list or a JSON string
+        # depending on the asyncpg codec. Normalise to a list of dicts before use.
+        raw_score_items = lead.get('score_items')
+        if isinstance(raw_score_items, str):
+            import json as _json
+            try:
+                raw_score_items = _json.loads(raw_score_items)
+            except Exception:
+                raw_score_items = []
+
+        if schema and schema.criteria and raw_score_items:
             score_items_dict = {
-                item.get('criterion_key'): item 
-                for item in (lead.get('score_items') or []) 
+                item.get('criterion_key'): item
+                for item in (raw_score_items or [])
                 if isinstance(item, dict)
             }
-            
+
             for criterion in schema.criteria:
                 item_data = score_items_dict.get(criterion.criterion_key, {})
                 score = float(item_data.get('score', 0.0))
-                
-                # Find matching band
-                band_info = {}
+
+                # Find matching band by score range
+                band_info: dict = {}
                 epsilon = 0.001
                 for band in criterion.bands:
-                    is_last_band = band == criterion.bands[-1]
-                    if band.min_score - epsilon <= score <= band.max_score + epsilon if is_last_band else band.min_score - epsilon <= score < band.max_score:
+                    is_last_band = band is criterion.bands[-1]
+                    in_range = (
+                        band.min_score - epsilon <= score <= band.max_score + epsilon
+                        if is_last_band
+                        else band.min_score - epsilon <= score < band.max_score
+                    )
+                    if in_range:
                         band_info = {
                             "label": band.label,
                             "icon": band.icon,
-                            "color": band.color
+                            "color": band.color,
                         }
                         break
-                
+
                 row[f"scoring_{criterion.criterion_key}"] = {
                     "score": score,
-                    "totalScore": lead['score_total'] or 0,
+                    "totalScore": score_total,
                     "label": band_info.get("label", "-"),
                     "icon": band_info.get("icon", "ri-question-line"),
-                    "color": band_info.get("color", "thermal-none")
+                    "color": band_info.get("color", "thermal-none"),
                 }
-        
+
         rows.append(row)
     
     return rows

@@ -86,12 +86,17 @@ services:
       - LLM_ANALYZE_TURN_MODEL=${LLM_ANALYZE_TURN_MODEL}
       - AI_RUNTIME_API_PREFIX=/api/v1
       - PYTHONPATH=/app
+      - SCORING_CORE_API=http://scoring-core:8000
+      - SCORING_CORE_API_PREFIX=/api/v1
+      - SCORING_ENQUEUE_ENABLED=${SCORING_ENQUEUE_ENABLED:-true}
+      - SCORING_ENQUEUE_TIMEOUT_SECS=${SCORING_ENQUEUE_TIMEOUT_SECS:-2.0}
     volumes:
       - ./schemas:/app/schemas:ro
       - ./log:/app/log
     depends_on:
       - postgres
       - redis
+      - scoring-core
     networks:
       - internal_network
 

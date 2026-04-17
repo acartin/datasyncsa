@@ -31,6 +31,11 @@ class AISettings:
     llm_context_cache_min_stable_chars: int = int(os.getenv("LLM_CONTEXT_CACHE_MIN_STABLE_CHARS", "2000"))
     turn_trace_enabled: bool = os.getenv("AI_TURN_TRACE_ENABLED", "true").lower() == "true"
     turn_trace_dir: str = os.getenv("AI_TURN_TRACE_DIR", "/app/log/turn-traces")
+    scoring_core_api: str = os.getenv("SCORING_CORE_API", "http://scoring-core:8000").rstrip("/")
+    scoring_core_api_prefix: str = os.getenv("SCORING_CORE_API_PREFIX", "/api/v1")
+    scoring_enqueue_enabled: bool = os.getenv("SCORING_ENQUEUE_ENABLED", "true").lower() == "true"
+    scoring_enqueue_timeout_secs: float = float(os.getenv("SCORING_ENQUEUE_TIMEOUT_SECS", "2.0"))
+    internal_api_token: str = os.getenv("INTERNAL_API_TOKEN", "")
 
 
 settings = AISettings()

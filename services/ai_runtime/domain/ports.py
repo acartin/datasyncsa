@@ -84,7 +84,16 @@ class ConversationRepositoryPort(Protocol):
         limit: int = 10,
     ) -> list[dict[str, Any]]: ...
 
-    async def persist_turn(self, payload: dict[str, Any]) -> None: ...
+    async def upsert_turn(
+        self,
+        *,
+        client_id: str,
+        conversation_id: str,
+        user_message: str,
+        bot_message: str,
+        platform: str = "webchat",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
 
 
 class AgentRepositoryPort(Protocol):

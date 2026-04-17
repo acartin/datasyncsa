@@ -38,6 +38,26 @@ from services.ai_runtime.runtime.state_migrations import apply_migrations
 
 logger = logging.getLogger(__name__)
 
+_CHANNEL_MAP: dict[str, str] = {
+    "web_html": "webchat",
+    "api": "webchat",
+    "web": "webchat",
+    "webchat": "webchat",
+    "meta_whatsapp": "whatsapp",
+    "whatsapp": "whatsapp",
+    "meta_ig": "instagram",
+    "instagram": "instagram",
+    "messenger": "messenger",
+    "meta_messenger": "messenger",
+    "telegram": "telegram",
+    "meta_telegram": "telegram",
+}
+
+
+def _channel_to_platform(metadata: dict[str, object]) -> str:
+    raw = str(metadata.get("channel") or "").strip().lower()
+    return _CHANNEL_MAP.get(raw, "webchat")
+
 
 def _build_last_turn_search_summary(base_state: BaseGraphState) -> dict[str, object] | None:
     if not isinstance(base_state, RealtorGraphState):
@@ -200,6 +220,47 @@ class ConversationRuntime:
                 final_state.model_dump(mode="json"),
                 tenant_config.redis_ttl_seconds,
             )
+
+            # Persist turn to lead_conversations (best-effort; never blocks the response)
+            conversation_lead_id: str | None = None
+            try:
+                counters = await self.dependencies.conversation_repository.upsert_turn(
+                    client_id=request.client_id,
+                    conversation_id=conversation_id,
+                    user_message=request.message,
+                    bot_message=final_state.final_response or "",
+                    platform=_channel_to_platform(request.metadata),
+                    metadata=dict(request.metadata or {}),
+                )
+                conversation_lead_id = counters.get("lead_id")
+            except Exception:
+                logger.exception(
+                    "conversation_persist_failed client_id=%s conversation_id=%s",
+                    request.client_id,
+                    conversation_id,
+                )
+
+            # Trigger async scoring job (fire-and-forget; never blocks)
+            scoring_status = "disabled"
+            if conversation_lead_id:
+                try:
+                    await self.dependencies.worker_dispatcher.fire_and_forget(
+                        "scoring_enqueue",
+                        {
+                            "conversation_id": conversation_id,
+                            "client_id": request.client_id,
+                            "lead_id": conversation_lead_id,
+                            "channel": str(request.metadata.get("channel") or "webchat"),
+                        },
+                    )
+                    scoring_status = "queued"
+                except Exception:
+                    logger.exception(
+                        "scoring_enqueue_failed client_id=%s conversation_id=%s",
+                        request.client_id,
+                        conversation_id,
+                    )
+
             response = ChatResponse(
                 session_id=session_id,
                 conversation_id=conversation_id,
@@ -212,7 +273,7 @@ class ConversationRuntime:
                 render_mode=getattr(final_state, "render_mode", None),
                 cards_mode=getattr(final_state, "cards_mode", None),
                 escalated=final_state.escalacion.solicitada,
-                scoring_status="disabled",
+                scoring_status=scoring_status,
                 metadata={"flow": flow, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
             )
             self.dependencies.trace_store.finish_turn(

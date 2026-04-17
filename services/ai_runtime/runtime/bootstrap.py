@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
+import httpx
+
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import MailDispatchResult
 from services.ai_runtime.domain.ports import GraphDependencies
@@ -21,6 +26,8 @@ from services.data.repositories.conversation_repository import ConversationRepos
 from services.data.repositories.property_repository import PropertyRepository
 from services.data.repositories.tenant_repository import TenantRepository
 
+logger = logging.getLogger("ai_runtime.worker_dispatcher")
+
 
 class PlaceholderMailer:
     async def send(self, payload: dict[str, object]):
@@ -31,9 +38,66 @@ class PlaceholderMailer:
         )
 
 
+async def _do_scoring_enqueue(
+    *,
+    url: str,
+    payload: dict[str, object],
+    token: str,
+    timeout: float,
+) -> None:
+    """Fire-and-forget HTTP call to scoring-core enqueue endpoint."""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Internal-Token"] = token
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            logger.debug(
+                "scoring_enqueue ok job_id=%s conversation_id=%s",
+                data.get("id"),
+                payload.get("conversation_id"),
+            )
+    except Exception:
+        logger.warning(
+            "scoring_enqueue failed (fire-and-forget, non-blocking) "
+            "conversation_id=%s",
+            payload.get("conversation_id"),
+            exc_info=True,
+        )
+
+
 class InlineWorkerDispatcher:
+    """Dispatcher that handles fire-and-forget background tasks."""
+
+    def __init__(
+        self,
+        *,
+        scoring_enqueue_url: str,
+        scoring_enqueue_enabled: bool,
+        internal_token: str,
+        enqueue_timeout: float,
+    ) -> None:
+        self._scoring_enqueue_url = scoring_enqueue_url
+        self._scoring_enqueue_enabled = scoring_enqueue_enabled
+        self._internal_token = internal_token
+        self._enqueue_timeout = enqueue_timeout
+
     async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> None:
-        return None
+        if task_name == "scoring_enqueue" and self._scoring_enqueue_enabled:
+            task = asyncio.create_task(
+                _do_scoring_enqueue(
+                    url=self._scoring_enqueue_url,
+                    payload=payload,
+                    token=self._internal_token,
+                    timeout=self._enqueue_timeout,
+                )
+            )
+            # Suppress "Task exception was never retrieved" warnings
+            task.add_done_callback(
+                lambda t: t.exception() if not t.cancelled() else None
+            )
 
 
 engine = build_engine()
@@ -47,6 +111,11 @@ tenant_loader = TenantLoader(
     tenant_cache=tenant_cache,
 )
 llm = TracingLLMPort(build_llm_port(settings), trace_store)
+
+_scoring_enqueue_url = (
+    f"{settings.scoring_core_api}{settings.scoring_core_api_prefix}/scoring/jobs/enqueue"
+)
+
 dependencies = GraphDependencies(
     llm=llm,
     session_store=SessionStore(),
@@ -59,7 +128,12 @@ dependencies = GraphDependencies(
     agency_rag_repository=AgencyRAGRepository(engine),
     documents_rag_repository=DocumentsRAGRepository(engine),
     mailer=PlaceholderMailer(),
-    worker_dispatcher=InlineWorkerDispatcher(),
+    worker_dispatcher=InlineWorkerDispatcher(
+        scoring_enqueue_url=_scoring_enqueue_url,
+        scoring_enqueue_enabled=settings.scoring_enqueue_enabled,
+        internal_token=settings.internal_api_token,
+        enqueue_timeout=settings.scoring_enqueue_timeout_secs,
+    ),
     trace_store=trace_store,
 )
 runtime = ConversationRuntime(
