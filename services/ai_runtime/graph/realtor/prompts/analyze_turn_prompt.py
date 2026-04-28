@@ -15,11 +15,11 @@ Contexto inyectado:
 - tipos de output del turno previo
 - resumen de la ultima busqueda del turno previo
 - capabilities habilitadas
-- filtros actuales
-- ids de cards visibles actuales
-- cards visibles actuales, si existen
-- resultados actuales
-- ultima entidad mencionada
+- contexto de busqueda actual
+- ids de referencias visibles actuales
+- referencias visibles actuales, si existen
+- candidatos de referencia actuales
+- entidad enfocada actual
 - memoria conversacional basica
 
 Tarea:
@@ -130,7 +130,7 @@ Reglas:
 - `reference.kind = NONE` si el turno no apunta a una entidad previa.
 - `confirm_previous` aplica cuando el usuario afirma una propuesta inmediata del asistente como "si", "sí", "dale", "claro", "ok".
 - Si el usuario solo señala una propiedad ya mostrada, usa `focus_property`, no `comparar`.
-- Si hay `cards_shown` o `visible_cards`, referencias deicticas u ordinales como "esta", "esa", "la primera", "la segunda", "la ultima", "la mas barata" o "la de Heredia" deben interpretarse respecto del set visible actual, no del total de `last_search_results`.
+- Si hay `visible_reference_ids` o `visible_reference_items`, referencias deicticas u ordinales como "esta", "esa", "la primera", "la segunda", "la ultima", "la mas barata" o "la de Heredia" deben interpretarse respecto del set visible actual, no del total de `reference_candidates`.
 - Si el usuario dice "la ultima" y hay 2 cards visibles, `reference.ordinal_index` debe ser 2.
 - Si el usuario responde afirmativamente a una propuesta del asistente despues de no encontrar resultados exactos, como "¿Te gustaría que amplíe el rango de precio o la zona?", tratá ese "sí" como `confirm_previous`, pero no dispares una nueva búsqueda automática todavía si el usuario no dijo qué criterio relajar.
 - Si el usuario dice algo como "ahora mejor busco...", "más bien busco..." o "en realidad quiero..." con nuevos criterios, tratá eso como `new_search` y no arrastres filtros viejos que ya no aplican.

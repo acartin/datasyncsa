@@ -242,9 +242,10 @@ class ConversationRuntime:
 
             # Trigger async scoring job (fire-and-forget; never blocks)
             scoring_status = "disabled"
+            scoring_job_id: str | None = None
             if conversation_lead_id:
                 try:
-                    await self.dependencies.worker_dispatcher.fire_and_forget(
+                    dispatch_result = await self.dependencies.worker_dispatcher.fire_and_forget(
                         "scoring_enqueue",
                         {
                             "conversation_id": conversation_id,
@@ -254,6 +255,8 @@ class ConversationRuntime:
                         },
                     )
                     scoring_status = "queued"
+                    if isinstance(dispatch_result, dict) and dispatch_result.get("id"):
+                        scoring_job_id = str(dispatch_result["id"])
                 except Exception:
                     logger.exception(
                         "scoring_enqueue_failed client_id=%s conversation_id=%s",
@@ -274,6 +277,7 @@ class ConversationRuntime:
                 cards_mode=getattr(final_state, "cards_mode", None),
                 escalated=final_state.escalacion.solicitada,
                 scoring_status=scoring_status,
+                scoring_job_id=scoring_job_id,
                 metadata={"flow": flow, "turn": final_state.current_turn, "trace_id": trace_context.trace_id},
             )
             self.dependencies.trace_store.finish_turn(

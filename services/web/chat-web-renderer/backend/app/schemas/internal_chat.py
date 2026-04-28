@@ -14,9 +14,11 @@ class InternalChatRequest(BaseModel):
         validation_alias=AliasChoices("client_id", "clientId", "client_id")
     )
     channel: CHANNEL_LITERAL = Field(
+        default="web_html",
         validation_alias=AliasChoices("channel", "Channel")
     )
-    channel_user_id: str = Field(
+    channel_user_id: Optional[str] = Field(
+        default=None,
         validation_alias=AliasChoices("channel_user_id", "channelUserId", "channel_user_id")
     )
     auth_user_id: Optional[str] = Field(

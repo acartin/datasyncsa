@@ -36,11 +36,42 @@ INTERNAL_API_TOKEN = (os.getenv("INTERNAL_API_TOKEN") or "").strip()
 RESET_BEFORE_CHAT = (os.getenv("RESET_BEFORE_CHAT", "true").strip().lower() == "true")
 
 
+def _candidate_scoring_bases() -> list[str]:
+    port = os.getenv("SCORING_CORE_PORT", "8097").strip() or "8097"
+    candidates = [
+        SCORING_CORE_API.rstrip("/"),
+        f"http://localhost:{port}",
+        f"http://127.0.0.1:{port}",
+    ]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for item in candidates:
+        if item and item not in seen:
+            ordered.append(item)
+            seen.add(item)
+    return ordered
+
+
 def _scoring_base_url() -> str:
     prefix = SCORING_API_PREFIX.strip()
     if not prefix.startswith("/"):
         prefix = f"/{prefix}"
-    return f"{SCORING_CORE_API.rstrip('/')}{prefix.rstrip('/')}"
+    normalized_prefix = prefix.rstrip("/")
+    for raw_base in _candidate_scoring_bases():
+        candidate = raw_base if raw_base.endswith(normalized_prefix) else f"{raw_base}{normalized_prefix}"
+        try:
+            response = requests.get(f"{candidate}/health", timeout=5)
+            if response.status_code != 200:
+                continue
+            payload = response.json()
+            if str(payload.get("service") or "").strip().lower() == "scoring-core":
+                return candidate
+        except Exception:
+            continue
+    raw_base = _candidate_scoring_bases()[0]
+    if raw_base.endswith(normalized_prefix):
+        return raw_base
+    return f"{raw_base}{normalized_prefix}"
 
 
 def _extract_chat_text(response_json: dict[str, Any]) -> str:

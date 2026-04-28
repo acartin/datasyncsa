@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes import (
     analyze_turn,
     ask_clarification,
@@ -19,14 +17,13 @@ from services.ai_runtime.graph._shared.nodes import (
     route_next_intent,
     synthesize,
 )
-from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.nodes.mail_node import build_mail_node
 from services.ai_runtime.graph._shared.routers.common import (
     after_analyze_turn,
     after_capture_memory,
     after_check_queue,
     after_memory_lookup,
 )
-from services.ai_runtime.graph._shared.tools.mensajear import mensajear
 from services.ai_runtime.graph.realtor.nodes.assign_agent_node import assign_agent
 from services.ai_runtime.graph.realtor.nodes.collect_appointment_data_node import collect_appointment_data
 from services.ai_runtime.graph.realtor.nodes.compare_properties_node import compare_properties
@@ -47,27 +44,6 @@ from services.ai_runtime.graph.realtor.routers.routes import (
 )
 from services.ai_runtime.graph.realtor.tools.financial_calc import financial_calc
 from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
-
-
-def _mail_node(deps: GraphDependencies):
-    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
-        tenant_config = TenantConfig.model_validate(state["tenant_config"])
-        graph_state = RealtorGraphState.model_validate(state)
-        result = await mensajear(
-            dependencies=runtime_deps,
-            client_id=state["client_id"],
-            tipo="appointment_confirmation",
-            destinatarios=[],
-            datos_cita=state.get("cita", {}),
-            tenant_config=tenant_config,
-        )
-        output = {"type": "mensajear", **result.model_dump(mode="json")}
-        return {
-            "turn_outputs": [*state.get("turn_outputs", []), output],
-            **complete_active_intent(graph_state, output),
-        }
-
-    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_realtor_graph(deps: GraphDependencies):
@@ -91,7 +67,7 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_node("rag_documents", build_traced_node("rag_documents", rag_documents, deps))
     workflow.add_node("collect_lead_data", build_traced_node("collect_lead_data", collect_lead_data, deps))
     workflow.add_node("llm_recommend", build_traced_node("llm_recommend", llm_recommend, deps))
-    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("mensajear", build_mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
     workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))

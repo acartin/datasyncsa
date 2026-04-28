@@ -162,7 +162,7 @@ async def chat_interaction(req: InternalChatRequest):
     
     client_id = str(req.client_id)
     channel = req.channel
-    channel_user_id = req.channel_user_id
+    channel_user_id = str(req.channel_user_id or f"web_{client_id}").strip()
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
     incoming_session_id = normalize_session_id(req.session_id)

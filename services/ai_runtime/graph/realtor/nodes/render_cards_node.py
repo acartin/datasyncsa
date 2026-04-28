@@ -173,8 +173,8 @@ async def render_cards(state: dict[str, Any], deps: GraphDependencies) -> dict[s
     _ = deps
     graph_state = RealtorGraphState.model_validate(state)
     properties = [Property.model_validate(item) for item in graph_state.last_search_results]
-    selected = properties[:1]
-    mode = "single"
+    selected = properties[:3]
+    mode = "gallery" if len(selected) > 1 else "single"
     payload = build_card_payload(selected)
     output = {"type": "render_cards", "mode": mode, "count": len(payload)}
     updates = {
@@ -190,6 +190,6 @@ async def render_cards(state: dict[str, Any], deps: GraphDependencies) -> dict[s
         ),
         **complete_active_intent(graph_state, output),
     }
-    if len(selected) == 1:
+    if selected:
         updates["last_mentioned"] = selected[0].model_dump(mode="json")
     return updates

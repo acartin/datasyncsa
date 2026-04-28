@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import httpx
@@ -10,6 +9,12 @@ import httpx
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import MailDispatchResult
 from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.vertical_adapters import (
+    HealthcareAdapters,
+    InsuranceAdapters,
+    LegalAdapters,
+    RealtorAdapters,
+)
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.rag.agency.repository import AgencyRAGRepository
 from services.ai_runtime.rag.documents.repository import DocumentsRAGRepository
@@ -44,7 +49,7 @@ async def _do_scoring_enqueue(
     payload: dict[str, object],
     token: str,
     timeout: float,
-) -> None:
+) -> dict[str, object] | None:
     """Fire-and-forget HTTP call to scoring-core enqueue endpoint."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if token:
@@ -59,6 +64,7 @@ async def _do_scoring_enqueue(
                 data.get("id"),
                 payload.get("conversation_id"),
             )
+            return data if isinstance(data, dict) else None
     except Exception:
         logger.warning(
             "scoring_enqueue failed (fire-and-forget, non-blocking) "
@@ -66,6 +72,7 @@ async def _do_scoring_enqueue(
             payload.get("conversation_id"),
             exc_info=True,
         )
+    return None
 
 
 class InlineWorkerDispatcher:
@@ -84,20 +91,17 @@ class InlineWorkerDispatcher:
         self._internal_token = internal_token
         self._enqueue_timeout = enqueue_timeout
 
-    async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> None:
+    async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> dict[str, object] | None:
         if task_name == "scoring_enqueue" and self._scoring_enqueue_enabled:
-            task = asyncio.create_task(
-                _do_scoring_enqueue(
-                    url=self._scoring_enqueue_url,
-                    payload=payload,
-                    token=self._internal_token,
-                    timeout=self._enqueue_timeout,
-                )
+            return await _do_scoring_enqueue(
+                url=self._scoring_enqueue_url,
+                payload=payload,
+                token=self._internal_token,
+                timeout=self._enqueue_timeout,
             )
-            # Suppress "Task exception was never retrieved" warnings
-            task.add_done_callback(
-                lambda t: t.exception() if not t.cancelled() else None
-            )
+        if task_name == "lead_worker":
+            return None
+        return None
 
 
 engine = build_engine()
@@ -123,7 +127,6 @@ dependencies = GraphDependencies(
     tenant_cache=tenant_cache,
     tenant_repository=tenant_repository,
     conversation_repository=ConversationRepository(engine),
-    property_repository=PropertyRepository(engine),
     agent_repository=agent_repository,
     agency_rag_repository=AgencyRAGRepository(engine),
     documents_rag_repository=DocumentsRAGRepository(engine),
@@ -135,6 +138,12 @@ dependencies = GraphDependencies(
         enqueue_timeout=settings.scoring_enqueue_timeout_secs,
     ),
     trace_store=trace_store,
+    vertical_adapters={
+        "realtor": RealtorAdapters(property_repository=PropertyRepository(engine)),
+        "healthcare": HealthcareAdapters(),
+        "legal": LegalAdapters(),
+        "insurance": InsuranceAdapters(),
+    },
 )
 runtime = ConversationRuntime(
     tenant_loader=tenant_loader,

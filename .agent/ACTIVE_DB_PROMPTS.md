@@ -1,6 +1,6 @@
 # Active DB Prompts
 
-- Generated UTC: `2026-04-17T18:10:48Z`
+- Generated UTC: `2026-04-27T17:14:13Z`
 - Source: `postgres.public.lead_scoring_prompts`
 - Refresh command: `bash .agent/refresh_db_prompts.sh`
 - Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.

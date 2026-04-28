@@ -10,13 +10,22 @@ from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.domain.state import BaseGraphState
 
 
+def _reference_candidate_count(state: BaseGraphState) -> int:
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    policy = get_vertical_spec(state.vertical).policy
+    visible = policy.resolve_visible_reference_items(state)
+    fallback = policy.resolve_reference_candidates(state)
+    return max(len(visible), len(fallback))
+
+
 def _deterministic_condition_passes(state: BaseGraphState, condition: dict[str, Any] | None) -> bool | None:
     if not condition:
         return True
     if "requires_reference" in condition:
         return bool(state.resolved_references)
     if "min_search_results" in condition:
-        return len(getattr(state, "last_search_results", [])) >= int(condition["min_search_results"])
+        return _reference_candidate_count(state) >= int(condition["min_search_results"])
     if "field_present" in condition:
         fields = state.lead_advisor.lead_extracted.model_dump()
         return fields.get(str(condition["field_present"])) is not None

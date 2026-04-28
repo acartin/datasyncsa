@@ -124,6 +124,18 @@ def _normalize_turn_analysis_payload(payload: Any) -> Any:
     raw_key = normalized.get("detail_attribute_key")
     if isinstance(raw_key, str):
         normalized["detail_attribute_key"] = DETAIL_ATTRIBUTE_ALIASES.get(raw_key.strip().lower(), raw_key.strip().lower())
+    raw_scope = normalized.get("detail_scope")
+    if isinstance(raw_scope, str):
+        scope = raw_scope.strip().lower()
+        detail_scope_aliases = {
+            "property": "resolved_reference",
+            "focused_property": "resolved_reference",
+            "focused_entity": "resolved_reference",
+            "current_results": "current_result_set",
+            "visible_results": "current_result_set",
+            "cards_shown": "current_result_set",
+        }
+        normalized["detail_scope"] = detail_scope_aliases.get(scope, scope)
     return normalized
 
 

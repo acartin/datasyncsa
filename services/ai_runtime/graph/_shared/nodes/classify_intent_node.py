@@ -29,6 +29,12 @@ DESCRIBE_RESULTS_PATTERN = re.compile(
 )
 
 
+def _policy_for_state(graph_state: BaseGraphState):
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    return get_vertical_spec(graph_state.vertical).policy
+
+
 def _should_focus_selected_property(graph_state: BaseGraphState, detected: list[IntentDefinition]) -> bool:
     property_refs = [item for item in graph_state.resolved_references if item.get("kind") == "property"]
     if len(property_refs) != 1:
@@ -45,8 +51,8 @@ def _should_reuse_search_results(graph_state: BaseGraphState, detected: list[Int
         return False
     if not AFFIRMATIVE_TURN_PATTERN.search(graph_state.messages[-1].content):
         return False
-    last_search_results = getattr(graph_state, "last_search_results", [])
-    if not last_search_results:
+    policy = _policy_for_state(graph_state)
+    if not (policy.resolve_visible_reference_items(graph_state) or policy.resolve_reference_candidates(graph_state)):
         return False
     previous_assistant = next(
         (message.content for message in reversed(graph_state.messages[:-1]) if message.role == "assistant"),

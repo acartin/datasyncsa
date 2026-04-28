@@ -40,15 +40,19 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `api.py`: `/health` y `/chat`.
 - `domain/contracts.py`: entidades canonicas, request/response, intents.
 - `domain/state.py`: estado base, estado generic y estado realtor.
-- `domain/ports.py`: puertos abstractos para LLM, Redis, PG, RAG, mail y workers.
+- `domain/ports.py`: puertos shared del runtime y contenedor `GraphDependencies`.
+- `domain/policies.py`: hooks neutrales que cada vertical inyecta en `_shared`.
+- `domain/vertical_adapters.py`: bundles de dependencias especificas por vertical.
 - `config/tenant_loader.py`: carga y cache de tenant.
 - `config/prompt_composer.py`: tone + vertical + context.
 - `runtime/bootstrap.py`: wiring por defecto.
 - `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
 - `runtime/turn_trace.py`: trazado por turno para nodos, routers y LLM.
+- `verticals.py`: registro explicito de `VerticalSpec`, `state_model`, `graph_builder` y `policy`.
 - `docs/graphs/**`: diagramas exportados del `grafo_basico` y `grafo_realtor`.
 - `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
+- `graph/_shared/nodes/mail_node.py`: implementacion compartida del handoff mail.
 - `graph/generic/**`: builder y nodos del vertical reducido.
 - `graph/healthcare/**`, `graph/legal/**`, `graph/insurance/**`: prompts semanticos propietarios por vertical.
 - `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
@@ -76,11 +80,46 @@ El estado esta modelado en `domain/state.py` y contiene:
 - lead: `lead_advisor`, `lead`, `escalacion`
 - cita: `cita`
 - salida: `final_response`
-- realtor only:
+- realtor state model:
   - `search_filters`, `inventory`, `last_search_results`, `last_mentioned`
   - `active_comparison`, `focus_scope`, `search_attempts`
   - `cards_shown`, `cards_mode`, `render_mode`, `ui_payload`
   - `financial_context`
+
+Importante:
+
+- `_shared` no debe leer directamente campos realtor-only para interpretar turnos.
+- Los nodos shared consumen hooks neutrales de `VerticalPolicy` y trabajan con snapshots como:
+  - `search_context`
+  - `visible_reference_ids`
+  - `visible_reference_items`
+  - `reference_candidates`
+  - `focused_entity`
+- El formato serializado del estado realtor no cambia: los campos realtor siguen viviendo en `RealtorGraphState`, pero su semantica ya no debe estar cableada dentro de `_shared`.
+
+## Seams por Vertical
+
+La extension multi-vertical del runtime hoy se hace por tres costuras explicitas:
+
+1. `VerticalSpec` en `verticals.py`
+   - registra `state_model`, `graph_builder`, `policy`, `turn_frame_builder`, `required_fields` y `scoring_criteria`
+2. `VerticalPolicy` en `domain/policies.py`
+   - expone hooks neutrales para:
+     - snapshots de contexto de busqueda
+     - referencias visibles y candidatos de referencia
+     - entidad enfocada
+     - quick actions
+     - journey y lead capture progresivo
+     - coerciones/turn policies del vertical
+3. `VerticalAdapters` en `domain/vertical_adapters.py`
+   - `GraphDependencies` conserva solo puertos shared
+   - los adapters verticales se resuelven por slug con `dependencies.get_adapters(vertical)`
+   - `RealtorAdapters` encapsula hoy `property_repository`
+
+Guardrail:
+
+- un vertical nuevo no debe requerir editar nodos shared para introducir semantica de dominio.
+- si un comportamiento depende del vertical, debe entrar por `VerticalPolicy`, `VerticalAdapters` o por un nodo propio del vertical.
 
 ## LangGraph Control Loops
 
@@ -139,6 +178,7 @@ Routers compartidos:
 ### Intent queue
 
 - `analyze_turn` interpreta el turno y devuelve `turn_analysis` con `intent_plan` inicial
+- si el mensaje trae una quick action, `_shared` delega en `VerticalPolicy.handle_quick_action(...)`
 - codigo deterministico normaliza referencias y alimenta `intent_queue`
 - `route_next_intent` elige el siguiente intent ejecutable
 - cada nodo de capacidad cierra explicitamente `running -> done`
@@ -171,10 +211,12 @@ Routers compartidos:
 - resolver referencias a IDs
 - filtrar capabilities por tenant
 - manejar la cola y dependencias
+- delegar semantica vertical via `VerticalPolicy` cuando `_shared` necesita contexto de dominio
 - reglas `lead_advisor`
 - `render_cards`
 - `financial_calc`
 - `assign_agent`
+- `mail_node` compartido para handoff appointment confirmation
 - aislamiento `client_id` en Redis y PostgreSQL
 
 ## Prompt Runtime
@@ -212,10 +254,21 @@ Guardrail:
 
 - `TenantRepository`: config editable por tenant
 - `ConversationRepository`: historial entre sesiones
-- `PropertyRepository`: consulta de inventario realtor
+- `PropertyRepository`: consulta de inventario realtor, expuesta via `RealtorAdapters`
 - `AgentRepository`: asignacion de agentes
 - `AgencyRAGRepository`: FAQ por tenant
 - `DocumentsRAGRepository`: documentos por tenant
+
+## Dependencias y Wiring
+
+`runtime/bootstrap.py` construye un solo `GraphDependencies` con:
+
+- puertos shared: LLM, stores, tenant/cache, repos de conversacion/agentes, RAG, mailer, worker dispatcher, trace store
+- `vertical_adapters` por slug:
+  - `realtor -> RealtorAdapters(property_repository=...)`
+  - `healthcare/legal/insurance -> adapters placeholder vacios`
+
+Esto permite bootear verticales generic sin requerir dependencias realtor-only.
 
 ## Lead Worker
 

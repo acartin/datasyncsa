@@ -172,6 +172,7 @@ cat > "$BRAIN_FILE" <<EOF
 - \`ai-runtime\` resuelve tenant, vertical, flow y estado de sesion.
 - \`realtor_flow\` y \`basic_flow\` son selectores logicos internos.
 - \`analyze_turn\` e \`intent_detector\` son prompts semanticos por vertical; \`shared\` solo debe contener piezas tecnicas neutrales.
+- \`VerticalPolicy\` y \`VerticalAdapters\` son las costuras activas para desacoplar logica y dependencias por vertical.
 - \`scoring-core\` permanece separado y no debe absorber decisiones conversacionales.
 - \`chat-web-renderer\` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por \`client_id\`.
@@ -255,9 +256,13 @@ append_file_excerpt "services/ai_runtime/runtime/settings.py"
 append_file_excerpt "services/ai_runtime/runtime/bootstrap.py"
 append_file_excerpt "services/ai_runtime/runtime/service.py"
 append_file_excerpt "services/ai_runtime/domain/state.py"
+append_file_excerpt "services/ai_runtime/domain/policies.py"
+append_file_excerpt "services/ai_runtime/domain/vertical_adapters.py"
+append_file_excerpt "services/ai_runtime/verticals.py"
 append_file_excerpt "services/ai_runtime/graph/registry.py"
 append_file_excerpt "services/ai_runtime/graph/generic/graph.py"
 append_file_excerpt "services/ai_runtime/graph/realtor/graph.py"
+append_file_excerpt "services/ai_runtime/graph/_shared/nodes/mail_node.py"
 
 append_section "Canal Web"
 append_file_excerpt "services/web/chat-web-renderer/backend/app/core/runtime_client.py"

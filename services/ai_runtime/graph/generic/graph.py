@@ -5,7 +5,6 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from services.ai_runtime.domain.state import GenericGraphState
-from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes import (
     analyze_turn,
@@ -19,41 +18,18 @@ from services.ai_runtime.graph._shared.nodes import (
     route_next_intent,
     synthesize,
 )
-from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.nodes.mail_node import build_mail_node
 from services.ai_runtime.graph._shared.routers.common import (
     after_analyze_turn,
     after_capture_memory,
     after_check_queue,
     after_memory_lookup,
 )
-from services.ai_runtime.graph._shared.tools.mensajear import mensajear
 from services.ai_runtime.graph.generic.nodes.assign_agent_node import assign_agent
 from services.ai_runtime.graph.generic.nodes.collect_appointment_data_node import collect_appointment_data
 from services.ai_runtime.graph.generic.nodes.rag_agencia_node import rag_agencia
 from services.ai_runtime.graph.generic.routers.routes import after_collect_appointment_data, after_route_next_intent
 from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
-
-
-def _mail_node(deps: GraphDependencies):
-    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
-        tenant_config = TenantConfig.model_validate(state["tenant_config"])
-        graph_state = GenericGraphState.model_validate(state)
-        output = (
-            await mensajear(
-                dependencies=runtime_deps,
-                client_id=state["client_id"],
-                tipo="appointment_confirmation",
-                destinatarios=[],
-                datos_cita=state.get("cita", {}),
-                tenant_config=tenant_config,
-            )
-        ).model_dump(mode="json")
-        return {
-            "turn_outputs": [*state.get("turn_outputs", []), {"type": "mensajear", **output}],
-            **complete_active_intent(graph_state, {"type": "mensajear", **output}),
-        }
-
-    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_generic_graph(deps: GraphDependencies):
@@ -67,7 +43,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_node("rag_agencia", build_traced_node("rag_agencia", rag_agencia, deps))
     workflow.add_node("collect_appointment_data", build_traced_node("collect_appointment_data", collect_appointment_data, deps))
     workflow.add_node("assign_agent", build_traced_node("assign_agent", assign_agent, deps))
-    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("mensajear", build_mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
     workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))

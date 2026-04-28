@@ -162,6 +162,17 @@ Donde:
 - `base_prompt_local` sale de builders en codigo segun `node_type` y `vertical`
 - `dynamic_context` es un JSON serializado con estado/contexto del turno
 
+Guardrail de contexto:
+
+- los nodos shared no deben inyectar llaves semanticas realtor-only para interpretar turnos
+- `analyze_turn` en `_shared` ahora compone contexto neutro y deja el mapping de dominio a la `VerticalPolicy`
+- para realtor, el prompt recibe snapshots neutrales como:
+  - `search_context`
+  - `visible_reference_ids`
+  - `visible_reference_items`
+  - `reference_candidates`
+  - `focused_entity`
+
 ## Mapa de nodos y su fuente
 
 ### Locales por vertical
@@ -181,6 +192,7 @@ Importante:
 
 - `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
 - `_shared` no debe contener prompts de negocio con semantica de dominio
+- `_shared` tampoco debe reconstruir conceptos de dominio leyendo estado realtor-only por su cuenta; eso entra por `VerticalPolicy`
 
 ### Locales compartidos
 

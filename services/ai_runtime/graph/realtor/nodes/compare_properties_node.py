@@ -8,6 +8,7 @@ from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
 from services.ai_runtime.graph._shared.prompt_context import summarize_properties_for_prompt
+from services.ai_runtime.graph.realtor.adapters import get_realtor_adapters
 from services.ai_runtime.graph.realtor.contracts import Property
 from services.ai_runtime.graph.realtor.nodes.comparison_helpers import score_property
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
@@ -37,12 +38,13 @@ def _build_selection_narrative(property_item: Property) -> str:
 
 async def compare_properties(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
+    property_repository = get_realtor_adapters(deps).property_repository
     property_ids = graph_state.active_comparison or [
         reference["property_id"]
         for reference in graph_state.resolved_references
         if reference.get("kind") == "property"
     ]
-    properties = await deps.property_repository.load_properties_by_ids(
+    properties = await property_repository.load_properties_by_ids(
         client_id=graph_state.client_id,
         property_ids=property_ids,
     )

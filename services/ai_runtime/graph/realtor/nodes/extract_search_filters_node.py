@@ -8,6 +8,7 @@ from services.ai_runtime.config.geo_catalog import DEFAULT_COUNTRY_CODE, normali
 from services.ai_runtime.config.property_type_catalog import normalize_property_type
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.graph.realtor.adapters import get_realtor_adapters
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 
 
@@ -36,7 +37,7 @@ def _normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def extract_search_filters(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
-    available_property_types = await deps.property_repository.load_property_types()
+    available_property_types = await get_realtor_adapters(deps).property_repository.load_property_types()
     prompt = compose(
         "search_filter_extractor",
         graph_state.tenant_config,

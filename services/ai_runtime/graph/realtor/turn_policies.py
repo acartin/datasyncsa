@@ -9,6 +9,7 @@ from services.ai_runtime.config.geo_catalog import DEFAULT_COUNTRY_CODE, normali
 from services.ai_runtime.config.property_type_catalog import normalize_property_type
 from services.ai_runtime.domain.contracts import IntentPlanItem, PendingDecision, ReferenceDecision, TurnAnalysis
 from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.graph.realtor.adapters import get_realtor_adapters
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 
 REALTOR_INTERNAL_INTENTS = {"focus_property", "describe_result_set", "show_result_cards"}
@@ -108,6 +109,27 @@ FINANCIAL_QUERY_PATTERN = re.compile(
     r"\b(cuota|financi(?:o|ar|ado|ada|amiento)|prima|preaprob(?:acion|ación)?|hipoteca|tasa)\b",
     flags=re.IGNORECASE,
 )
+DOCUMENT_QUERY_PATTERN = re.compile(
+    r"\b(bono(?:\s+de\s+vivienda)?|requisitos?|tramites?|tr[aá]mites?|documentos?|papeles?|subsidio)\b",
+    flags=re.IGNORECASE,
+)
+SCHEDULE_INTENT_PATTERN = re.compile(
+    r"\b("
+    r"agendar|agenda|coordinar(?:lo|la|mos)?|"
+    r"visitar(?:la)?|visita(?:r)?|"
+    r"ir\s+a\s+verla|"
+    r"me\s+gustaria\s+ir\s+a\s+verla|"
+    r"me\s+interesa\s+visitarla|"
+    r"quiero\s+visitar(?:la)?"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+NEGATIVE_SCHEDULE_PATTERN = re.compile(
+    r"\b(no\s+(?:quiero|deseo|necesito)\s+(?:agendar|coordinar|visita|visitar)|"
+    r"todavia\s+no\s+(?:quiero\s+)?(?:agendar|coordinar|visita|visitar)|"
+    r"prefiero\s+no\s+(?:agendar|coordinar|visita|visitar))\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _normalize_value(value: Any) -> Any:
@@ -151,7 +173,7 @@ async def merge_realtor_filters(
     analysis: TurnAnalysis,
     deps: GraphDependencies,
 ) -> dict[str, Any]:
-    available_property_types = await deps.property_repository.load_property_types()
+    available_property_types = await get_realtor_adapters(deps).property_repository.load_property_types()
     base_filters = (
         SearchFilters().model_dump(mode="json")
         if analysis.dialogue_act == "new_search"
@@ -194,6 +216,22 @@ def build_realtor_fallback_intent_plan(
     graph_state: RealtorGraphState,
     analysis: TurnAnalysis,
 ) -> list[IntentPlanItem]:
+    latest_message = graph_state.messages[-1].content if graph_state.messages else ""
+    if (
+        analysis.dialogue_act == "unknown"
+        and SEARCH_INTENT_PATTERN.search(latest_message)
+        and not COMPARE_INTENT_PATTERN.search(latest_message)
+        and not INVENTORY_COUNT_PATTERN.search(latest_message)
+    ):
+        return [
+            IntentPlanItem(
+                type="buscar",
+                priority=1,
+                depends_on=[],
+                condition=None,
+                skip_if_failed=False,
+            )
+        ]
     if analysis.dialogue_act not in {"new_search", "refine_search", "confirm_previous"}:
         return []
     if analysis.dialogue_act == "confirm_previous" and _assistant_requested_search_relaxation(graph_state):
@@ -328,6 +366,8 @@ def apply_realtor_turn_policies(
     analysis = _coerce_search_restart(graph_state, analysis)
     analysis = _coerce_countrywide_scope(graph_state, analysis)
     analysis = _coerce_financial_query_reference(graph_state, analysis)
+    analysis = _coerce_schedule_request(graph_state, analysis)
+    analysis = _coerce_document_query(graph_state, analysis)
     analysis = _coerce_affirmative_after_no_results(graph_state, analysis)
     analysis = _coerce_single_ordinal_selection(graph_state, analysis)
     analysis = _coerce_visual_request(graph_state, analysis)
@@ -656,6 +696,78 @@ def _coerce_affirmative_after_no_results(
             "reference": ReferenceDecision(kind="NONE", confidence=0.99),
             "intent_plan": [],
             "reuse_current_filters": False,
+            "detail_scope": None,
+            "detail_attribute_key": None,
+        }
+    )
+
+
+def _coerce_document_query(
+    graph_state: RealtorGraphState,
+    analysis: TurnAnalysis,
+) -> TurnAnalysis:
+    if analysis.dialogue_act not in {"unknown", "small_talk", "faq"}:
+        return analysis
+
+    latest_message = graph_state.messages[-1].content.strip()
+    if not latest_message or not DOCUMENT_QUERY_PATTERN.search(latest_message):
+        return analysis
+    if SEARCH_INTENT_PATTERN.search(latest_message):
+        return analysis
+
+    return analysis.model_copy(
+        update={
+            "dialogue_act": "document_query",
+            "confidence": max(analysis.confidence, 0.92),
+            "needs_clarification": False,
+            "clarification_target": None,
+            "reference": ReferenceDecision(kind="NONE", confidence=max(analysis.reference.confidence, 0.98)),
+            "intent_plan": [
+                IntentPlanItem(
+                    type="rag_docs",
+                    priority=1,
+                    depends_on=[],
+                    condition=None,
+                    skip_if_failed=False,
+                )
+            ],
+            "reuse_current_filters": False,
+            "detail_scope": None,
+            "detail_attribute_key": None,
+            "memory_lookup_key": None,
+        }
+    )
+
+
+def _coerce_schedule_request(
+    graph_state: RealtorGraphState,
+    analysis: TurnAnalysis,
+) -> TurnAnalysis:
+    if analysis.dialogue_act not in {"unknown", "ask_detail", "select_result", "confirm_previous", "lead_capture", "refine_search"}:
+        return analysis
+
+    latest_message = graph_state.messages[-1].content.strip()
+    if not latest_message or not SCHEDULE_INTENT_PATTERN.search(latest_message):
+        return analysis
+    normalized = latest_message.lower()
+    if NEGATIVE_SCHEDULE_PATTERN.search(normalized):
+        return analysis
+
+    return analysis.model_copy(
+        update={
+            "dialogue_act": "schedule",
+            "confidence": max(analysis.confidence, 0.93),
+            "needs_clarification": False,
+            "clarification_target": None,
+            "intent_plan": [
+                IntentPlanItem(
+                    type="agendar",
+                    priority=1,
+                    depends_on=[],
+                    condition=None,
+                    skip_if_failed=False,
+                )
+            ],
             "detail_scope": None,
             "detail_attribute_key": None,
         }

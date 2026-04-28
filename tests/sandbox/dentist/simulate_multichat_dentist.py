@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simulador multi-conversacion para vertical Dentista (v2).
+Simulador multi-conversacion para vertical Dentista sobre el stack activo.
 
 Objetivo:
 - Ejecutar conversaciones cortas en distintos escenarios odontologicos.
@@ -117,7 +117,8 @@ def _run_scenario(
     print(f"Descripcion: {scenario['description']}")
     print(f"Mensajes: {len(messages)}")
     print(f"Cliente: {client_id}")
-    print(f"API: {simulator.base_url}")
+    print(f"Chat API: {simulator.base_url}")
+    print(f"Scoring API: {simulator.scoring_base_url}")
     print()
 
     if not simulator.check_health():
@@ -171,7 +172,7 @@ def _run_scenario(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Simulador multi-conversacion para Dentista v2."
+        description="Simulador multi-conversacion para Dentista sobre chat activo + scoring-core."
     )
     parser.add_argument(
         "--conversation",
@@ -205,7 +206,7 @@ def main() -> None:
         "--url",
         type=str,
         default=os.getenv("INFERENCE_V2_API", INFERENCE_V2_URL),
-        help=f"URL del API v2 (default: env INFERENCE_V2_API o {INFERENCE_V2_URL})",
+        help=f"URL del chat activo (default: env CHAT_WEB_RENDERER_URL o {INFERENCE_V2_URL})",
     )
     parser.add_argument(
         "--discover-endpoints",

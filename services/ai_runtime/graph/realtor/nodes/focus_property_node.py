@@ -6,6 +6,7 @@ from typing import Any
 
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.adapters import get_realtor_adapters
 from services.ai_runtime.graph.realtor.contracts import Property
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
@@ -34,12 +35,13 @@ def _build_focus_narrative(property_item: Property) -> str:
 
 async def focus_property(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
+    property_repository = get_realtor_adapters(deps).property_repository
     property_ids = [
         reference["property_id"]
         for reference in graph_state.resolved_references
         if reference.get("kind") == "property"
     ]
-    properties = await deps.property_repository.load_properties_by_ids(
+    properties = await property_repository.load_properties_by_ids(
         client_id=graph_state.client_id,
         property_ids=property_ids,
     )

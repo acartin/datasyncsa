@@ -63,10 +63,34 @@ def _compose_preferred_datetime(fecha: Any, hora: Any) -> str | None:
     return combined or None
 
 
+def _resolved_property_ids(graph_state: BaseGraphState) -> set[str]:
+    property_ids: set[str] = set()
+    for reference in getattr(graph_state, "resolved_references", []) or []:
+        if str(reference.get("kind") or "").strip().lower() != "property":
+            continue
+        property_id = str(reference.get("property_id") or "").strip()
+        if property_id:
+            property_ids.add(property_id)
+    focused = getattr(graph_state, "last_mentioned", None)
+    focused_id = str(getattr(focused, "id", "") or "").strip()
+    if focused_id:
+        property_ids.add(focused_id)
+    return property_ids
+
+
+def _has_grounded_appointment_target(graph_state: BaseGraphState) -> bool:
+    grounded_property_ids = _resolved_property_ids(graph_state)
+    cita_property_id = str(getattr(graph_state.cita, "propiedad_id", "") or "").strip()
+    if cita_property_id:
+        return cita_property_id in grounded_property_ids if grounded_property_ids else False
+    return bool(grounded_property_ids)
+
+
 def _resolve_lead_capture(graph_state: BaseGraphState) -> LeadCaptureContext:
     advisor = graph_state.lead_advisor
     contact_ok = has_valid_lead_contact(advisor.lead_extracted)
     lead_name_known = bool(str(advisor.lead_extracted.nombre or "").strip())
+    grounded_appointment_target = _has_grounded_appointment_target(graph_state)
 
     appointment_context = (
         _turn_has_output_type(graph_state, "appointment")
@@ -83,6 +107,7 @@ def _resolve_lead_capture(graph_state: BaseGraphState) -> LeadCaptureContext:
     )
     appointment_pending_contact = (
         appointment_context
+        and grounded_appointment_target
         and not bool(graph_state.cita.confirmada)
         and not contact_ok
     )

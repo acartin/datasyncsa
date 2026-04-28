@@ -1,9 +1,4 @@
-"""Abstract integration ports used by the AI runtime.
-
-Vertical-specific adapters may be attached to the dependency container as
-optional opaque fields, but their concrete protocols live inside each
-vertical package instead of this shared module.
-"""
+"""Abstract integration ports used by the AI runtime."""
 
 from __future__ import annotations
 
@@ -19,6 +14,7 @@ from services.ai_runtime.domain.contracts import (
     TextToSQLResult,
 )
 from services.ai_runtime.domain.prompts import PromptInput
+from services.ai_runtime.domain.vertical_adapters import VerticalAdapters
 
 
 class LLMPort(Protocol):
@@ -118,7 +114,7 @@ class MailerPort(Protocol):
 
 
 class WorkerDispatcherPort(Protocol):
-    async def fire_and_forget(self, task_name: str, payload: dict[str, Any]) -> None: ...
+    async def fire_and_forget(self, task_name: str, payload: dict[str, Any]) -> dict[str, Any] | None: ...
 
 
 class TraceStorePort(Protocol):
@@ -152,10 +148,17 @@ class GraphDependencies:
     tenant_cache: TenantCachePort
     tenant_repository: TenantRepositoryPort
     conversation_repository: ConversationRepositoryPort
-    property_repository: Any
     agent_repository: AgentRepositoryPort
     agency_rag_repository: VectorRepositoryPort
     documents_rag_repository: VectorRepositoryPort
     mailer: MailerPort
     worker_dispatcher: WorkerDispatcherPort
     trace_store: TraceStorePort
+    vertical_adapters: dict[str, VerticalAdapters]
+
+    def get_adapters(self, vertical: str) -> VerticalAdapters:
+        normalized = str(vertical or "").strip().lower()
+        adapters = self.vertical_adapters.get(normalized)
+        if adapters is None:
+            raise KeyError(f"Missing vertical adapters for vertical={vertical!r}")
+        return adapters

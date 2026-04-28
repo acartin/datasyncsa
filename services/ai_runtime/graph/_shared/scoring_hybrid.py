@@ -85,6 +85,15 @@ _MEDIUM_URGENCY_HINTS = (
 _WEEKDAY_PATTERN = re.compile(
     r"\b(este|proximo)\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b"
 )
+_NEGATIVE_APPOINTMENT_HINTS = (
+    "no quiero agendar",
+    "no deseo agendar",
+    "no necesito agendar",
+    "todavia no",
+    "aun no",
+    "prefiero no agendar",
+    "solo estoy comparando",
+)
 
 
 def _normalize_key(value: str) -> str:
@@ -383,7 +392,10 @@ def _build_scoring_prompt(
     graph_state: BaseGraphState,
     advisor_state: LeadAdvisorState,
 ) -> PromptPayload:
+    from services.ai_runtime.verticals import get_vertical_spec
+
     stable_prefix = _build_scoring_stable_prefix(graph_state, advisor_state)
+    policy = get_vertical_spec(graph_state.vertical).policy
     required_fields = list(advisor_state.required_fields or advisor_state.target_fields)
     completed_fields = list(advisor_state.completed_fields or [])
     pending_fields = [field for field in required_fields if field not in completed_fields]
@@ -404,17 +416,14 @@ def _build_scoring_prompt(
         "last_turn_output_types": list(graph_state.last_turn_output_types or []),
         "last_turn_search_summary": graph_state.last_turn_search_summary,
     }
-    raw_filters = getattr(graph_state, "search_filters", None)
-    if raw_filters is not None:
-        if hasattr(raw_filters, "model_dump"):
-            dynamic_context["search_filters"] = raw_filters.model_dump(mode="json")
-        elif isinstance(raw_filters, dict):
-            dynamic_context["search_filters"] = raw_filters
-    raw_results = getattr(graph_state, "last_search_results", None)
-    if raw_results:
-        dynamic_context["last_search_results_summary"] = [
+    search_context = policy.snapshot_search_context(graph_state)
+    if search_context:
+        dynamic_context["search_context"] = search_context
+    reference_candidates = policy.resolve_reference_candidates(graph_state)
+    if reference_candidates:
+        dynamic_context["reference_candidates_summary"] = [
             summary
-            for summary in (_property_summary(item) for item in list(raw_results)[:4])
+            for summary in (_property_summary(item) for item in list(reference_candidates)[:4])
             if summary is not None
         ]
     dynamic_context = json.dumps(
@@ -523,6 +532,52 @@ def _timeline_floor_from_text(value: Any) -> float | None:
     return None
 
 
+def _intent_floor_from_context(
+    *,
+    message: Any,
+    appointment_intent: Any,
+    fecha_preferida: Any,
+) -> float | None:
+    normalized_message = _normalize_text(message)
+    normalized_intent = _normalize_text(appointment_intent)
+    normalized_date = _normalize_text(fecha_preferida)
+
+    if normalized_intent == "negative":
+        return None
+    if normalized_message and any(
+        hint in normalized_message
+        for hint in (
+            "no quiero agendar",
+            "no deseo agendar",
+            "todavia no",
+            "aun no",
+            "prefiero no agendar",
+            "solo estoy comparando",
+        )
+    ):
+        return None
+    if normalized_intent == "positive":
+        return 6.0
+    if normalized_date:
+        return 6.0
+    if not normalized_message:
+        return None
+    if any(
+        hint in normalized_message
+        for hint in (
+            "agendar",
+            "coordinar",
+            "visitar",
+            "visitarla",
+            "ir a verla",
+            "como lo coordinamos",
+            "como coordinamos",
+        )
+    ):
+        return 6.0
+    return None
+
+
 def _extract_current_user_message(graph_state: BaseGraphState) -> str | None:
     for message in reversed(graph_state.messages):
         if str(getattr(message, "role", "")).strip().lower() != "user":
@@ -530,6 +585,13 @@ def _extract_current_user_message(graph_state: BaseGraphState) -> str | None:
         content = str(getattr(message, "content", "")).strip()
         if content:
             return content
+    return None
+
+
+def _latest_search_output(graph_state: BaseGraphState) -> dict[str, Any] | None:
+    for item in reversed(graph_state.turn_outputs):
+        if str(item.get("type") or "").strip().lower() == "search":
+            return item
     return None
 
 
@@ -574,6 +636,169 @@ def _apply_timeline_score_guardrail(
         previous_reason = str(merged_reasons.get(normalized_key) or "").strip()
         guardrail_reason = (
             f"Guardrail temporal: horizonte explicito detectado en '{source_text}'; "
+            f"{normalized_key} ajustado a {guarded_score:.1f}."
+        )
+        merged_reasons[normalized_key] = (
+            f"{previous_reason} {guardrail_reason}".strip()
+            if previous_reason
+            else guardrail_reason
+        )
+        adjusted.append(normalized_key)
+    return adjusted
+
+
+def _apply_search_result_score_guardrail(
+    *,
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+    merged_scores: dict[str, float],
+    merged_reasons: dict[str, str],
+    criterion_bounds: dict[str, tuple[float, float]],
+) -> list[str]:
+    latest_search = _latest_search_output(graph_state)
+    if not latest_search:
+        return []
+    try:
+        result_count = int(latest_search.get("count") or 0)
+    except (TypeError, ValueError):
+        result_count = 0
+    if result_count <= 0:
+        return []
+
+    normalized_act = _normalize_key(getattr(graph_state.turn_analysis, "dialogue_act", None) or "")
+    if normalized_act not in {"new_search", "refine_search", "select_result", "ask_detail", "compare"}:
+        return []
+
+    relaxation_applied = bool(latest_search.get("relaxation_applied"))
+    floors = {
+        "apertura": 6.0,
+        "openness": 6.0,
+        "engagement": 6.0,
+        "match": 6.0 if not relaxation_applied else 5.0,
+        "fit": 6.0 if not relaxation_applied else 5.0,
+        "encaje": 6.0 if not relaxation_applied else 5.0,
+    }
+    adjusted: list[str] = []
+    for criterion_key in advisor_state.target_criteria:
+        normalized_key = _normalize_key(criterion_key)
+        floor = floors.get(normalized_key)
+        if floor is None:
+            continue
+        lower, upper = criterion_bounds.get(normalized_key, (0.0, 10.0))
+        current_score = _coerce_float(merged_scores.get(normalized_key))
+        if current_score is None:
+            continue
+        guarded_score = _clamp(floor, lower=lower, upper=upper)
+        if current_score >= guarded_score:
+            continue
+        merged_scores[normalized_key] = guarded_score
+        previous_reason = str(merged_reasons.get(normalized_key) or "").strip()
+        basis = "busqueda con resultados visibles"
+        if not relaxation_applied:
+            basis = "busqueda con resultados visibles y match util"
+        guardrail_reason = (
+            f"Guardrail de resultado: {basis}; "
+            f"{normalized_key} ajustado a {guarded_score:.1f}."
+        )
+        merged_reasons[normalized_key] = (
+            f"{previous_reason} {guardrail_reason}".strip()
+            if previous_reason
+            else guardrail_reason
+        )
+        adjusted.append(normalized_key)
+    return adjusted
+
+
+def _negative_intent_ceiling_from_context(
+    *,
+    message: Any,
+    appointment_intent: Any,
+) -> float | None:
+    normalized_intent = _normalize_text(appointment_intent)
+    normalized_message = _normalize_text(message)
+    if normalized_intent == "negative":
+        return 3.0
+    if normalized_message and any(hint in normalized_message for hint in _NEGATIVE_APPOINTMENT_HINTS):
+        return 3.0
+    return None
+
+
+def _apply_negative_intent_guardrail(
+    *,
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+    merged_scores: dict[str, float],
+    merged_reasons: dict[str, str],
+    merged_extracted: LeadExtracted,
+    criterion_bounds: dict[str, tuple[float, float]],
+) -> list[str]:
+    ceiling = _negative_intent_ceiling_from_context(
+        message=_extract_current_user_message(graph_state),
+        appointment_intent=merged_extracted.appointment_intent,
+    )
+    if ceiling is None:
+        return []
+
+    adjusted: list[str] = []
+    for criterion_key in advisor_state.target_criteria:
+        normalized_key = _normalize_key(criterion_key)
+        if normalized_key not in {"intencion", "intent", "purchase_intent"}:
+            continue
+        lower, upper = criterion_bounds.get(normalized_key, (0.0, 10.0))
+        current_score = _coerce_float(merged_scores.get(normalized_key))
+        if current_score is None:
+            continue
+        guarded_score = _clamp(ceiling, lower=lower, upper=upper)
+        if current_score <= guarded_score:
+            continue
+        merged_scores[normalized_key] = guarded_score
+        previous_reason = str(merged_reasons.get(normalized_key) or "").strip()
+        guardrail_reason = (
+            "Guardrail de intencion negativa: se detecto una negacion explicita de agenda; "
+            f"{normalized_key} ajustado a {guarded_score:.1f}."
+        )
+        merged_reasons[normalized_key] = (
+            f"{previous_reason} {guardrail_reason}".strip()
+            if previous_reason
+            else guardrail_reason
+        )
+        adjusted.append(normalized_key)
+    return adjusted
+
+
+def _apply_intent_score_guardrail(
+    *,
+    graph_state: BaseGraphState,
+    advisor_state: LeadAdvisorState,
+    merged_scores: dict[str, float],
+    merged_reasons: dict[str, str],
+    merged_extracted: LeadExtracted,
+    criterion_bounds: dict[str, tuple[float, float]],
+) -> list[str]:
+    floor = _intent_floor_from_context(
+        message=_extract_current_user_message(graph_state),
+        appointment_intent=merged_extracted.appointment_intent,
+        fecha_preferida=merged_extracted.fecha_preferida,
+    )
+    if floor is None:
+        return []
+
+    adjusted: list[str] = []
+    for criterion_key in advisor_state.target_criteria:
+        normalized_key = _normalize_key(criterion_key)
+        if normalized_key not in {"intencion", "intent", "purchase_intent"}:
+            continue
+        lower, upper = criterion_bounds.get(normalized_key, (0.0, 10.0))
+        current_score = _coerce_float(merged_scores.get(normalized_key))
+        if current_score is None:
+            continue
+        guarded_score = _clamp(floor, lower=lower, upper=upper)
+        if current_score >= guarded_score:
+            continue
+        merged_scores[normalized_key] = guarded_score
+        previous_reason = str(merged_reasons.get(normalized_key) or "").strip()
+        guardrail_reason = (
+            "Guardrail de intencion: se detecto una senal clara de coordinacion o visita; "
             f"{normalized_key} ajustado a {guarded_score:.1f}."
         )
         merged_reasons[normalized_key] = (
@@ -705,6 +930,35 @@ async def enrich_lead_advisor_with_llm_scoring(
         merged_reasons=merged_reasons,
         merged_extracted=merged_extracted,
         criterion_bounds=criterion_bounds,
+    )
+    guardrails_applied.extend(
+        _apply_search_result_score_guardrail(
+            graph_state=graph_state,
+            advisor_state=advisor_state,
+            merged_scores=merged_scores,
+            merged_reasons=merged_reasons,
+            criterion_bounds=criterion_bounds,
+        )
+    )
+    guardrails_applied.extend(
+        _apply_negative_intent_guardrail(
+            graph_state=graph_state,
+            advisor_state=advisor_state,
+            merged_scores=merged_scores,
+            merged_reasons=merged_reasons,
+            merged_extracted=merged_extracted,
+            criterion_bounds=criterion_bounds,
+        )
+    )
+    guardrails_applied.extend(
+        _apply_intent_score_guardrail(
+            graph_state=graph_state,
+            advisor_state=advisor_state,
+            merged_scores=merged_scores,
+            merged_reasons=merged_reasons,
+            merged_extracted=merged_extracted,
+            criterion_bounds=criterion_bounds,
+        )
     )
 
     updated_advisor = advisor_state.model_copy(

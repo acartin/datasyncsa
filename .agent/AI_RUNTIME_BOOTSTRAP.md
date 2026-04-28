@@ -26,7 +26,10 @@ No tomar como autoridad principal salvo instruccion explicita:
 7. `services/ai_runtime/runtime/service.py`
 8. `services/ai_runtime/domain/contracts.py`
 9. `services/ai_runtime/domain/state.py`
-10. `services/ai_runtime/graph/registry.py`
+10. `services/ai_runtime/domain/policies.py`
+11. `services/ai_runtime/domain/vertical_adapters.py`
+12. `services/ai_runtime/verticals.py`
+13. `services/ai_runtime/graph/registry.py`
 Lectura adicional segun el caso:
 
 - `services/data/repositories/base.py`
@@ -51,6 +54,8 @@ Lectura adicional segun el caso:
 - el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
 - `shared` solo contiene infraestructura y piezas tecnicas neutrales
 - `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
+- `VerticalPolicy` es la costura para quick actions, snapshots de referencia, journey y lead capture progresivo
+- `GraphDependencies` solo contiene puertos shared; lo vertical-specific entra por `vertical_adapters`
 - `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
@@ -81,5 +86,7 @@ Ambas operaciones son best-effort: un fallo no aborta la respuesta al usuario.
 - no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
 - no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
 - no colgar `analyze_turn` ni `intent_detector` de prompts shared
+- no reintroducir semantica realtor en nodos shared leyendo `last_search_results`, `cards_shown`, `last_mentioned` o quick actions hardcodeadas
+- no volver a colgar repositorios verticales directo de `GraphDependencies`; usar `vertical_adapters`
 - no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
 - si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`

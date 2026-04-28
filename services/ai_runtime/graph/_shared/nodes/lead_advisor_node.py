@@ -45,57 +45,12 @@ CAPTURE_ELIGIBLE_DIALOGUE_ACTS = {
     "confirm_previous",
     "recommend",
 }
-CHANNEL_ALIASES = {
-    "meta_whatsapp": "whatsapp",
-    "whatsapp": "whatsapp",
-    "meta_telegram": "telegram",
-    "telegram": "telegram",
-    "web_html": "webchat",
-    "webchat": "webchat",
-    "web": "webchat",
-    "api": "webchat",
-    "meta_ig": "instagram",
-    "instagram": "instagram",
-    "meta_messenger": "messenger",
-    "messenger": "messenger",
-}
-REALTOR_PROGRESSIVE_DEFAULTS = {
-    "sale": [
-        "presupuesto",
-        "aprobacion",
-        "fecha_preferida",
-        "appointment_intent",
-        "tipo_cita",
-        "contacto",
-        "email",
-        "telefono",
-        "preferencias",
-        "nombre",
-    ],
-    "rent": [
-        "fecha_preferida",
-        "presupuesto",
-        "appointment_intent",
-        "tipo_cita",
-        "contacto",
-        "email",
-        "telefono",
-        "preferencias",
-        "nombre",
-    ],
-    "default": [
-        "appointment_intent",
-        "tipo_cita",
-        "contacto",
-        "email",
-        "telefono",
-        "presupuesto",
-        "aprobacion",
-        "fecha_preferida",
-        "preferencias",
-        "nombre",
-    ],
-}
+
+
+def _policy_for_state(graph_state: BaseGraphState):
+    from services.ai_runtime.verticals import get_vertical_spec
+
+    return get_vertical_spec(graph_state.vertical).policy
 
 
 def _compose_preferred_datetime(fecha: Any, hora: Any) -> str | None:
@@ -206,56 +161,7 @@ def _pending_fields(advisor_state: LeadAdvisorState) -> list[str]:
     return pending
 
 
-def _normalize_channel(value: Any) -> str:
-    raw = str(value or "").strip().lower()
-    if not raw:
-        return ""
-    return CHANNEL_ALIASES.get(raw, raw)
-
-
-def _resolve_current_channel(graph_state: BaseGraphState) -> str:
-    for message in reversed(graph_state.messages):
-        if str(getattr(message, "role", "")).strip().lower() != "user":
-            continue
-        metadata = getattr(message, "metadata", None)
-        if not isinstance(metadata, dict):
-            continue
-        for key in ("channel", "platform"):
-            normalized = _normalize_channel(metadata.get(key))
-            if normalized:
-                return normalized
-    return "webchat"
-
-
-def _resolve_realtor_journey(graph_state: BaseGraphState) -> str:
-    if str(graph_state.vertical).strip().lower() != "realtor":
-        return "default"
-
-    candidates: list[str] = []
-    search_filters = getattr(graph_state, "search_filters", None)
-    if search_filters is not None:
-        candidates.append(str(getattr(search_filters, "operacion", "") or ""))
-    effective_filters = getattr(graph_state, "effective_search_filters", None)
-    if effective_filters is not None:
-        candidates.append(str(getattr(effective_filters, "operacion", "") or ""))
-
-    for candidate in candidates:
-        normalized = candidate.strip().lower()
-        if not normalized:
-            continue
-        if any(token in normalized for token in ("alquiler", "renta", "rent", "arrendar")):
-            return "rent"
-        if any(token in normalized for token in ("venta", "comprar", "compra", "sale", "buy")):
-            return "sale"
-    return "default"
-
-
-def _resolve_contact_field(
-    *,
-    graph_state: BaseGraphState,
-    advisor_state: LeadAdvisorState,
-    pending: list[str],
-) -> str | None:
+def _generic_contact_field(pending: list[str]) -> str | None:
     normalized_pending = {_normalize_field_key(item) for item in pending}
     has_email = "email" in normalized_pending
     has_phone = "telefono" in normalized_pending
@@ -268,118 +174,24 @@ def _resolve_contact_field(
         return "telefono"
     if has_email and not has_phone:
         return "email"
-
-    profile = advisor_state.scoring_profile
-    scoring_contract = dict(profile.scoring_contract or {}) if profile else {}
-    progressive = scoring_contract.get("progressive_profile")
-    contact_policy: Any = None
-    if isinstance(progressive, dict):
-        contact_policy = progressive.get("contact_policy")
-
-    policy_name = "channel_aware"
-    channel = _resolve_current_channel(graph_state)
-    if isinstance(contact_policy, str):
-        policy_name = contact_policy.strip().lower() or policy_name
-    elif isinstance(contact_policy, dict):
-        default_policy = str(contact_policy.get("default") or "").strip().lower()
-        by_channel = contact_policy.get("by_channel")
-        if not isinstance(by_channel, dict):
-            by_channel = contact_policy.get("channels")
-        channel_policy = ""
-        if isinstance(by_channel, dict):
-            channel_policy = str(by_channel.get(channel) or "").strip().lower()
-            if channel_policy:
-                policy_name = channel_policy
-        if not channel_policy and default_policy:
-            policy_name = default_policy
-
-    if policy_name in {"phone_first", "prefer_phone", "whatsapp_first"}:
-        return "telefono"
-    if policy_name in {"email_first", "prefer_email"}:
-        return "email"
-    if channel in {"whatsapp", "telegram"}:
-        return "telefono"
-    return "email"
+    return "contacto"
 
 
-def _resolve_realtor_progressive_order(
+def _select_field_from_plan(
     *,
-    graph_state: BaseGraphState,
-    advisor_state: LeadAdvisorState,
-) -> list[str]:
-    journey = _resolve_realtor_journey(graph_state)
-    profile = advisor_state.scoring_profile
-    scoring_contract = dict(profile.scoring_contract or {}) if profile else {}
-    progressive = scoring_contract.get("progressive_profile")
-    journey_orders: dict[str, Any] = {}
-    if isinstance(progressive, dict):
-        raw_orders = progressive.get("journey_field_orders")
-        if isinstance(raw_orders, dict):
-            journey_orders = raw_orders
-
-    sequence = journey_orders.get(journey)
-    if not isinstance(sequence, list):
-        sequence = journey_orders.get("default")
-    if not isinstance(sequence, list):
-        sequence = REALTOR_PROGRESSIVE_DEFAULTS.get(journey, REALTOR_PROGRESSIVE_DEFAULTS["default"])
-
-    resolved: list[str] = []
-    for item in sequence:
-        if not isinstance(item, str):
-            continue
-        normalized = _normalize_field_key(item)
-        if normalized:
-            resolved.append(normalized)
-    return resolved
-
-
-def _select_realtor_progressive_fallback(
-    *,
-    graph_state: BaseGraphState,
-    advisor_state: LeadAdvisorState,
     pending: list[str],
-    dialogue_act: str | None,
+    ordered_fields: list[str],
+    appointment_intent: str | None,
 ) -> str | None:
-    if str(graph_state.vertical).strip().lower() != "realtor":
-        return None
-
-    normalized_act = str(dialogue_act or "").strip().lower()
-    if normalized_act not in CAPTURE_ELIGIBLE_DIALOGUE_ACTS:
-        return None
-
     normalized_pending = {_normalize_field_key(item) for item in pending}
-    appointment_intent = _normalize_field_key(advisor_state.lead_extracted.appointment_intent)
-    ordered_fields = _resolve_realtor_progressive_order(
-        graph_state=graph_state,
-        advisor_state=advisor_state,
-    )
-
+    normalized_intent = _normalize_field_key(appointment_intent)
     for candidate in ordered_fields:
-        if candidate == "contacto":
-            resolved_contact = _resolve_contact_field(
-                graph_state=graph_state,
-                advisor_state=advisor_state,
-                pending=pending,
-            )
-            if resolved_contact and _normalize_field_key(resolved_contact) in normalized_pending:
-                return resolved_contact
+        normalized = _normalize_field_key(candidate)
+        if not normalized or normalized not in normalized_pending:
             continue
-        if candidate not in normalized_pending:
+        if normalized == "tipo_cita" and normalized_intent != "positive":
             continue
-        if candidate == "tipo_cita" and appointment_intent != "positive":
-            continue
-        return candidate
-
-    if "email" in normalized_pending and "telefono" in normalized_pending:
-        return _resolve_contact_field(
-            graph_state=graph_state,
-            advisor_state=advisor_state,
-            pending=pending,
-        )
-    for item in pending:
-        normalized = _normalize_field_key(item)
-        if normalized in normalized_pending:
-            return normalized
+        return normalized
     return None
 
 
@@ -404,6 +216,16 @@ def _select_field_to_ask(
 
     profile = advisor_state.scoring_profile
     normalized_suggested = _normalize_field_key(suggested_field)
+    policy = _policy_for_state(graph_state)
+    policy_journey = policy.resolve_journey(graph_state)
+    policy_owned_progression = policy_journey is not None
+    policy_plan = (
+        list(policy.progressive_field_plan(graph_state, advisor_state))
+        if policy_owned_progression
+        else []
+    )
+    appointment_intent = advisor_state.lead_extracted.appointment_intent
+
     if current_turn_is_exposure and int(capture_exposure_count or 0) == 2 and "nombre" in pending:
         return "nombre"
 
@@ -415,68 +237,58 @@ def _select_field_to_ask(
         return "aprobacion"
 
     if normalized_act == "schedule":
-        if str(graph_state.vertical).strip().lower() == "realtor":
-            if "appointment_intent" in pending:
-                return "appointment_intent"
-            if _normalize_field_key(advisor_state.lead_extracted.appointment_intent) == "positive" and "tipo_cita" in pending:
-                return "tipo_cita"
-            schedule_contact = _resolve_contact_field(
-                graph_state=graph_state,
-                advisor_state=advisor_state,
+        if policy_plan:
+            scheduled_field = _select_field_from_plan(
                 pending=pending,
+                ordered_fields=policy_plan,
+                appointment_intent=appointment_intent,
             )
-            if schedule_contact:
-                return schedule_contact
-        else:
-            if "email" in pending and "telefono" in pending:
-                return "contacto"
-            if "email" in pending:
-                return "email"
-            if "telefono" in pending:
-                return "telefono"
+            if scheduled_field:
+                return scheduled_field
+        generic_contact = _generic_contact_field(pending)
+        if generic_contact:
+            return generic_contact
 
     if normalized_suggested == "contacto":
-        if str(graph_state.vertical).strip().lower() == "realtor":
-            suggested_contact = _resolve_contact_field(
-                graph_state=graph_state,
-                advisor_state=advisor_state,
+        if policy_plan:
+            planned_contact = _select_field_from_plan(
                 pending=pending,
+                ordered_fields=policy_plan,
+                appointment_intent=appointment_intent,
             )
-            if suggested_contact:
-                return suggested_contact
-        else:
-            if "email" in pending and "telefono" in pending:
-                return "contacto"
-            if "email" in pending:
-                return "email"
-            if "telefono" in pending:
-                return "telefono"
+            if planned_contact in {"contacto", "email", "telefono"}:
+                return planned_contact
+        generic_contact = _generic_contact_field(pending)
+        if generic_contact:
+            return generic_contact
+
+    normalized_pending = {_normalize_field_key(item) for item in pending}
     if (
-        str(graph_state.vertical).strip().lower() == "realtor"
+        policy_plan
         and normalized_suggested in {"email", "telefono"}
-        and "email" in pending
-        and "telefono" in pending
+        and "email" in normalized_pending
+        and "telefono" in normalized_pending
     ):
-        policy_contact = _resolve_contact_field(
-            graph_state=graph_state,
-            advisor_state=advisor_state,
+        planned_contact = _select_field_from_plan(
             pending=pending,
+            ordered_fields=policy_plan,
+            appointment_intent=appointment_intent,
         )
-        if policy_contact:
-            return policy_contact
+        if planned_contact in {"email", "telefono"}:
+            return planned_contact
+
     if normalized_suggested and normalized_suggested in pending:
         return normalized_suggested
 
-    # Si el tenant ya tiene prompt de scoring activo, usa fallback determinista realtor antes de abortar.
-    if profile and str(profile.prompt_template or "").strip():
-        return _select_realtor_progressive_fallback(
-            graph_state=graph_state,
-            advisor_state=advisor_state,
+    if profile and str(profile.prompt_template or "").strip() and policy_plan:
+        planned_fallback = _select_field_from_plan(
             pending=pending,
-            dialogue_act=normalized_act,
+            ordered_fields=policy_plan,
+            appointment_intent=appointment_intent,
         )
+        if planned_fallback:
+            return planned_fallback
 
-    # Fallback legacy solo para tenants sin scoring prompt activo.
     if normalized_act not in CAPTURE_ELIGIBLE_DIALOGUE_ACTS:
         return None
     return pending[0]
@@ -530,7 +342,6 @@ def _resolve_question_to_ask(
 ) -> str | None:
     if not field_to_ask:
         return None
-    # Precedence: dynamic prompt hint -> schema wording -> synthesize fallback.
     prompt_question = str(suggested_question or "").strip()
     if prompt_question and _question_matches_field(field_to_ask, prompt_question):
         return prompt_question
@@ -544,7 +355,8 @@ async def lead_advisor(state: dict[str, Any], deps: GraphDependencies) -> dict[s
     advisor_state = build_lead_advisor_state(graph_state.tenant_config, graph_state.lead_advisor)
     advisor_state = _sync_lead_extracted_from_state(graph_state, advisor_state)
     capture_exposure_count = int(advisor_state.capture_exposure_count or 0)
-    if _turn_counts_as_case_exposure(graph_state):
+    current_turn_is_exposure = _turn_counts_as_case_exposure(graph_state)
+    if current_turn_is_exposure:
         capture_exposure_count += 1
         advisor_state = advisor_state.model_copy(update={"capture_exposure_count": capture_exposure_count})
     enriched_advisor, scoring_output, slot_hints = await enrich_lead_advisor_with_llm_scoring(
@@ -562,7 +374,7 @@ async def lead_advisor(state: dict[str, Any], deps: GraphDependencies) -> dict[s
         suggested_field=suggested_field,
         dialogue_act=dialogue_act,
         capture_exposure_count=capture_exposure_count,
-        current_turn_is_exposure=_turn_counts_as_case_exposure(graph_state),
+        current_turn_is_exposure=current_turn_is_exposure,
     )
     question_to_ask = _resolve_question_to_ask(
         advisor_state,

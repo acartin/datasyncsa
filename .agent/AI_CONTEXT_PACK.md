@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-17T18:10:47Z`
+- Generated UTC: `2026-04-19T16:59:40Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-16`
-- Git commit: `97ee52d`
+- Git branch: `HETZNER-LOCAL-2026-Abril-18`
+- Git commit: `fd94051`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-17T18:10:47Z`
+- Generated UTC: `2026-04-19T16:59:40Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-16`
-- Git commit: `97ee52d`
+- Git branch: `HETZNER-LOCAL-2026-Abril-18`
+- Git commit: `fd94051`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -44,6 +44,7 @@
 - `ai-runtime` resuelve tenant, vertical, flow y estado de sesion.
 - `realtor_flow` y `basic_flow` son selectores logicos internos.
 - `analyze_turn` e `intent_detector` son prompts semanticos por vertical; `shared` solo debe contener piezas tecnicas neutrales.
+- `VerticalPolicy` y `VerticalAdapters` son las costuras activas para desacoplar logica y dependencias por vertical.
 - `scoring-core` permanece separado y no debe absorber decisiones conversacionales.
 - `chat-web-renderer` es consumidor/canal, no autoridad de negocio.
 - Toda operacion conversacional debe mantener scope por `client_id`.
@@ -51,20 +52,20 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
-postgres
 redis
+postgres
 scoring-core
+ai-runtime
+chat-web-renderer-api
+portainer
 scoring-core-worker
-admin-console-api
-admin-console-web
+chat-web-renderer-ui
 datasyncsa-web
 etl-docs
 etl-docs-worker
 test-ui
-ai-runtime
-chat-web-renderer-api
-chat-web-renderer-ui
-portainer
+admin-console-api
+admin-console-web
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -98,7 +99,7 @@ portainer
 ```
 # Active DB Prompts
 
-- Generated UTC: `2026-04-17T18:10:48Z`
+- Generated UTC: `2026-04-19T16:59:41Z`
 - Source: `postgres.public.lead_scoring_prompts`
 - Refresh command: `bash .agent/refresh_db_prompts.sh`
 - Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.
@@ -283,10 +284,8 @@ SLOT_HINTS CONVERSACIONALES
 ### Servicios activos del compose
 
 ```text
-postgres
 redis
-etl-docs
-portainer
+postgres
 scoring-core
 scoring-core-worker
 test-ui
@@ -296,7 +295,9 @@ ai-runtime
 chat-web-renderer-api
 chat-web-renderer-ui
 etl-docs-worker
+portainer
 datasyncsa-web
+etl-docs
 ```
 ### `docker-compose.yml:1-220`
 
@@ -821,24 +822,6 @@ services/scoring-core/main.py:59:app.include_router(scoring_router, prefix=setti
 services/scoring-core/main.py:72:if __name__ == "__main__":
 services/scoring-core/main.py:73:    uvicorn.run(
 services/web/admin-console/backend/tests/sandbox/test_countries_crud_script.py:51:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_vertical_policies.py:46:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_progressive_profile.py:171:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:123:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/admin-console/backend/tests/sandbox/test_connection.py:25:if __name__ == "__main__":
 services/web/admin-console/backend/tests/contract/test_scoring_schema_contracts.py:306:if __name__ == "__main__":
 services/web/admin-console/backend/tests/smoke/test_smoke_tenant_isolation.py:89:if __name__ == "__main__":
@@ -846,11 +829,27 @@ services/web/admin-console/backend/tests/smoke/test_smoke_system_user_menu.py:16
 services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
-services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/ai_runtime/tests/unit/test_shared_policy_decoupling.py:143:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_vertical_policies.py:70:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_vertical_contract.py:47:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_progressive_profile.py:171:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:199:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -869,7 +868,11 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
 ```
 
 ## Rutas API Detectadas
@@ -937,6 +940,8 @@ services/web/admin-console/backend/app/modules/countries/router.py:87:@router.po
 services/web/admin-console/backend/app/modules/countries/router.py:91:@router.get("/countries/{country_id}", response_model=CountryRow)
 services/web/admin-console/backend/app/modules/countries/router.py:99:@router.put("/countries/{country_id}", response_model=CountryRow)
 services/web/admin-console/backend/app/modules/countries/router.py:106:@router.delete("/countries/{country_id}")
+services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
 services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
 services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
 services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
@@ -956,8 +961,6 @@ services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{a
 services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
 services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
 services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
-services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
 services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
@@ -1076,7 +1079,10 @@ No tomar como autoridad principal salvo instruccion explicita:
 7. `services/ai_runtime/runtime/service.py`
 8. `services/ai_runtime/domain/contracts.py`
 9. `services/ai_runtime/domain/state.py`
-10. `services/ai_runtime/graph/registry.py`
+10. `services/ai_runtime/domain/policies.py`
+11. `services/ai_runtime/domain/vertical_adapters.py`
+12. `services/ai_runtime/verticals.py`
+13. `services/ai_runtime/graph/registry.py`
 Lectura adicional segun el caso:
 
 - `services/data/repositories/base.py`
@@ -1101,6 +1107,8 @@ Lectura adicional segun el caso:
 - el runtime selecciona `grafo_realtor` o `grafo_basico` segun vertical/flow
 - `shared` solo contiene infraestructura y piezas tecnicas neutrales
 - `analyze_turn`, `intent_detector` y `synthesis_prompt` son responsabilidad semantica del vertical
+- `VerticalPolicy` es la costura para quick actions, snapshots de referencia, journey y lead capture progresivo
+- `GraphDependencies` solo contiene puertos shared; lo vertical-specific entra por `vertical_adapters`
 - `lead_scoring_prompts` mantiene ownership separado y no debe invadir routing, analisis semantico ni phrasing final
 - `scoring-core` corre aparte y no debe bloquear decisiones de chat
 
@@ -1131,6 +1139,8 @@ Ambas operaciones son best-effort: un fallo no aborta la respuesta al usuario.
 - no asumir heuristicas hardcodeadas para resolver intents, verticales o referencias
 - no reintroducir prompts semanticos de negocio en `graph/_shared/prompts`
 - no colgar `analyze_turn` ni `intent_detector` de prompts shared
+- no reintroducir semantica realtor en nodos shared leyendo `last_search_results`, `cards_shown`, `last_mentioned` o quick actions hardcodeadas
+- no volver a colgar repositorios verticales directo de `GraphDependencies`; usar `vertical_adapters`
 - no mezclar en un mismo nodo interpretacion semantica, compilacion de intents, scoring y phrasing final
 - si cambias naming o wiring Docker, tambien debes actualizar `.env.example` y `.agent/*`
 ```
@@ -1302,22 +1312,22 @@ Donde:
 - `base_prompt_local` sale de builders en codigo segun `node_type` y `vertical`
 - `dynamic_context` es un JSON serializado con estado/contexto del turno
 
+Guardrail de contexto:
+
+- los nodos shared no deben inyectar llaves semanticas realtor-only para interpretar turnos
+- `analyze_turn` en `_shared` ahora compone contexto neutro y deja el mapping de dominio a la `VerticalPolicy`
+- para realtor, el prompt recibe snapshots neutrales como:
+  - `search_context`
+  - `visible_reference_ids`
+  - `visible_reference_items`
+  - `reference_candidates`
+  - `focused_entity`
+
 ## Mapa de nodos y su fuente
 
 ### Locales por vertical
 
 - `analyze_turn`
-- `intent_detector`
-- `synthesis_prompt`
-
-Fuente:
-
-- `services/ai_runtime/graph/realtor/prompts/*.py`
-- `services/ai_runtime/graph/healthcare/prompts/*.py`
-- `services/ai_runtime/graph/legal/prompts/*.py`
-- `services/ai_runtime/graph/insurance/prompts/*.py`
-
-Importante:
 ```
 ### `services/ai_runtime/ARCHITECTURE.md`
 
@@ -1364,15 +1374,19 @@ El servicio es `multitenant-first`: ninguna operacion se ejecuta sin `client_id`
 - `api.py`: `/health` y `/chat`.
 - `domain/contracts.py`: entidades canonicas, request/response, intents.
 - `domain/state.py`: estado base, estado generic y estado realtor.
-- `domain/ports.py`: puertos abstractos para LLM, Redis, PG, RAG, mail y workers.
+- `domain/ports.py`: puertos shared del runtime y contenedor `GraphDependencies`.
+- `domain/policies.py`: hooks neutrales que cada vertical inyecta en `_shared`.
+- `domain/vertical_adapters.py`: bundles de dependencias especificas por vertical.
 - `config/tenant_loader.py`: carga y cache de tenant.
 - `config/prompt_composer.py`: tone + vertical + context.
 - `runtime/bootstrap.py`: wiring por defecto.
 - `runtime/service.py`: bootstrap de sesion e invocacion del grafo.
 - `runtime/turn_trace.py`: trazado por turno para nodos, routers y LLM.
+- `verticals.py`: registro explicito de `VerticalSpec`, `state_model`, `graph_builder` y `policy`.
 - `docs/graphs/**`: diagramas exportados del `grafo_basico` y `grafo_realtor`.
 - `web/turn_trace/**`: consola web minima para inspeccionar trazas del runtime.
 - `graph/_shared/**`: nodos, routers, prompts y tools comunes.
+- `graph/_shared/nodes/mail_node.py`: implementacion compartida del handoff mail.
 - `graph/generic/**`: builder y nodos del vertical reducido.
 - `graph/healthcare/**`, `graph/legal/**`, `graph/insurance/**`: prompts semanticos propietarios por vertical.
 - `graph/realtor/**`: builder, prompts y herramientas del vertical completo.
@@ -1400,11 +1414,46 @@ El estado esta modelado en `domain/state.py` y contiene:
 - lead: `lead_advisor`, `lead`, `escalacion`
 - cita: `cita`
 - salida: `final_response`
-- realtor only:
+- realtor state model:
   - `search_filters`, `inventory`, `last_search_results`, `last_mentioned`
   - `active_comparison`, `focus_scope`, `search_attempts`
   - `cards_shown`, `cards_mode`, `render_mode`, `ui_payload`
   - `financial_context`
+
+Importante:
+
+- `_shared` no debe leer directamente campos realtor-only para interpretar turnos.
+- Los nodos shared consumen hooks neutrales de `VerticalPolicy` y trabajan con snapshots como:
+  - `search_context`
+  - `visible_reference_ids`
+  - `visible_reference_items`
+  - `reference_candidates`
+  - `focused_entity`
+- El formato serializado del estado realtor no cambia: los campos realtor siguen viviendo en `RealtorGraphState`, pero su semantica ya no debe estar cableada dentro de `_shared`.
+
+## Seams por Vertical
+
+La extension multi-vertical del runtime hoy se hace por tres costuras explicitas:
+
+1. `VerticalSpec` en `verticals.py`
+   - registra `state_model`, `graph_builder`, `policy`, `turn_frame_builder`, `required_fields` y `scoring_criteria`
+2. `VerticalPolicy` en `domain/policies.py`
+   - expone hooks neutrales para:
+     - snapshots de contexto de busqueda
+     - referencias visibles y candidatos de referencia
+     - entidad enfocada
+     - quick actions
+     - journey y lead capture progresivo
+     - coerciones/turn policies del vertical
+3. `VerticalAdapters` en `domain/vertical_adapters.py`
+   - `GraphDependencies` conserva solo puertos shared
+   - los adapters verticales se resuelven por slug con `dependencies.get_adapters(vertical)`
+   - `RealtorAdapters` encapsula hoy `property_repository`
+
+Guardrail:
+
+- un vertical nuevo no debe requerir editar nodos shared para introducir semantica de dominio.
+- si un comportamiento depende del vertical, debe entrar por `VerticalPolicy`, `VerticalAdapters` o por un nodo propio del vertical.
 
 ## LangGraph Control Loops
 
@@ -1463,45 +1512,6 @@ Routers compartidos:
 ### Intent queue
 
 - `analyze_turn` interpreta el turno y devuelve `turn_analysis` con `intent_plan` inicial
-- codigo deterministico normaliza referencias y alimenta `intent_queue`
-- `route_next_intent` elige el siguiente intent ejecutable
-- cada nodo de capacidad cierra explicitamente `running -> done`
-- `check_queue` decide si quedan intents pendientes
-
-### Realtor enrich/reanalyze loop
-
-- `search`
-- si `0 resultados` y `search_attempts < 3` -> `search` otra vez
-- si `0 resultados` y `search_attempts >= 3` -> `lead_advisor`
-- si hay resultados -> `render_cards` -> `check_queue`
-- `render_mode` y `cards_mode` se deciden downstream, no en el router
-
-## Separacion de Responsabilidades
-
-### LLM
-
-- `analyze_turn`: interpreta el turno; es responsabilidad semantica del vertical
-- `route_next_intent`: solo condiciones lazy
-- `capture_memory_entities`: extrae memoria canonica del turno
-- `lead_advisor`: scoring y estrategia de captura
-- `synthesize`: respuesta final
-- `compare_properties`: solo redaccion
-- `llm_recommend`: solo redaccion
-- `text_to_sql`: traduccion controlada a SQL
-- `collect_lead_data` y `collect_appointment_data`: extraccion conversacional
-
-### Codigo deterministico
-
-- resolver referencias a IDs
-- filtrar capabilities por tenant
-- manejar la cola y dependencias
-- reglas `lead_advisor`
-- `render_cards`
-- `financial_calc`
-- `assign_agent`
-- aislamiento `client_id` en Redis y PostgreSQL
-
-## Prompt Runtime
 ```
 ### `services/ai_runtime/main.py`
 
@@ -1760,6 +1770,12 @@ import httpx
 from services.ai_runtime.config.tenant_loader import TenantLoader
 from services.ai_runtime.domain.contracts import MailDispatchResult
 from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.vertical_adapters import (
+    HealthcareAdapters,
+    InsuranceAdapters,
+    LegalAdapters,
+    RealtorAdapters,
+)
 from services.ai_runtime.graph.registry import GraphRegistry
 from services.ai_runtime.rag.agency.repository import AgencyRAGRepository
 from services.ai_runtime.rag.documents.repository import DocumentsRAGRepository
@@ -1873,7 +1889,6 @@ dependencies = GraphDependencies(
     tenant_cache=tenant_cache,
     tenant_repository=tenant_repository,
     conversation_repository=ConversationRepository(engine),
-    property_repository=PropertyRepository(engine),
     agent_repository=agent_repository,
     agency_rag_repository=AgencyRAGRepository(engine),
     documents_rag_repository=DocumentsRAGRepository(engine),
@@ -1885,6 +1900,12 @@ dependencies = GraphDependencies(
         enqueue_timeout=settings.scoring_enqueue_timeout_secs,
     ),
     trace_store=trace_store,
+    vertical_adapters={
+        "realtor": RealtorAdapters(property_repository=PropertyRepository(engine)),
+        "healthcare": HealthcareAdapters(),
+        "legal": LegalAdapters(),
+        "insurance": InsuranceAdapters(),
+    },
 )
 runtime = ConversationRuntime(
     tenant_loader=tenant_loader,
@@ -2260,6 +2281,412 @@ def _vertical_scoring_defaults(vertical: Vertical) -> tuple[list[str], list[str]
     try:
         spec = get_vertical_spec(vertical)
 ```
+### `services/ai_runtime/domain/policies.py`
+
+```
+"""Vertical policy hooks for runtime behavior that is not universally shared."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Protocol
+
+from services.ai_runtime.domain.contracts import PendingDecision, TurnAnalysis
+from services.ai_runtime.domain.state import BaseGraphState, LeadAdvisorState
+
+
+@dataclass(frozen=True, slots=True)
+class QuickActionResolution:
+    """Normalized turn override produced by a vertical-owned quick action.
+
+    The shared runtime treats this object as an already-interpreted turn:
+    - ``analysis`` is the synthetic TurnAnalysis for the action
+    - ``resolved_references`` contains any resolved entities the action points to
+    - ``pending_decision`` optionally pauses the flow for a follow-up choice
+    - ``lead_advisor`` / ``cita`` carry state patches owned by the vertical
+    """
+
+    analysis: TurnAnalysis
+    resolved_references: list[dict[str, Any]] = field(default_factory=list)
+    pending_decision: PendingDecision | None = None
+    lead_advisor: dict[str, Any] | None = None
+    cita: dict[str, Any] | None = None
+
+
+class VerticalPolicy(Protocol):
+    """Behavior hooks injected by each vertical into the shared runtime.
+
+    Hooks must stay neutral from the perspective of ``graph/_shared``:
+    - ``search context`` means whatever query/filter snapshot helps a vertical
+      interpret a follow-up turn.
+    - ``visible reference items`` are the entities the user can reasonably point
+      at in the current turn, typically because they were just surfaced.
+    - ``reference candidates`` are the broader current result set that can be
+      reused when the user refers back to recent entities.
+    - ``focused entity`` is the single entity currently in focus, if any.
+    """
+
+    def snapshot_search_context(
+        self,
+        graph_state: BaseGraphState,
+    ) -> dict[str, Any]:
+        ...
+
+    def resolve_visible_reference_items(
+        self,
+        graph_state: BaseGraphState,
+    ) -> list[dict[str, Any]]:
+        ...
+
+    def resolve_reference_candidates(
+        self,
+        graph_state: BaseGraphState,
+    ) -> list[dict[str, Any]]:
+        ...
+
+    def snapshot_focused_entity(
+        self,
+        graph_state: BaseGraphState,
+    ) -> dict[str, Any] | None:
+        ...
+
+    def handle_quick_action(
+        self,
+        graph_state: BaseGraphState,
+        metadata: dict[str, Any],
+    ) -> QuickActionResolution | None:
+        ...
+
+    async def merge_filters(
+        self,
+        graph_state: BaseGraphState,
+        analysis: TurnAnalysis,
+        deps: Any,
+    ) -> dict[str, Any] | None:
+        ...
+
+    def apply_turn_policies(
+        self,
+        graph_state: BaseGraphState,
+        analysis: TurnAnalysis,
+    ) -> tuple[TurnAnalysis, list[str]]:
+        ...
+
+    def derive_pending_decision(
+        self,
+        graph_state: BaseGraphState,
+        analysis: TurnAnalysis,
+    ) -> Any | None:
+        ...
+
+    def build_fallback_intent_plan(
+        self,
+        graph_state: BaseGraphState,
+        analysis: TurnAnalysis,
+    ) -> list[Any]:
+        ...
+
+    def internal_intents(self) -> set[str]:
+        ...
+
+    def field_has_value(self, extracted: Any, field_key: str) -> bool | None:
+        ...
+
+    def resolve_journey(
+        self,
+        graph_state: BaseGraphState,
+    ) -> str | None:
+        ...
+
+    def progressive_field_plan(
+        self,
+        graph_state: BaseGraphState,
+        lead_advisor_state: LeadAdvisorState,
+    ) -> list[str]:
+        ...
+
+    def extra_lead_sync(
+        self,
+        graph_state: BaseGraphState,
+        lead_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        ...
+
+    def select_semantic_ctas(
+        self,
+        graph_state: BaseGraphState,
+        *,
+        channel: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        ...
+
+
+class NullVerticalPolicy:
+    """No-op policy for verticals without extra runtime behavior."""
+
+    def snapshot_search_context(self, graph_state):
+        _ = graph_state
+        return {}
+
+    def resolve_visible_reference_items(self, graph_state):
+        _ = graph_state
+        return []
+
+    def resolve_reference_candidates(self, graph_state):
+        _ = graph_state
+        return []
+
+    def snapshot_focused_entity(self, graph_state):
+        _ = graph_state
+        return None
+
+    def handle_quick_action(self, graph_state, metadata):
+        _ = (graph_state, metadata)
+        return None
+
+    async def merge_filters(self, graph_state, analysis, deps):
+        return None
+
+    def apply_turn_policies(self, graph_state, analysis):
+        return analysis, []
+
+    def derive_pending_decision(self, graph_state, analysis):
+        return None
+
+    def build_fallback_intent_plan(self, graph_state, analysis):
+        return []
+
+    def internal_intents(self):
+        return set()
+
+    def field_has_value(self, extracted, field_key):
+        return None
+
+    def resolve_journey(self, graph_state):
+```
+### `services/ai_runtime/domain/vertical_adapters.py`
+
+```
+"""Vertical-specific adapter bundles attached to the shared dependency container."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol, Sequence
+
+if TYPE_CHECKING:
+    from services.ai_runtime.graph.realtor.contracts import Property
+
+
+class VerticalAdapters(Protocol):
+    """Marker protocol for vertical-owned dependency bundles."""
+
+
+class RealtorPropertyRepositoryPort(Protocol):
+    """Repository contract used by the realtor graph."""
+
+    async def load_property_types(self) -> list[str]: ...
+
+    async def run_text_to_sql_query(
+        self,
+        *,
+        client_id: str,
+        sql: str,
+        params: dict[str, object],
+    ) -> list["Property"]: ...
+
+    async def load_properties_by_ids(
+        self,
+        *,
+        client_id: str,
+        property_ids: Sequence[str],
+    ) -> list["Property"]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RealtorAdapters:
+    property_repository: RealtorPropertyRepositoryPort
+
+
+@dataclass(frozen=True, slots=True)
+class HealthcareAdapters:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class LegalAdapters:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class InsuranceAdapters:
+    pass
+```
+### `services/ai_runtime/verticals.py`
+
+```
+"""Explicit runtime vertical registry and response adapters."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+from services.ai_runtime.domain.contracts import FlowName, Vertical
+from services.ai_runtime.domain.policies import NullVerticalPolicy, VerticalPolicy
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.state import BaseGraphState, GenericGraphState
+from services.ai_runtime.domain.turn_frame import BaseTurnFrame
+from services.ai_runtime.graph.generic.graph import build_generic_graph
+from services.ai_runtime.graph._shared.turn_frame_builder import build_turn_frame
+from services.ai_runtime.graph.realtor.graph import build_realtor_graph
+from services.ai_runtime.graph.realtor.policies import RealtorPolicy
+from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
+from services.ai_runtime.graph.realtor.turn_frame import RealtorTurnFrame
+from services.ai_runtime.graph.realtor.turn_frame_builder import build_realtor_turn_frame
+
+GraphBuilder = Callable[[GraphDependencies], Any]
+ComponentBuilder = Callable[[BaseGraphState], list[dict[str, object]]]
+TurnFrameBuilder = Callable[[BaseGraphState], BaseTurnFrame]
+
+
+def _build_empty_components(_: BaseGraphState) -> list[dict[str, object]]:
+    return []
+
+
+def _build_realtor_base_components(final_state: BaseGraphState) -> list[dict[str, object]]:
+    if not isinstance(final_state, RealtorGraphState):
+        return []
+
+    components: list[dict[str, object]] = []
+    ui_payload = final_state.ui_payload or {}
+    for card in ui_payload.get("property_cards", []):
+        features = {
+            "bedrooms_clean": card.get("bedrooms_clean"),
+            "bathrooms_clean": card.get("bathrooms_clean"),
+            "sqm_clean": card.get("sqm_clean"),
+            "garage_clean": card.get("garage_clean"),
+            "lot_size_sqm": card.get("lot_size_sqm"),
+            "front": card.get("front"),
+            "land_use": card.get("land_use"),
+            "property_type": card.get("property_type"),
+            "amenities": card.get("amenities") or [],
+            "address": card.get("address"),
+            "province": card.get("province"),
+        }
+        components.append(
+            {
+                "type": "property-card",
+                "id": card.get("id"),
+                "title": card.get("title"),
+                "price": card.get("price"),
+                "currency": card.get("currency"),
+                "price_note": card.get("price_note"),
+                "location": card.get("location") or card.get("address") or card.get("province"),
+                "image_url": card.get("primary_image_url"),
+                "image_urls": card.get("image_urls") or [],
+                "photo_count": card.get("photo_count"),
+                "public_url": card.get("public_url"),
+                "tags": card.get("amenities") or [],
+                "amenities": card.get("amenities") or [],
+                "description": card.get("description"),
+                "badge_main": card.get("badge_main"),
+                "badge_sub": card.get("badge_sub"),
+                "stats": card.get("stats") or [],
+                "bedrooms_clean": card.get("bedrooms_clean"),
+                "bathrooms_clean": card.get("bathrooms_clean"),
+                "sqm_clean": card.get("sqm_clean"),
+                "garage_clean": card.get("garage_clean"),
+                "features": {
+                    key: value
+                    for key, value in features.items()
+                    if value not in (None, "", [])
+                },
+                "quick_actions": [],
+                "city": card.get("province"),
+                "neighborhood": card.get("province"),
+            }
+        )
+    return components
+
+
+def _build_realtor_components(final_state: BaseGraphState) -> list[dict[str, object]]:
+    return _build_realtor_base_components(final_state)
+
+
+@dataclass(frozen=True, slots=True)
+class VerticalSpec:
+    slug: Vertical
+    default_flow: FlowName
+    state_model: type[BaseGraphState]
+    graph_builder: GraphBuilder
+    component_builder: ComponentBuilder = _build_empty_components
+    policy: VerticalPolicy = field(default_factory=NullVerticalPolicy)
+    turn_frame_model: type[BaseTurnFrame] = BaseTurnFrame
+    turn_frame_builder: TurnFrameBuilder = build_turn_frame
+    scoring_criteria: tuple[str, ...] = ()
+    required_fields: tuple[str, ...] = ()
+
+
+_VERTICAL_SPECS: dict[str, VerticalSpec] = {
+    "realtor": VerticalSpec(
+        slug="realtor",
+        default_flow="realtor_flow",
+        state_model=RealtorGraphState,
+        graph_builder=build_realtor_graph,
+        component_builder=_build_realtor_components,
+        policy=RealtorPolicy(),
+        turn_frame_model=RealtorTurnFrame,
+        turn_frame_builder=build_realtor_turn_frame,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=(
+            "nombre",
+            "contacto",
+            "presupuesto",
+            "aprobacion",
+            "fecha_preferida",
+            "appointment_intent",
+        ),
+    ),
+    "healthcare": VerticalSpec(
+        slug="healthcare",
+        default_flow="basic_flow",
+        state_model=GenericGraphState,
+        graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "emergencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "appointment_intent"),
+    ),
+    "legal": VerticalSpec(
+        slug="legal",
+        default_flow="basic_flow",
+        state_model=GenericGraphState,
+        graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "appointment_intent"),
+    ),
+    "insurance": VerticalSpec(
+        slug="insurance",
+        default_flow="basic_flow",
+        state_model=GenericGraphState,
+        graph_builder=build_generic_graph,
+        scoring_criteria=("apertura", "intencion", "urgencia", "match", "solvencia"),
+        required_fields=("nombre", "contacto", "presupuesto", "appointment_intent"),
+    ),
+}
+
+
+def get_vertical_spec(vertical: Vertical | str) -> VerticalSpec:
+    normalized = str(vertical or "").strip().lower()
+    spec = _VERTICAL_SPECS.get(normalized)
+    if spec is None:
+        raise ValueError(f"Unsupported runtime vertical={vertical!r}")
+    return spec
+
+
+def get_supported_verticals() -> tuple[str, ...]:
+    return tuple(_VERTICAL_SPECS)
+```
 ### `services/ai_runtime/graph/registry.py`
 
 ```
@@ -2293,7 +2720,6 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from services.ai_runtime.domain.state import GenericGraphState
-from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes import (
     analyze_turn,
@@ -2307,41 +2733,18 @@ from services.ai_runtime.graph._shared.nodes import (
     route_next_intent,
     synthesize,
 )
-from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.nodes.mail_node import build_mail_node
 from services.ai_runtime.graph._shared.routers.common import (
     after_analyze_turn,
     after_capture_memory,
     after_check_queue,
     after_memory_lookup,
 )
-from services.ai_runtime.graph._shared.tools.mensajear import mensajear
 from services.ai_runtime.graph.generic.nodes.assign_agent_node import assign_agent
 from services.ai_runtime.graph.generic.nodes.collect_appointment_data_node import collect_appointment_data
 from services.ai_runtime.graph.generic.nodes.rag_agencia_node import rag_agencia
 from services.ai_runtime.graph.generic.routers.routes import after_collect_appointment_data, after_route_next_intent
 from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
-
-
-def _mail_node(deps: GraphDependencies):
-    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
-        tenant_config = TenantConfig.model_validate(state["tenant_config"])
-        graph_state = GenericGraphState.model_validate(state)
-        output = (
-            await mensajear(
-                dependencies=runtime_deps,
-                client_id=state["client_id"],
-                tipo="appointment_confirmation",
-                destinatarios=[],
-                datos_cita=state.get("cita", {}),
-                tenant_config=tenant_config,
-            )
-        ).model_dump(mode="json")
-        return {
-            "turn_outputs": [*state.get("turn_outputs", []), {"type": "mensajear", **output}],
-            **complete_active_intent(graph_state, {"type": "mensajear", **output}),
-        }
-
-    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_generic_graph(deps: GraphDependencies):
@@ -2355,7 +2758,7 @@ def build_generic_graph(deps: GraphDependencies):
     workflow.add_node("rag_agencia", build_traced_node("rag_agencia", rag_agencia, deps))
     workflow.add_node("collect_appointment_data", build_traced_node("collect_appointment_data", collect_appointment_data, deps))
     workflow.add_node("assign_agent", build_traced_node("assign_agent", assign_agent, deps))
-    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("mensajear", build_mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
     workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))
@@ -2426,9 +2829,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from services.ai_runtime.domain.contracts import TenantConfig
 from services.ai_runtime.domain.ports import GraphDependencies
-from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 from services.ai_runtime.graph._shared.nodes import (
     analyze_turn,
     ask_clarification,
@@ -2441,14 +2842,13 @@ from services.ai_runtime.graph._shared.nodes import (
     route_next_intent,
     synthesize,
 )
-from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.nodes.mail_node import build_mail_node
 from services.ai_runtime.graph._shared.routers.common import (
     after_analyze_turn,
     after_capture_memory,
     after_check_queue,
     after_memory_lookup,
 )
-from services.ai_runtime.graph._shared.tools.mensajear import mensajear
 from services.ai_runtime.graph.realtor.nodes.assign_agent_node import assign_agent
 from services.ai_runtime.graph.realtor.nodes.collect_appointment_data_node import collect_appointment_data
 from services.ai_runtime.graph.realtor.nodes.compare_properties_node import compare_properties
@@ -2469,27 +2869,6 @@ from services.ai_runtime.graph.realtor.routers.routes import (
 )
 from services.ai_runtime.graph.realtor.tools.financial_calc import financial_calc
 from services.ai_runtime.runtime.turn_trace import build_traced_node, build_traced_router
-
-
-def _mail_node(deps: GraphDependencies):
-    async def _mail_impl(state: dict, runtime_deps: GraphDependencies):
-        tenant_config = TenantConfig.model_validate(state["tenant_config"])
-        graph_state = RealtorGraphState.model_validate(state)
-        result = await mensajear(
-            dependencies=runtime_deps,
-            client_id=state["client_id"],
-            tipo="appointment_confirmation",
-            destinatarios=[],
-            datos_cita=state.get("cita", {}),
-            tenant_config=tenant_config,
-        )
-        output = {"type": "mensajear", **result.model_dump(mode="json")}
-        return {
-            "turn_outputs": [*state.get("turn_outputs", []), output],
-            **complete_active_intent(graph_state, output),
-        }
-
-    return build_traced_node("mensajear", _mail_impl, deps)
 
 
 def build_realtor_graph(deps: GraphDependencies):
@@ -2513,7 +2892,7 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_node("rag_documents", build_traced_node("rag_documents", rag_documents, deps))
     workflow.add_node("collect_lead_data", build_traced_node("collect_lead_data", collect_lead_data, deps))
     workflow.add_node("llm_recommend", build_traced_node("llm_recommend", llm_recommend, deps))
-    workflow.add_node("mensajear", _mail_node(deps))
+    workflow.add_node("mensajear", build_mail_node(deps))
     workflow.add_node("check_queue", build_traced_node("check_queue", check_queue, deps))
     workflow.add_node("lead_advisor", build_traced_node("lead_advisor", lead_advisor, deps))
     workflow.add_node("prepare_synthesis", build_traced_node("prepare_synthesis", prepare_synthesis, deps))
@@ -2600,6 +2979,49 @@ def build_realtor_graph(deps: GraphDependencies):
     workflow.add_conditional_edges(
         "check_queue",
         build_traced_router("after_check_queue", after_check_queue, deps),
+        {"route_next_intent": "route_next_intent", "lead_advisor": "lead_advisor"},
+    )
+    workflow.add_edge("lead_advisor", "prepare_synthesis")
+    workflow.add_edge("prepare_synthesis", "synthesize")
+    workflow.add_edge("synthesize", END)
+    return workflow.compile()
+```
+### `services/ai_runtime/graph/_shared/nodes/mail_node.py`
+
+```
+"""Shared mail delivery node."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from services.ai_runtime.domain.contracts import TenantConfig
+from services.ai_runtime.domain.ports import GraphDependencies
+from services.ai_runtime.domain.state import BaseGraphState
+from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph._shared.tools.mensajear import mensajear
+from services.ai_runtime.runtime.turn_trace import build_traced_node
+
+
+def build_mail_node(deps: GraphDependencies):
+    async def _mail_impl(state: dict[str, Any], runtime_deps: GraphDependencies) -> dict[str, Any]:
+        tenant_config = TenantConfig.model_validate(state["tenant_config"])
+        graph_state = BaseGraphState.model_validate(state)
+        result = await mensajear(
+            dependencies=runtime_deps,
+            client_id=state["client_id"],
+            tipo="appointment_confirmation",
+            destinatarios=[],
+            datos_cita=state.get("cita", {}),
+            tenant_config=tenant_config,
+        )
+        output = {"type": "mensajear", **result.model_dump(mode="json")}
+        return {
+            "turn_outputs": [*state.get("turn_outputs", []), output],
+            **complete_active_intent(graph_state, output),
+        }
+
+    return build_traced_node("mensajear", _mail_impl, deps)
 ```
 
 ## Canal Web

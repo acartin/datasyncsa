@@ -40,6 +40,10 @@ Si hay contradiccion:
 - los diagramas vivos del runtime se regeneran en `services/ai_runtime/docs/graphs/`
 - la consola de trazas por turno vive en `services/ai_runtime/web/turn_trace/` y el runtime expone `/api/v1/debug/turn-trace/`
 - `docs/AI_RUNTIME_PROMPT_RUNTIME.md` documenta la carga real de prompts: los prompts semanticos core viven en codigo por vertical; `lead_ai_prompts` solo aporta `tone_prompt`
+- las costuras de extension multi-vertical viven en:
+  - `services/ai_runtime/verticals.py`
+  - `services/ai_runtime/domain/policies.py`
+  - `services/ai_runtime/domain/vertical_adapters.py`
 - `services/ai_runtime/ARCHITECTURE.md` debe mantenerse como resumen operativo del runtime, no como inventario exhaustivo de prompts ni como sustituto del codigo
 - archivados por drift arquitectural en `docs/OLD/ai-runtime/`:
   - `AI_RUNTIME_FILE_MAP.md`

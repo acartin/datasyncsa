@@ -8,6 +8,7 @@ from typing import Any
 from services.ai_runtime.config.prompt_composer import compose
 from services.ai_runtime.domain.ports import GraphDependencies
 from services.ai_runtime.graph._shared.nodes.helpers import complete_active_intent
+from services.ai_runtime.graph.realtor.adapters import get_realtor_adapters
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState, SearchFilters
 from services.ai_runtime.graph.realtor.turn_frame import merge_seen_properties
 
@@ -91,6 +92,7 @@ def _build_fallback_search_sql(graph_state: RealtorGraphState, filters: SearchFi
 
 async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, Any]:
     graph_state = RealtorGraphState.model_validate(state)
+    property_repository = get_realtor_adapters(deps).property_repository
     requested_filters = graph_state.search_filters
     effective_filters = _build_effective_filters(
         requested_filters,
@@ -113,7 +115,7 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
     execution_mode = "llm_sql"
     sql_error: str | None = None
     try:
-        results = await deps.property_repository.run_text_to_sql_query(
+        results = await property_repository.run_text_to_sql_query(
             client_id=graph_state.client_id,
             sql=translation.sql,
             params=translation.params,
@@ -121,7 +123,7 @@ async def search(state: dict[str, Any], deps: GraphDependencies) -> dict[str, An
     except Exception as exc:
         logger.warning("search fallback activated after SQL execution error: %s", exc)
         fallback_sql, fallback_params = _build_fallback_search_sql(graph_state, effective_filters)
-        results = await deps.property_repository.run_text_to_sql_query(
+        results = await property_repository.run_text_to_sql_query(
             client_id=graph_state.client_id,
             sql=fallback_sql,
             params=fallback_params,

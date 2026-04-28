@@ -16,6 +16,16 @@ from services.ai_runtime.graph.realtor.nodes.comparison_helpers import score_pro
 from services.ai_runtime.graph.realtor.state.model import RealtorGraphState
 
 
+def _ensure_recommendation_framing(narrative: str) -> str:
+    text = str(narrative or "").strip()
+    if not text:
+        return "De las opciones que te mostre, me inclinaria por esta."
+    normalized = text.lower()
+    if any(token in normalized for token in ("recomend", "me inclin", "de las opciones")):
+        return text
+    return f"De las opciones que te mostre, me inclinaria por esta. {text}".strip()
+
+
 def _select_visible_properties(graph_state: RealtorGraphState) -> list[Property]:
     property_map = {
         item.id: item
@@ -92,7 +102,7 @@ async def llm_recommend(state: dict[str, Any], deps: GraphDependencies) -> dict[
             "explicit_preferences": _extract_explicit_preferences(graph_state),
         },
     )
-    narrative = await deps.llm.redact_recommendation(prompt)
+    narrative = _ensure_recommendation_framing(await deps.llm.redact_recommendation(prompt))
     output = {
         "type": "recommendation",
         "property": recommended_property.model_dump(mode="json"),

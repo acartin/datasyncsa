@@ -9,11 +9,40 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_PRIMARY_CHAT_PROMPT = (
+    "Responde con claridad, cercania y precision. "
+    "Mantene el tono profesional del tenant y guia la conversacion con naturalidad."
+)
+
 class PromptService:
     """
     Data Access Layer for AI Prompts.
     Tenant-Scoped: All operations require client_id.
     """
+
+    async def _ensure_default_primary_prompt(self, client_id: str) -> None:
+        query = text(
+            """
+            INSERT INTO lead_ai_prompts (client_id, slug, prompt_text, is_active, created_at, updated_at)
+            SELECT CAST(:cid AS uuid), 'primary_chat', :prompt_text, true, NOW(), NOW()
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM lead_ai_prompts
+                WHERE client_id = CAST(:cid AS uuid)
+                  AND slug = 'primary_chat'
+                  AND deleted_at IS NULL
+            )
+            """
+        )
+        async with engine.connect() as conn:
+            await conn.execute(
+                query,
+                {
+                    "cid": client_id,
+                    "prompt_text": _DEFAULT_PRIMARY_CHAT_PROMPT,
+                },
+            )
+            await conn.commit()
 
     async def list_prompts(self, client_id: Optional[str] = None) -> List[PromptRow]:
         # Filter by client_id if provided (Tenant View), else ALL (Admin View)
@@ -36,7 +65,7 @@ class PromptService:
         
         async with engine.connect() as conn:
             result = await conn.execute(query, params)
-            return [
+            rows = [
                 PromptRow(
                     id=row.id, 
                     client_id=row.client_id,
@@ -46,6 +75,24 @@ class PromptService:
                     updated_at=row.updated_at,
                     client_name=row.client_name
                 ) for row in result
+            ]
+        if rows or not client_id:
+            return rows
+
+        await self._ensure_default_primary_prompt(client_id)
+        async with engine.connect() as conn:
+            result = await conn.execute(query, params)
+            return [
+                PromptRow(
+                    id=row.id,
+                    client_id=row.client_id,
+                    slug=row.slug,
+                    prompt_text=row.prompt_text,
+                    is_active=row.is_active,
+                    updated_at=row.updated_at,
+                    client_name=row.client_name,
+                )
+                for row in result
             ]
 
     async def get_prompt(self, client_id: Optional[str], prompt_id: UUID) -> Optional[PromptRow]:
