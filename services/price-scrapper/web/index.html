@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catalogos CR | Abarrotes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Price Scrapper</p>
+          <h1>Catalogos de abarrotes en Costa Rica</h1>
+          <p class="hero-text">
+            Vista local consolidada de las salidas disponibles. Puedes buscar por nombre, SKU o
+            EAN, filtrar por tienda y saltar a una pantalla de comparacion para reunir todos los
+            productos que compartan el mismo codigo EAN.
+          </p>
+        </div>
+
+        <div class="hero-panel">
+          <div class="control-stack">
+            <div class="field-group">
+              <label class="search-label" for="search-input">Buscar producto</label>
+              <input
+                id="search-input"
+                class="search-input"
+                type="search"
+                placeholder="Nombre, marca, categoria, tienda, EAN o SKU"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="field-group">
+              <label class="search-label" for="catalog-select">Salida</label>
+              <select id="catalog-select" class="search-input select-input">
+                <option value="all">Todas las salidas</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="stats" id="stats">
+            <div class="stat-card">
+              <span class="stat-label">Productos</span>
+              <strong id="total-products">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Visibles</span>
+              <strong id="visible-products">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Pagina</span>
+              <strong id="page-indicator">0 / 0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Salidas</span>
+              <strong id="loaded-catalogs">0</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="toolbar">
+          <div class="toolbar-copy">
+            <h2>Productos consolidados</h2>
+            <p id="results-copy">Cargando catalogos...</p>
+          </div>
+
+          <div class="toolbar-actions">
+            <button id="prev-button" class="pager-button" type="button">Anterior</button>
+            <button id="next-button" class="pager-button" type="button">Siguiente</button>
+          </div>
+        </section>
+
+        <section id="status-banner" class="status-banner" aria-live="polite"></section>
+
+        <section id="product-grid" class="product-grid" aria-live="polite"></section>
+
+        <nav class="pagination" aria-label="Paginacion del catalogo">
+          <div id="page-buttons" class="page-buttons"></div>
+        </nav>
+      </main>
+    </div>
+
+    <template id="product-card-template">
+      <article class="product-card">
+        <a class="product-image-link" target="_blank" rel="noreferrer noopener">
+          <img class="product-image" loading="lazy" alt="" />
+        </a>
+
+        <div class="product-body">
+          <div class="product-topline">
+            <p class="product-category"></p>
+            <span class="product-store"></span>
+          </div>
+          <h3 class="product-name"></h3>
+          <p class="product-brand"></p>
+
+          <div class="product-meta">
+            <span class="product-measure"></span>
+            <span class="product-sku"></span>
+          </div>
+
+          <div class="product-prices">
+            <strong class="product-price"></strong>
+            <span class="product-list-price"></span>
+          </div>
+
+          <div class="product-footer">
+            <span class="product-ean"></span>
+            <div class="product-actions">
+              <a class="compare-link">Comparar</a>
+              <a class="product-link" target="_blank" rel="noreferrer noopener">Ver producto</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./catalog-data.js?v=20260501-megasuper"></script>
+    <script src="./app.js?v=20260501-megasuper"></script>
+  </body>
+</html>

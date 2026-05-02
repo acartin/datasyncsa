@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://datasyncsa.local/price-scrapper/schemas/canonical_product_v1.schema.json",
+  "title": "Canonical Product V1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "pricing_scope",
+    "store",
+    "identity",
+    "taxonomy",
+    "content",
+    "measurement",
+    "pricing",
+    "availability"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "canonical_product_v1"
+    },
+    "catalog_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pricing_scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "store": {
+      "type": "object",
+      "required": [
+        "store_id",
+        "display_name",
+        "short_label",
+        "base_url"
+      ],
+      "properties": {
+        "store_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "short_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "product_id",
+        "sku"
+      ],
+      "properties": {
+        "product_id": {
+          "type": "string"
+        },
+        "sku": {
+          "type": "string"
+        },
+        "ean": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "product_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reference_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "brand": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seller_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seller_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "taxonomy": {
+      "type": "object",
+      "required": [
+        "category_path",
+        "root_categories"
+      ],
+      "properties": {
+        "category_path": {
+          "type": "string"
+        },
+        "category_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root_categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "slug"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "raw_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link_text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "measurement": {
+      "type": "object",
+      "required": [
+        "quantity",
+        "unit"
+      ],
+      "properties": {
+        "quantity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "measurement_unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unit_multiplier": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "pricing": {
+      "type": "object",
+      "required": [
+        "currency",
+        "price",
+        "list_price",
+        "has_discount"
+      ],
+      "properties": {
+        "currency": {
+          "const": "CRC"
+        },
+        "price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "list_price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "price_without_discount": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "spot_price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "has_discount": {
+          "type": "boolean"
+        },
+        "price_valid_until": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "availability": {
+      "type": "object",
+      "required": [
+        "available_quantity"
+      ],
+      "properties": {
+        "available_quantity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "attributes": {
+      "type": "object",
+      "properties": {
+        "properties": {
+          "type": "array"
+        },
+        "specification_groups": {
+          "type": "array"
+        },
+        "selected_properties": {
+          "type": "array"
+        },
+        "variations": {
+          "type": "array"
+        },
+        "cluster_highlights": {
+          "type": "object"
+        },
+        "product_clusters": {
+          "type": "object"
+        },
+        "discount_highlights": {
+          "type": "array"
+        },
+        "teasers": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

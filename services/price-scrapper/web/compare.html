@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comparar por EAN | Price Scrapper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <a class="back-link" href="./index.html">Volver al catalogo</a>
+          <p class="eyebrow">Price Scrapper</p>
+          <h1>Comparar por EAN</h1>
+          <p class="hero-text">
+            Esta vista reune todas las coincidencias cargadas localmente para un mismo EAN y te
+            deja contrastar precios, nombres y presencia por tienda.
+          </p>
+        </div>
+
+        <div class="hero-panel">
+          <form id="compare-form" class="compare-form">
+            <label class="search-label" for="ean-input">EAN a comparar</label>
+            <div class="compare-form-row">
+              <input
+                id="ean-input"
+                class="search-input"
+                type="search"
+                placeholder="Ejemplo: 0751963314474"
+                autocomplete="off"
+              />
+              <button id="compare-submit" class="pager-button compare-submit" type="submit">
+                Comparar
+              </button>
+            </div>
+          </form>
+
+          <div class="stats" id="stats">
+            <div class="stat-card">
+              <span class="stat-label">Coincidencias</span>
+              <strong id="match-count">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Tiendas</span>
+              <strong id="store-count">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Salidas</span>
+              <strong id="loaded-catalogs">0</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section id="status-banner" class="status-banner" aria-live="polite"></section>
+        <section id="origin-panel" class="origin-panel"></section>
+
+        <section class="toolbar">
+          <div class="toolbar-copy">
+            <h2>Resultados</h2>
+            <p id="results-copy">Cargando comparacion...</p>
+          </div>
+        </section>
+
+        <section id="product-grid" class="product-grid" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <template id="compare-card-template">
+      <article class="product-card">
+        <a class="product-image-link" target="_blank" rel="noreferrer noopener">
+          <img class="product-image" loading="lazy" alt="" />
+        </a>
+
+        <div class="product-body">
+          <div class="product-topline">
+            <p class="product-category"></p>
+            <span class="product-store"></span>
+          </div>
+          <h3 class="product-name"></h3>
+          <p class="product-brand"></p>
+
+          <div class="product-meta">
+            <span class="product-measure"></span>
+            <span class="product-sku"></span>
+          </div>
+
+          <div class="product-prices">
+            <strong class="product-price"></strong>
+            <span class="product-list-price"></span>
+          </div>
+
+          <div class="product-footer">
+            <span class="product-ean"></span>
+            <div class="product-actions">
+              <a class="compare-link">Comparar</a>
+              <a class="product-link" target="_blank" rel="noreferrer noopener">Ver producto</a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./catalog-data.js?v=20260501-megasuper"></script>
+    <script src="./compare.js?v=20260501-megasuper"></script>
+  </body>
+</html>

@@ -1,0 +1,168 @@
+{
+  "schema_version": "store_category_config_v1",
+  "store_id": "maxi_pali_cr",
+  "display_name": "Maxi Palí Costa Rica",
+  "short_label": "Maxi Palí",
+  "catalog_id": "maxi_pali_cr_catalog",
+  "base_url": "https://www.maxipali.co.cr",
+  "default_output_dir": "output/maxi_pali_abarrotes",
+  "pricing_scope": "chain_public_online",
+  "pricing_context": {
+    "uses_selected_store": false,
+    "uses_postal_code": false,
+    "uses_access_control_list": false,
+    "description": "Consulta publica de VTEX productSearchV3 sin seleccionar tienda fisica, codigo postal ni contexto logistico local."
+  },
+  "categories": [
+    {
+      "name": "Abarrotes",
+      "slug": "abarrotes",
+      "url": "https://www.maxipali.co.cr/abarrotes",
+      "enabled": true
+    },
+    {
+      "name": "Alimentos Congelados",
+      "slug": "alimentos-congelados",
+      "url": "https://www.maxipali.co.cr/alimentos-congelados",
+      "enabled": false
+    },
+    {
+      "name": "Artículos para el hogar",
+      "slug": "articulos-para-el-hogar",
+      "url": "https://www.maxipali.co.cr/articulos-para-el-hogar",
+      "enabled": false
+    },
+    {
+      "name": "Bebes y Niños",
+      "slug": "bebes-y-ninos",
+      "url": "https://www.maxipali.co.cr/bebes-y-ninos",
+      "enabled": false
+    },
+    {
+      "name": "Carnes y Pescados",
+      "slug": "carnes-y-pescados",
+      "url": "https://www.maxipali.co.cr/carnes-y-pescados",
+      "enabled": false
+    },
+    {
+      "name": "Cervezas, Vinos y Licores",
+      "slug": "cervezas-vinos-y-licores",
+      "url": "https://www.maxipali.co.cr/cervezas-vinos-y-licores",
+      "enabled": false
+    },
+    {
+      "name": "Chorizo",
+      "slug": "chorizo",
+      "url": "https://www.maxipali.co.cr/chorizo",
+      "enabled": false
+    },
+    {
+      "name": "Curitas y Vendajes",
+      "slug": "curitas-y-vendajes",
+      "url": "https://www.maxipali.co.cr/curitas-y-vendajes",
+      "enabled": false
+    },
+    {
+      "name": "Deportes",
+      "slug": "deportes",
+      "url": "https://www.maxipali.co.cr/deportes",
+      "enabled": false
+    },
+    {
+      "name": "Electrónica",
+      "slug": "electronica",
+      "url": "https://www.maxipali.co.cr/electronica",
+      "enabled": false
+    },
+    {
+      "name": "Farmacia",
+      "slug": "farmacia",
+      "url": "https://www.maxipali.co.cr/farmacia",
+      "enabled": false
+    },
+    {
+      "name": "Frutas y Verduras",
+      "slug": "frutas-y-verduras",
+      "url": "https://www.maxipali.co.cr/frutas-y-verduras",
+      "enabled": false
+    },
+    {
+      "name": "Higiene y Belleza",
+      "slug": "higiene-y-belleza",
+      "url": "https://www.maxipali.co.cr/higiene-y-belleza",
+      "enabled": false
+    },
+    {
+      "name": "Jamón",
+      "slug": "jamon",
+      "url": "https://www.maxipali.co.cr/jamon",
+      "enabled": false
+    },
+    {
+      "name": "Jugos y Bebidas",
+      "slug": "jugos-y-bebidas",
+      "url": "https://www.maxipali.co.cr/jugos-y-bebidas",
+      "enabled": true
+    },
+    {
+      "name": "Juguetes",
+      "slug": "juguetes",
+      "url": "https://www.maxipali.co.cr/juguetes",
+      "enabled": false
+    },
+    {
+      "name": "Limpieza",
+      "slug": "limpieza",
+      "url": "https://www.maxipali.co.cr/limpieza",
+      "enabled": true
+    },
+    {
+      "name": "Lácteos",
+      "slug": "lacteos",
+      "url": "https://www.maxipali.co.cr/lacteos",
+      "enabled": true
+    },
+    {
+      "name": "Mascota",
+      "slug": "mascota",
+      "url": "https://www.maxipali.co.cr/mascota",
+      "enabled": false
+    },
+    {
+      "name": "Mortadela y salchichón",
+      "slug": "mortadela-y-salchichon",
+      "url": "https://www.maxipali.co.cr/mortadela-y-salchichon",
+      "enabled": false
+    },
+    {
+      "name": "Otros Embutidos",
+      "slug": "otros-embutidos",
+      "url": "https://www.maxipali.co.cr/otros-embutidos",
+      "enabled": false
+    },
+    {
+      "name": "Panadería y tortillería",
+      "slug": "panaderia-y-tortilleria",
+      "url": "https://www.maxipali.co.cr/panaderia-y-tortilleria",
+      "enabled": false
+    },
+    {
+      "name": "Ropa, Zapatería y Accesorios",
+      "slug": "ropa-zapateria-y-accesorios",
+      "url": "https://www.maxipali.co.cr/ropa-zapateria-y-accesorios",
+      "enabled": false
+    },
+    {
+      "name": "Salchichas",
+      "slug": "salchichas",
+      "url": "https://www.maxipali.co.cr/salchichas",
+      "enabled": false
+    },
+    {
+      "name": "Tocino",
+      "slug": "tocino",
+      "url": "https://www.maxipali.co.cr/tocino",
+      "enabled": false
+    }
+  ]
+}
