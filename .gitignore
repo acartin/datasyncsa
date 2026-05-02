@@ -25,3 +25,4 @@ log/
 __pycache__/
 *.py[cod]
 *$py.class
+services/price-scrapper/output/
