@@ -26,3 +26,4 @@ __pycache__/
 *.py[cod]
 *$py.class
 services/price-scrapper/output/
+services/price-scrapper/output/**/*.json
