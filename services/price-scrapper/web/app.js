@@ -2,8 +2,7 @@ const PAGE_SIZE = 100;
 const dataApi = window.PriceScrapperData;
 
 const state = {
-  bundles: [],
-  failures: [],
+  chains: [],
   allProducts: [],
   filtered: [],
   currentPage: 1,
@@ -27,8 +26,8 @@ const elements = {
   template: document.getElementById("product-card-template"),
 };
 
-function getSelectedBundle() {
-  return state.bundles.find((bundle) => bundle.id === state.catalogFilter) || null;
+function getSelectedChain() {
+  return state.chains.find((chain) => chain.chain_id === state.catalogFilter) || null;
 }
 
 function getTotalPages() {
@@ -50,11 +49,6 @@ function setStatus(message, type = "info") {
   elements.statusBanner.classList.toggle("is-error", type === "error");
 }
 
-function clearStatus() {
-  elements.statusBanner.textContent = "";
-  elements.statusBanner.classList.remove("is-visible", "is-error");
-}
-
 function createEmptyState(message) {
   const empty = document.createElement("div");
   empty.className = "empty-state";
@@ -62,18 +56,24 @@ function createEmptyState(message) {
   return empty;
 }
 
+function countProductsForChain(chainId) {
+  return state.allProducts.filter((product) => product.available_chains.includes(chainId)).length;
+}
+
 function populateCatalogSelect() {
   elements.catalogSelect.innerHTML = "";
 
   const allOption = document.createElement("option");
   allOption.value = "all";
-  allOption.textContent = `Todas las salidas (${state.allProducts.length.toLocaleString("es-CR")})`;
+  allOption.textContent = `Todos los productos (${state.allProducts.length.toLocaleString("es-CR")})`;
   elements.catalogSelect.appendChild(allOption);
 
-  state.bundles.forEach((bundle) => {
+  state.chains.forEach((chain) => {
     const option = document.createElement("option");
-    option.value = bundle.id;
-    option.textContent = `${bundle.label} (${bundle.products.length.toLocaleString("es-CR")})`;
+    option.value = chain.chain_id;
+    option.textContent = `${chain.label} (${countProductsForChain(chain.chain_id).toLocaleString(
+      "es-CR"
+    )})`;
     elements.catalogSelect.appendChild(option);
   });
 
@@ -85,7 +85,7 @@ function applyFilters() {
   const baseProducts =
     state.catalogFilter === "all"
       ? state.allProducts
-      : state.allProducts.filter((product) => product._catalogId === state.catalogFilter);
+      : state.allProducts.filter((product) => product.available_chains.includes(state.catalogFilter));
 
   state.filtered = !query
     ? [...baseProducts]
@@ -173,12 +173,12 @@ function renderSummary() {
   const firstVisible =
     pageItems.length && state.currentPage ? (state.currentPage - 1) * PAGE_SIZE + 1 : 0;
   const lastVisible = pageItems.length ? firstVisible + pageItems.length - 1 : 0;
-  const selectedBundle = getSelectedBundle();
-  const scopeLabel = selectedBundle ? selectedBundle.label : "todas las salidas";
+  const selectedChain = getSelectedChain();
+  const scopeLabel = selectedChain ? selectedChain.label : "todas las cadenas";
 
   elements.totalProducts.textContent = state.allProducts.length.toLocaleString("es-CR");
   elements.visibleProducts.textContent = state.filtered.length.toLocaleString("es-CR");
-  elements.loadedCatalogs.textContent = state.bundles.length.toLocaleString("es-CR");
+  elements.loadedCatalogs.textContent = state.chains.length.toLocaleString("es-CR");
   elements.pageIndicator.textContent = totalPages
     ? `${state.currentPage} / ${totalPages}`
     : "0 / 0";
@@ -187,7 +187,7 @@ function renderSummary() {
     ? `Mostrando ${firstVisible}-${lastVisible} de ${state.filtered.length.toLocaleString(
         "es-CR"
       )} productos en ${scopeLabel}.`
-    : `No hay coincidencias en ${scopeLabel} para la busqueda actual.`;
+    : `No hay coincidencias en ${scopeLabel} para la búsqueda actual.`;
 }
 
 function render() {
@@ -225,15 +225,11 @@ function bindEvents() {
 }
 
 function buildLoadedMessage() {
-  const loadedNames = state.bundles.map((bundle) => bundle.shortLabel).join(", ");
-  const parts = [`${state.bundles.length} salidas cargadas`];
+  const loadedNames = state.chains.map((chain) => chain.shortLabel).join(", ");
+  const parts = [`${state.chains.length} cadenas cargadas`];
 
   if (loadedNames) {
     parts.push(`(${loadedNames})`);
-  }
-
-  if (state.failures.length) {
-    parts.push(`| ${state.failures.length} salidas omitidas`);
   }
 
   return parts.join(" ");
@@ -241,19 +237,18 @@ function buildLoadedMessage() {
 
 async function init() {
   bindEvents();
-  setStatus("Cargando salidas locales...", "info");
+  setStatus("Cargando catálogo único desde BD...", "info");
 
   try {
-    const { bundles, failures } = await dataApi.loadCatalogBundles();
-    if (!bundles.length) {
+    const { products, chains } = await dataApi.loadProductCatalog();
+    if (!products.length) {
       throw new Error(
-        "No se pudo cargar ningun catalogo. Levanta un servidor desde services/price-scrapper y abre /web/."
+        "No se pudo cargar ningún producto desde BD. Levanta `python3 commands/serve_web.py` en services/price-scrapper y abre /web/."
       );
     }
 
-    state.bundles = bundles;
-    state.failures = failures;
-    state.allProducts = bundles.flatMap((bundle) => dataApi.prepareProductsFromBundle(bundle));
+    state.chains = chains;
+    state.allProducts = dataApi.prepareCatalogProducts(products);
     state.currentPage = state.allProducts.length ? 1 : 0;
 
     populateCatalogSelect();
@@ -262,7 +257,7 @@ async function init() {
   } catch (error) {
     elements.productGrid.innerHTML = "";
     elements.productGrid.appendChild(
-      createEmptyState("No se pudieron cargar las salidas locales.")
+      createEmptyState("No se pudieron cargar los productos desde BD.")
     );
     setStatus(error.message, "error");
     renderSummary();

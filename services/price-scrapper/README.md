@@ -1,191 +1,289 @@
-# VTEX CR Price Scrapper
+# Price Scrapper
 
-Motor local para extraer catalogos de supermercados VTEX en Costa Rica desde
-`services/price-scrapper`, con:
+Extraccion local de catalogos y precios de supermercados en Costa Rica.
 
-- configuracion por tienda en `config/stores/*.json`
-- categorias raiz con bandera `enabled`
-- esquema canónico de producto
-- metadata comun de pricing
-- web local para navegar y comparar por `EAN`
+## Nomenclatura
+
+- `chain`: cadena comercial, por ejemplo `walmart_cr`
+- `physical store`: sucursal concreta dentro de una cadena
+- `engine`: plataforma tecnica origen, por ejemplo `vtex` o `instaleap`
+
+En este servicio `chain_id` es el nombre canonico para la cadena.
 
 ## Estructura
 
-- `run_store_scraper.py`
-  runner generico por `store_id`
-- `refresh_store_categories.py`
-  refresca categorias raiz por tienda y preserva `enabled`
-- `vtex_abarrotes_scraper.py`
-  motor VTEX compartido
-- `store_catalog_config.py`
-  definiciones locales de tiendas y rutas
-- `config/stores/*.json`
-  configuracion editable por tienda
-- `schemas/canonical_product_v1.schema.json`
-  esquema canonico de salida
-- `web/`
-  interfaz estatica local
-
-## Config de categorias
-
-Cada tienda tiene un JSON en `config/stores/`. Ejemplo:
-
-```json
-{
-  "store_id": "walmart_cr",
-  "catalog_id": "walmart_cr_catalog",
-  "default_output_dir": "output/walmart_cr_abarrotes",
-  "pricing_scope": "chain_public_online",
-  "categories": [
-    {
-      "name": "Abarrotes",
-      "slug": "abarrotes",
-      "url": "https://www.walmart.co.cr/abarrotes",
-      "enabled": true
-    }
-  ]
-}
+```text
+services/price-scrapper/
+├── commands/
+│   ├── extract_chain_catalog.py
+│   ├── extract_catalog_to_stage.py
+│   ├── extract_chain_locations.py
+│   ├── transform_stage_products.py
+│   ├── load_dim_products.py
+│   ├── transform_stage_listings.py
+│   ├── load_dim_listings.py
+│   ├── transform_stage_listing_snapshots.py
+│   ├── load_fact_listing_snapshots.py
+│   ├── serve_web.py
+│   └── update_chain_root_categories.py
+├── etl/
+│   ├── chain_runtime_db.py
+│   ├── catalog_stage_loader.py
+│   ├── normalize.py
+│   └── postgres_cli.py
+├── engines/
+│   ├── vtex_catalog_engine.py
+│   └── instaleap_catalog_engine.py
+├── output/
+│   └── chains/<chain_id>/
+├── schemas/
+└── web/
 ```
 
-Para controlar que se scrapea, edita solo `enabled`.
+El runtime operativo del servicio vive en BD, principalmente en:
 
-## Refrescar categorias
+- `mkt_dim_chain`
+- `mkt_dim_category`
+- `mkt_dim_location`
 
-Actualiza las categorias raiz publicas y preserva los flags existentes:
+## Comandos
 
 ```bash
 cd /srv/datasyncsa/services/price-scrapper
-python3 refresh_store_categories.py
+python3 commands/extract_chain_catalog.py --chain-id walmart_cr
+python3 commands/extract_chain_catalog.py --chain-id walmart_cr --max-categories 2 --max-pages-per-category 1 --sleep-min 0 --sleep-max 0
+python3 commands/extract_chain_catalog.py --chain-id walmart_cr --root-category-slug abarrotes
+python3 commands/reset_catalog_stage.py
+python3 commands/extract_catalog_to_stage.py --chain-id walmart_cr
+python3 commands/extract_catalog_to_stage.py --chain-id walmart_cr --max-categories 1 --max-pages-per-category 1
+python3 commands/extract_chain_locations.py
+python3 commands/extract_chain_locations.py --chain-id walmart_cr
+python3 commands/transform_stage_products.py
+python3 commands/load_dim_products.py --truncate-first
+python3 commands/transform_stage_listings.py
+python3 commands/load_dim_listings.py --truncate-first
+python3 commands/transform_stage_listing_snapshots.py
+python3 commands/load_fact_listing_snapshots.py --truncate-first
+python3 commands/serve_web.py
+python3 commands/update_chain_root_categories.py
+python3 commands/update_chain_root_categories.py --chain-id walmart_cr
 ```
 
-Solo una tienda:
+Convención operativa:
+- `extract_*`: etapa de extracción del ETL o discovery contra APIs externas.
+- `transform_*`: futura etapa de transformación desde `stage` hacia modelos intermedios.
+- `load_*`: futura etapa de carga hacia dimensiones y facts.
+- `update_*`: mantenimiento de configuración/runtime en BD.
 
-```bash
-python3 refresh_store_categories.py --store-id walmart_cr
-```
+## Runtime de cadenas
 
-## Ejecucion
+La cadena, engine, scope y contexto operativo salen de `mkt_dim_chain`.
 
-### Runner generico
+Las categorías raíz que entran al scrape salen de `mkt_dim_category`:
 
-```bash
-cd /srv/datasyncsa/services/price-scrapper
-python3 run_store_scraper.py --store-id walmart_cr
-```
-
-Smoke test corto:
-
-```bash
-python3 run_store_scraper.py --store-id walmart_cr --max-categories 2 --max-pages-per-category 1 --sleep-min 0 --sleep-max 0
-```
-
-Limitar temporalmente a una categoria raiz por slug:
-
-```bash
-python3 run_store_scraper.py --store-id walmart_cr --root-category-slug abarrotes
-```
-
-### Wrappers por tienda
-
-```bash
-python3 walmart_cr_abarrotes_scraper.py
-python3 maxi_pali_abarrotes_scraper.py
-python3 masxmenos_cr_abarrotes_scraper.py
-```
+- `is_enabled = true`: entra al scrape por defecto
+- `is_enabled = false`: no entra al scrape por defecto
 
 ## Salidas
 
 Cada corrida escribe:
 
-- `catalog.json`
-- `metadata.json`
+- `output/chains/<chain_id>/catalog.json`
+- `output/chains/<chain_id>/metadata.json`
 
-El catalogo ahora usa `canonical_product_v1` y la metadata incluye:
+Esas salidas sirven para inspección manual, compatibilidad legacy o debug.
+No son la fuente oficial del pipeline ETL.
 
-- `pricing_scope`
-- `pricing_context`
-- `started_at`
-- `finished_at`
-- `elapsed_seconds`
-- `enabled_root_categories`
-- `category_runs`
-- `overflow_categories`
+La metadata distingue `chain_id` y `engine`. El `pricing_scope` actual puede ser:
 
-## Alcance de pricing
+- `chain_public_online`
+- `default_store_online`
 
-La salida actual representa el precio online publico por cadena:
+El segundo caso ya implica una tienda fisica implicita del engine, como
+`storeReference` en Instaleap.
 
-- `pricing_scope: chain_public_online`
-- no selecciona tienda fisica
-- no selecciona codigo postal
-- no inyecta `accesscontrollist` ni `regionId`
+## ETL
 
-Eso nos deja una base consistente para el comparador de precios entre cadenas.
+`extract_catalog_to_stage.py` hace la extracción oficial a:
 
-## Notas VTEX
+- `public.mkt_run`
+- `public.mkt_stage_catalog_item`
 
-`productSearchV3` puede reportar miles de productos en `recordsFiltered`, pero
-deja de responder de forma confiable cuando una misma consulta supera
-aproximadamente las `50` paginas. Por eso el motor:
+Las corridas quedan etiquetadas con:
 
-1. usa GraphQL paginado con `from`/`to`
-2. intenta payload `base64` en modo `auto`
-3. cae a JSON serializado si el endpoint rechaza esa codificacion
-4. divide categorias grandes por subcategorias publicas
+- `run_kind = comparative | analytic`
+- `client_id` opcional
 
-## Vista web local
+Por defecto, los comandos actuales usan `comparative`.
 
-La interfaz estatica de `web/` lee las salidas locales, soporta el esquema
-canonico y permite comparar por `EAN`.
+Si quieres arrancar un batch con stage limpio:
+
+- `reset_catalog_stage.py`
+  - vacía solo tablas `mkt_stage_*`
+  - no toca `mkt_run`
+  - no toca dimensiones
+  - no toca facts
+
+Luego el flujo de productos queda así:
+
+- `transform_stage_products.py`
+  - lee `mkt_run` / `mkt_stage_catalog_item`
+  - genera `mkt_stage_product_candidate`
+  - genera `mkt_stage_product_review`
+- `load_dim_products.py`
+  - carga `mkt_stage_product_candidate` hacia `mkt_dim_product`
+
+Luego el flujo de listings queda así:
+
+- `transform_stage_listings.py`
+  - lee `mkt_stage_catalog_item`
+  - enlaza contra `mkt_dim_product`
+  - genera `mkt_stage_listing_candidate`
+  - genera `mkt_stage_listing_review`
+- `load_dim_listings.py`
+  - carga `mkt_stage_listing_candidate` hacia `mkt_dim_listing`
+
+Luego el flujo de snapshots/fact queda así:
+
+- `transform_stage_listing_snapshots.py`
+  - lee `mkt_run` / `mkt_stage_catalog_item`
+  - enlaza contra `mkt_dim_listing`
+  - genera `mkt_stage_listing_snapshot_candidate`
+  - genera `mkt_stage_listing_snapshot_review`
+- `load_fact_listing_snapshots.py`
+  - carga `mkt_stage_listing_snapshot_candidate` hacia `mkt_fact_listing_snapshot`
+
+## ETL a stage
+
+El comando ETL nuevo es:
 
 ```bash
 cd /srv/datasyncsa/services/price-scrapper
-python3 -m http.server 8765
+python3 commands/extract_catalog_to_stage.py --chain-id walmart_cr
 ```
 
-Luego abre:
+Idempotencia operativa diaria:
 
-```text
-http://127.0.0.1:8765/web/
-```
+- `mkt_run` registra `business_date_key` en horario `America/Costa_Rica`
+- si ya existe una corrida `succeeded` para la misma combinación diaria, el comando se omite
+- combinación comparativa:
+  - `business_date_key + run_kind + chain`
+- combinación analítica:
+  - `business_date_key + run_kind + campaign + chain + location`
+- esto evita duplicar snapshots por reruns accidentales del mismo día
 
-La vista principal permite filtrar por salida y cada card tiene un boton
-`Comparar` que abre:
+Qué hace:
 
-```text
-http://127.0.0.1:8765/web/compare.html?ean=...
-```
+- corre el engine configurado para la cadena
+- conserva los sleeps y retries ya definidos en el scraper
+- toma su runtime desde `mkt_dim_chain` y `mkt_dim_category`
+- carga el resultado en:
+  - `public.mkt_run`
+  - `public.mkt_stage_catalog_item`
+- opcionalmente escribe JSON de debug si agregas `--write-debug-files`
 
-## Tiendas soportadas hoy
+Esto deja a los JSON como artifacts opcionales de inspección, no como fuente oficial del pipeline ETL.
 
-- `walmart_cr` (engine VTEX)
-- `maxi_pali_cr` (engine VTEX)
-- `masxmenos_cr` (engine VTEX)
-- `megasuper_cr` (engine Instaleap, GraphQL `nextgentheadless.instaleap.io/api/v3`,
-  clientId `MEGASUPER`, storeReference `M102`)
+En `mkt_dim_category` solo viven categorías raíz por cadena, con `is_enabled` como switch simple de extracción.
 
-## Motor Instaleap (megasuper)
+## Engines soportados hoy
 
-Megasuper no corre sobre VTEX sino sobre Instaleap. La salida sigue usando
-`canonical_product_v1` y la metadata `catalog_metadata_v1` para que el comparador
-por EAN siga funcionando con todas las cadenas.
+- `walmart_cr`: `vtex`
+- `maxi_pali_cr`: `vtex`
+- `masxmenos_cr`: `vtex`
+- `megasuper_cr`: `instaleap`
+
+## Vista web local
 
 ```bash
-python3 megasuper_cr_abarrotes_scraper.py
-# o via runner generico:
-python3 run_store_scraper.py --store-id megasuper_cr
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/serve_web.py
 ```
 
-Smoke test corto:
+Luego abre `http://127.0.0.1:8765/web/`.
+
+La web ya no consume `output/chains/*.json`; ahora lee las últimas corridas `succeeded`
+con `run_kind = comparative` y resuelve productos desde:
+
+- `mkt_fact_listing_snapshot`
+- `mkt_dim_listing`
+- `mkt_dim_product`
+
+## Corrida operativa
 
 ```bash
-python3 megasuper_cr_abarrotes_scraper.py --max-pages-per-category 1 --page-size 5 --sleep-min 0 --sleep-max 0
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/reset_catalog_stage.py
+python3 commands/extract_catalog_to_stage.py --chain-id masxmenos_cr --run-kind comparative
+python3 commands/extract_catalog_to_stage.py --chain-id maxi_pali_cr --run-kind comparative
+python3 commands/extract_catalog_to_stage.py --chain-id megasuper_cr --run-kind comparative
+python3 commands/extract_catalog_to_stage.py --chain-id walmart_cr --run-kind comparative
+python3 commands/transform_stage_products.py
+python3 commands/load_dim_products.py
+python3 commands/transform_stage_listings.py
+python3 commands/load_dim_listings.py
+python3 commands/transform_stage_listing_snapshots.py
+python3 commands/load_fact_listing_snapshots.py
 ```
 
-Notas:
+## Corrida analítica operativa
 
-- el motor pagina `getProductsByCategory` con `currentPage`/`pageSize` (default 100)
-- la respuesta ya incluye toda la subcategoria, no hay que recursar en el arbol
-- `pricing_scope` se reporta como `default_store_online` porque Instaleap exige
-  `storeReference` (la web fija `M102` para usuarios anonimos)
-- `refresh_store_categories.py` ignora tiendas con engine distinto a VTEX
+Esta corrida usa los engines analíticos por plataforma:
+
+- `vtex_analytic_engine.py`
+  - aplica a `walmart_cr`, `maxi_pali_cr`, `masxmenos_cr`
+  - consulta producto puntual por tienda usando el contexto VTEX de la location
+- `instaleap_analytic_engine.py`
+  - aplica a `megasuper_cr`
+  - consulta producto puntual por tienda usando `storeReference` / `storeId`
+
+La campaña define:
+
+- qué productos monitorear: `mkt_campaign_product`
+- qué tiendas monitorear: `mkt_campaign_location`
+- fecha de negocio diaria:
+  - `--business-date YYYY-MM-DD`
+  - si se omite, usa hoy en `America/Costa_Rica`
+
+### Corrida analítica completa
+
+Corre toda la campaña, aunque ya existan runs analíticos exitosos previos para esas tiendas.
+
+```bash
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1
+```
+
+### Corrida analítica solo pendientes
+
+Corre solo las `locations` de la campaña que todavía no tengan un run analítico `succeeded`
+para esa misma campaña.
+
+```bash
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --only-pending
+```
+
+Aunque no uses `--only-pending`, si una `location` de esa campaña ya tiene una corrida analítica
+`succeeded` para la misma fecha de negocio, el comando la omite y no duplica facts.
+
+### Corrida analítica parcial por cadena
+
+Sirve para lanzar o relanzar solo una cadena de la campaña.
+
+```bash
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --chain-id walmart_cr
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --chain-id maxi_pali_cr
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --chain-id masxmenos_cr
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --chain-id megasuper_cr
+```
+
+### Corrida analítica parcial por cadena solo pendientes
+
+Útil para retomar una cadena incompleta sin repetir tiendas ya exitosas.
+
+```bash
+cd /srv/datasyncsa/services/price-scrapper
+python3 commands/run_campaign_analytic_batch.py --campaign-id 1 --chain-id megasuper_cr --only-pending
+```

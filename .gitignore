@@ -1,6 +1,8 @@
 # Secrets
 .env
 .env.*
+.env_old
+.env.example_old
 !.env.example
 
 # Data Volumes (Local & R2 Mounts)

@@ -1,13 +1,13 @@
 const dataApi = window.PriceScrapperData;
 
 const state = {
-  bundles: [],
-  failures: [],
-  allProducts: [],
+  chains: [],
+  catalogProducts: [],
   matches: [],
+  selectedProduct: null,
+  targetProductKey: null,
   targetEan: "",
-  originSource: "",
-  originSku: "",
+  searchQuery: "",
 };
 
 const elements = {
@@ -25,10 +25,13 @@ const elements = {
 
 function readQuery() {
   const params = new URLSearchParams(window.location.search);
+  const productKeyText = String(params.get("product_key") || "").trim();
+  const parsedProductKey = Number.parseInt(productKeyText, 10);
+
   return {
+    productKey: Number.isFinite(parsedProductKey) ? parsedProductKey : null,
     ean: String(params.get("ean") || "").trim(),
-    source: String(params.get("source") || "").trim(),
-    sku: String(params.get("sku") || "").trim(),
+    q: String(params.get("q") || "").trim(),
   };
 }
 
@@ -45,65 +48,55 @@ function createEmptyState(message) {
   return empty;
 }
 
-function findOriginProduct() {
-  if (!state.targetEan) {
-    return null;
-  }
-
-  return (
-    state.allProducts.find(
-      (product) =>
-        product.ean === state.targetEan &&
-        product._catalogId === state.originSource &&
-        String(product.sku || "") === String(state.originSku || "")
-    ) || null
-  );
-}
-
-function isOriginProduct(product) {
-  return (
-    Boolean(state.targetEan) &&
-    product.ean === state.targetEan &&
-    product._catalogId === state.originSource &&
-    String(product.sku || "") === String(state.originSku || "")
-  );
+function isExactComparisonMode() {
+  return Boolean(state.selectedProduct && state.targetProductKey);
 }
 
 function renderOrigin() {
-  const origin = findOriginProduct();
   elements.originPanel.innerHTML = "";
 
-  if (!origin) {
+  if (!state.selectedProduct) {
     elements.originPanel.classList.remove("is-visible");
     return;
   }
 
+  const product = state.selectedProduct;
   const card = document.createElement("article");
   card.className = "origin-card";
 
   const title = document.createElement("h2");
   title.className = "origin-title";
-  title.textContent = "Producto origen";
+  title.textContent = "Producto canónico";
 
   const name = document.createElement("p");
   name.className = "origin-name";
-  name.textContent = origin.name || "Sin nombre";
+  name.textContent = product.name || "Sin nombre";
 
   const meta = document.createElement("div");
   meta.className = "origin-meta";
   meta.innerHTML = `
-    <span class="origin-chip">${origin._catalogLabel}</span>
-    <span class="origin-chip">SKU ${origin.sku || "-"}</span>
-    <span class="origin-chip">EAN ${origin.ean || "-"}</span>
-    <span class="origin-chip">${dataApi.formatCurrency(origin.price)}</span>
+    <span class="origin-chip">${product.brand || "Marca no disponible"}</span>
+    <span class="origin-chip">EAN ${product.ean || "-"}</span>
+    <span class="origin-chip">${product.available_chain_count || 0} cadenas</span>
+    <span class="origin-chip">${product.quantity && product.unit ? `${product.quantity} ${product.unit}` : "Medida no disponible"}</span>
   `;
 
   const link = document.createElement("a");
   link.className = "product-link";
-  link.href = origin.link || "#";
+  link.href = product.link || "#";
   link.target = "_blank";
   link.rel = "noreferrer noopener";
-  link.textContent = "Ver producto origen";
+  link.textContent = "Ver producto de referencia";
+  if (!product.link) {
+    link.setAttribute("aria-disabled", "true");
+    link.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+      },
+      { once: true }
+    );
+  }
 
   card.appendChild(title);
   card.appendChild(name);
@@ -117,16 +110,20 @@ function renderOrigin() {
 function renderMatches() {
   elements.productGrid.innerHTML = "";
 
-  if (!state.targetEan) {
+  if (!state.targetProductKey && !state.searchQuery) {
     elements.productGrid.appendChild(
-      createEmptyState("Escribe un EAN o entra desde un producto del catalogo principal.")
+      createEmptyState("Escribe un nombre, marca, SKU o EAN para buscar y comparar.")
     );
     return;
   }
 
   if (!state.matches.length) {
     elements.productGrid.appendChild(
-      createEmptyState("No encontramos coincidencias para ese EAN en las salidas cargadas.")
+      createEmptyState(
+        isExactComparisonMode()
+          ? "No encontramos snapshots comparativos vigentes para ese producto."
+          : "No encontramos coincidencias para esa búsqueda en el catálogo único."
+      )
     );
     return;
   }
@@ -135,8 +132,9 @@ function renderMatches() {
   state.matches.forEach((product) => {
     const card = elements.template.content.firstElementChild.cloneNode(true);
     dataApi.fillProductCard(card, product, {
-      showCompare: false,
-      highlightOrigin: isOriginProduct(product),
+      showCompare: !isExactComparisonMode(),
+      compareText: "Comparar",
+      highlightOrigin: false,
     });
     fragment.appendChild(card);
   });
@@ -145,60 +143,89 @@ function renderMatches() {
 }
 
 function renderSummary() {
-  const uniqueStores = new Set(state.matches.map((product) => product._catalogId));
+  const uniqueStores = new Set(
+    state.matches.map((product) => product.chain || product._catalogId).filter(Boolean)
+  );
 
   elements.matchCount.textContent = state.matches.length.toLocaleString("es-CR");
   elements.storeCount.textContent = uniqueStores.size.toLocaleString("es-CR");
-  elements.loadedCatalogs.textContent = state.bundles.length.toLocaleString("es-CR");
+  elements.loadedCatalogs.textContent = state.chains.length.toLocaleString("es-CR");
 
-  if (!state.targetEan) {
-    elements.resultsCopy.textContent = "Esperando un EAN para comparar.";
+  if (!state.targetProductKey && !state.searchQuery) {
+    elements.resultsCopy.textContent = "Esperando un criterio de búsqueda para comparar.";
     return;
   }
 
   if (!state.matches.length) {
-    elements.resultsCopy.textContent = `No hay coincidencias cargadas para el EAN ${state.targetEan}.`;
+    elements.resultsCopy.textContent = isExactComparisonMode()
+      ? `No hay snapshots comparativos cargados para ${state.selectedProduct?.name || "este producto"}.`
+      : `No hay coincidencias cargadas para la búsqueda "${state.searchQuery}".`;
+    return;
+  }
+
+  if (isExactComparisonMode()) {
+    elements.resultsCopy.textContent = `Se encontraron ${state.matches.length.toLocaleString(
+      "es-CR"
+    )} snapshots actuales para ${state.selectedProduct?.name || "el producto"} en ${uniqueStores.size.toLocaleString(
+      "es-CR"
+    )} cadenas.`;
     return;
   }
 
   elements.resultsCopy.textContent = `Se encontraron ${state.matches.length.toLocaleString(
     "es-CR"
-  )} coincidencias para el EAN ${state.targetEan} en ${uniqueStores.size.toLocaleString(
-    "es-CR"
-  )} tiendas.`;
+  )} productos para "${state.searchQuery}" en el catálogo único.`;
 }
 
-function sortMatches(products) {
+function sortSearchMatches(products) {
   return [...products].sort((left, right) => {
-    const leftOrigin = isOriginProduct(left) ? 1 : 0;
-    const rightOrigin = isOriginProduct(right) ? 1 : 0;
-
-    if (leftOrigin !== rightOrigin) {
-      return rightOrigin - leftOrigin;
-    }
-
     return (
-      left._catalogLabel.localeCompare(right._catalogLabel, "es") ||
+      Number(right.available_chain_count || 0) - Number(left.available_chain_count || 0) ||
       left.name.localeCompare(right.name, "es") ||
-      Number(left.price || 0) - Number(right.price || 0)
+      left.brand.localeCompare(right.brand, "es")
     );
   });
 }
 
-function updateComparison() {
-  if (!state.targetEan) {
-    state.matches = [];
-    renderOrigin();
+function sortComparisonMatches(products) {
+  return [...products].sort((left, right) => {
+    return (
+      Number(left.price ?? Number.MAX_SAFE_INTEGER) - Number(right.price ?? Number.MAX_SAFE_INTEGER) ||
+      String(left._catalogLabel || "").localeCompare(String(right._catalogLabel || ""), "es")
+    );
+  });
+}
+
+async function updateComparison() {
+  renderOrigin();
+
+  if (isExactComparisonMode()) {
+    const payload = await dataApi.loadProductComparison({
+      productKey: state.targetProductKey,
+      ean: state.targetEan,
+    });
+    state.matches = sortComparisonMatches(
+      dataApi.prepareCatalogProducts(payload.matches).map((product) => ({
+        ...product,
+        _catalogSource: "/api/product-comparison",
+      }))
+    );
     renderSummary();
     renderMatches();
     return;
   }
 
-  state.matches = sortMatches(
-    state.allProducts.filter((product) => String(product.ean || "").trim() === state.targetEan)
-  );
+  if (!state.searchQuery) {
+    state.matches = [];
+    renderSummary();
+    renderMatches();
+    return;
+  }
 
-  renderOrigin();
+  const query = dataApi.normalizeText(state.searchQuery);
+  state.matches = sortSearchMatches(
+    state.catalogProducts.filter((product) => product._searchIndex.includes(query))
+  );
   renderSummary();
   renderMatches();
 }
@@ -206,21 +233,33 @@ function updateComparison() {
 function bindEvents() {
   elements.compareForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const nextEan = String(elements.eanInput.value || "").trim();
-    window.location.href = dataApi.buildCompareUrl({ ean: nextEan });
+    const nextQuery = String(elements.eanInput.value || "").trim();
+    if (!nextQuery) {
+      window.location.href = dataApi.buildCompareUrl({});
+      return;
+    }
+
+    const exactProductMatch = state.catalogProducts.find(
+      (product) =>
+        String(product.ean || "").trim() === nextQuery ||
+        String(product.product_key || "").trim() === nextQuery
+    );
+
+    window.location.href = exactProductMatch
+      ? dataApi.buildCompareUrl({
+          productKey: exactProductMatch.product_key,
+          ean: exactProductMatch.ean,
+        })
+      : dataApi.buildCompareUrl({ q: nextQuery });
   });
 }
 
 function buildLoadedMessage() {
-  const loadedNames = state.bundles.map((bundle) => bundle.shortLabel).join(", ");
-  const parts = [`${state.bundles.length} salidas cargadas`];
+  const loadedNames = state.chains.map((chain) => chain.shortLabel).join(", ");
+  const parts = [`${state.chains.length} cadenas cargadas`];
 
   if (loadedNames) {
     parts.push(`(${loadedNames})`);
-  }
-
-  if (state.failures.length) {
-    parts.push(`| ${state.failures.length} salidas omitidas`);
   }
 
   return parts.join(" ");
@@ -228,32 +267,44 @@ function buildLoadedMessage() {
 
 async function init() {
   const query = readQuery();
+  state.targetProductKey = query.productKey;
   state.targetEan = query.ean;
-  state.originSource = query.source;
-  state.originSku = query.sku;
-  elements.eanInput.value = state.targetEan;
+  state.searchQuery = query.q || query.ean;
+  elements.eanInput.value = query.q || query.ean || (query.productKey ? String(query.productKey) : "");
 
   bindEvents();
-  setStatus("Cargando salidas locales para comparar...", "info");
+  setStatus("Cargando catálogo único desde BD para comparar...", "info");
 
   try {
-    const { bundles, failures } = await dataApi.loadCatalogBundles();
-    if (!bundles.length) {
+    const { products, chains } = await dataApi.loadProductCatalog();
+    if (!products.length) {
       throw new Error(
-        "No se pudo cargar ningun catalogo para comparar. Levanta un servidor desde services/price-scrapper y abre /web/."
+        "No se pudo cargar ningún producto para comparar desde BD. Levanta `python3 commands/serve_web.py` en services/price-scrapper y abre /web/."
       );
     }
 
-    state.bundles = bundles;
-    state.failures = failures;
-    state.allProducts = bundles.flatMap((bundle) => dataApi.prepareProductsFromBundle(bundle));
+    state.chains = chains;
+    state.catalogProducts = dataApi.prepareCatalogProducts(products);
 
-    updateComparison();
+    if (state.targetProductKey) {
+      state.selectedProduct =
+        state.catalogProducts.find((product) => product.product_key === state.targetProductKey) ||
+        null;
+    } else if (state.targetEan && !query.q) {
+      state.selectedProduct =
+        state.catalogProducts.find((product) => String(product.ean || "").trim() === state.targetEan) ||
+        null;
+      if (state.selectedProduct) {
+        state.targetProductKey = state.selectedProduct.product_key;
+      }
+    }
+
+    await updateComparison();
     setStatus(buildLoadedMessage(), "info");
   } catch (error) {
     elements.productGrid.innerHTML = "";
     elements.productGrid.appendChild(
-      createEmptyState("No se pudieron cargar las salidas para comparar.")
+      createEmptyState("No se pudieron cargar los datos para comparar desde BD.")
     );
     elements.originPanel.innerHTML = "";
     renderSummary();

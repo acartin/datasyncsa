@@ -1,142 +1,70 @@
 (function () {
-  const OUTPUTS = [
-    {
-      id: "walmart_cr_catalog",
-      label: "Walmart Costa Rica",
-      shortLabel: "Walmart",
-      store: "walmart_cr",
-      catalogSources: [
-        "../output/walmart_cr_abarrotes/catalog.json",
-        "/output/walmart_cr_abarrotes/catalog.json",
-      ],
-      metadataSources: [
-        "../output/walmart_cr_abarrotes/metadata.json",
-        "/output/walmart_cr_abarrotes/metadata.json",
-      ],
-    },
-    {
-      id: "maxi_pali_cr_catalog",
-      label: "Maxi Palí Costa Rica",
-      shortLabel: "Maxi Palí",
-      store: "maxi_pali_cr",
-      catalogSources: [
-        "../output/maxi_pali_abarrotes/catalog.json",
-        "/output/maxi_pali_abarrotes/catalog.json",
-      ],
-      metadataSources: [
-        "../output/maxi_pali_abarrotes/metadata.json",
-        "/output/maxi_pali_abarrotes/metadata.json",
-      ],
-    },
-    {
-      id: "masxmenos_cr_catalog",
-      label: "Más x Menos Costa Rica",
-      shortLabel: "Más x Menos",
-      store: "masxmenos_cr",
-      catalogSources: [
-        "../output/masxmenos_cr_abarrotes/catalog.json",
-        "/output/masxmenos_cr_abarrotes/catalog.json",
-      ],
-      metadataSources: [
-        "../output/masxmenos_cr_abarrotes/metadata.json",
-        "/output/masxmenos_cr_abarrotes/metadata.json",
-      ],
-    },
-    {
-      id: "megasuper_cr_catalog",
-      label: "Megasuper Costa Rica",
-      shortLabel: "Megasuper",
-      store: "megasuper_cr",
-      catalogSources: [
-        "../output/megasuper_cr_abarrotes/catalog.json",
-        "/output/megasuper_cr_abarrotes/catalog.json",
-      ],
-      metadataSources: [
-        "../output/megasuper_cr_abarrotes/metadata.json",
-        "/output/megasuper_cr_abarrotes/metadata.json",
-      ],
-    },
-  ];
-
-  async function loadJsonFromSources(sources, options = {}) {
-    const { required = true } = options;
-    let lastError = null;
-
-    for (const source of sources) {
+  async function fetchJson(url, failurePrefix) {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
       try {
-        const response = await fetch(source, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (payload?.error) {
+          detail = payload.error;
         }
-
-        return {
-          data: await response.json(),
-          source,
-        };
-      } catch (error) {
-        lastError = error;
+      } catch (_error) {
+        // ignore parse errors and keep HTTP detail
       }
+      throw new Error(`${failurePrefix}. Detalle: ${detail}`);
     }
 
-    if (!required) {
-      return {
-        data: null,
-        source: null,
-        error: lastError,
-      };
-    }
-
-    throw new Error(
-      `No se pudo cargar ninguna fuente. Detalle: ${lastError?.message || "sin detalle"}`
-    );
+    return response.json();
   }
 
   async function loadCatalogBundles() {
-    const results = await Promise.allSettled(
-      OUTPUTS.map(async (output) => {
-        const catalog = await loadJsonFromSources(output.catalogSources);
-        if (!Array.isArray(catalog.data)) {
-          throw new Error(`La salida ${output.label} no devolvio un arreglo JSON.`);
-        }
-
-        const metadataResult = await loadJsonFromSources(output.metadataSources, {
-          required: false,
-        });
-
-        const metadata =
-          metadataResult.data && typeof metadataResult.data === "object"
-            ? metadataResult.data
-            : null;
-
-        return {
-          ...output,
-          id: metadata?.catalog_id || output.id,
-          label: metadata?.display_name || output.label,
-          shortLabel: metadata?.short_label || output.shortLabel,
-          source: catalog.source,
-          products: catalog.data,
-          metadata,
-        };
-      })
+    const payload = await fetchJson(
+      "/api/catalog-bundles",
+      "No se pudo cargar el comparador desde BD"
     );
+    if (!payload || !Array.isArray(payload.bundles)) {
+      throw new Error("La API de catálogos no devolvió un payload válido.");
+    }
 
-    const bundles = [];
-    const failures = [];
+    return {
+      bundles: payload.bundles,
+      failures: Array.isArray(payload.failures) ? payload.failures : [],
+    };
+  }
 
-    results.forEach((result, index) => {
-      const output = OUTPUTS[index];
-      if (result.status === "fulfilled") {
-        bundles.push(result.value);
-        return;
-      }
+  async function loadProductCatalog() {
+    const payload = await fetchJson(
+      "/api/product-catalog",
+      "No se pudo cargar el catálogo único desde BD"
+    );
+    if (!payload || !Array.isArray(payload.products)) {
+      throw new Error("La API de productos no devolvió un payload válido.");
+    }
 
-      failures.push({
-        ...output,
-        error: result.reason,
-      });
-    });
+    return {
+      products: payload.products,
+      chains: Array.isArray(payload.chains) ? payload.chains : [],
+    };
+  }
 
-    return { bundles, failures };
+  async function loadProductComparison(params = {}) {
+    const query = new URLSearchParams();
+    if (params.productKey) {
+      query.set("product_key", String(params.productKey).trim());
+    }
+    if (params.ean) {
+      query.set("ean", String(params.ean).trim());
+    }
+
+    const suffix = query.toString();
+    const payload = await fetchJson(
+      `/api/product-comparison${suffix ? `?${suffix}` : ""}`,
+      "No se pudo cargar la comparación desde BD"
+    );
+    if (!payload || !payload.product || !Array.isArray(payload.matches)) {
+      throw new Error("La API de comparación no devolvió un payload válido.");
+    }
+    return payload;
   }
 
   function normalizeText(value) {
@@ -171,46 +99,55 @@
     );
   }
 
-  function normalizeCanonicalProduct(product) {
+  function normalizeProductRecord(product) {
     return {
       ...product,
-      store: product.store?.store_id || "",
-      product_id: product.identity?.product_id || "",
-      sku: product.identity?.sku || "",
-      name: product.content?.name || "",
-      brand: product.identity?.brand || "",
-      ean: product.identity?.ean || null,
-      price: product.pricing?.price ?? null,
-      list_price: product.pricing?.list_price ?? null,
-      has_discount: Boolean(product.pricing?.has_discount),
-      unit: product.measurement?.unit || null,
-      quantity: product.measurement?.quantity ?? null,
-      category: product.taxonomy?.category_path || "",
-      link: product.content?.link || null,
-      image: product.content?.image || null,
+      product_key: product.product_key ? Number(product.product_key) : null,
+      chain: product.chain || "",
+      product_id: product.product_id || "",
+      sku: product.sku || "",
+      name: product.name || "",
+      brand: product.brand || "",
+      ean: product.ean || null,
+      price: product.price ?? null,
+      list_price: product.list_price ?? null,
+      has_discount: Boolean(product.has_discount),
+      unit: product.unit || null,
+      quantity: product.quantity ?? null,
+      category: product.category || "",
+      link: product.link || null,
+      image: product.image || null,
       pricing_scope: product.pricing_scope || null,
-      _canonical: product,
+      available_chain_count: Number(product.available_chain_count || 0),
+      available_chains: Array.isArray(product.available_chains) ? product.available_chains : [],
     };
   }
 
-  function normalizeProductRecord(product) {
-    if (product && product.schema_version === "canonical_product_v1") {
-      return normalizeCanonicalProduct(product);
-    }
-
-    return { ...product };
+  function prepareCatalogProducts(products) {
+    return (products || []).map((product) => {
+      const normalized = normalizeProductRecord(product);
+      const prepared = {
+        ...normalized,
+        _catalogId: normalized._catalogId || "all",
+        _catalogLabel: normalized._catalogLabel || "Catálogo único",
+        _catalogShortLabel: normalized._catalogShortLabel || "Catálogo único",
+        _catalogSource: normalized._catalogSource || "/api/product-catalog",
+      };
+      prepared._searchIndex = buildSearchIndex(prepared);
+      return prepared;
+    });
   }
 
   function prepareProductsFromBundle(bundle) {
-    return bundle.products.map((product) => {
+    return (bundle.products || []).map((product) => {
       const normalized = normalizeProductRecord(product);
       const prepared = {
         ...normalized,
         _catalogId: bundle.id,
         _catalogLabel: bundle.label,
         _catalogShortLabel: bundle.shortLabel,
-        _catalogSource: bundle.source,
-        _generatedAt: bundle.metadata?.generated_at || null,
+        _catalogSource: bundle.source || "/api/catalog-bundles",
+        _generatedAt: bundle.metadata?.generated_at || bundle.metadata?.finished_at || null,
       };
       prepared._searchIndex = buildSearchIndex(prepared);
       return prepared;
@@ -220,8 +157,14 @@
   function buildCompareUrl(params = {}) {
     const query = new URLSearchParams();
 
+    if (params.productKey) {
+      query.set("product_key", String(params.productKey).trim());
+    }
     if (params.ean) {
       query.set("ean", String(params.ean).trim());
+    }
+    if (params.q) {
+      query.set("q", String(params.q).trim());
     }
     if (params.source) {
       query.set("source", String(params.source));
@@ -235,11 +178,12 @@
   }
 
   function buildCompareHref(product) {
-    if (!product.ean) {
+    if (!product.product_key && !product.ean) {
       return "#";
     }
 
     return buildCompareUrl({
+      productKey: product.product_key,
       ean: product.ean,
       source: product._catalogId,
       sku: product.sku,
@@ -297,7 +241,7 @@
     const imageLink = card.querySelector(".product-image-link");
     const image = card.querySelector(".product-image");
     const category = card.querySelector(".product-category");
-    const store = card.querySelector(".product-store");
+    const chain = card.querySelector(".product-store");
     const name = card.querySelector(".product-name");
     const brand = card.querySelector(".product-brand");
     const measure = card.querySelector(".product-measure");
@@ -333,7 +277,7 @@
     }
 
     category.textContent = product.category || "Sin categoria";
-    store.textContent = product._catalogShortLabel || product._catalogLabel || product.store || "-";
+    chain.textContent = product._catalogShortLabel || product._catalogLabel || product.chain || "-";
     name.textContent = product.name || "Sin nombre";
     brand.textContent = product.brand || "Marca no disponible";
     measure.textContent =
@@ -355,13 +299,15 @@
   }
 
   window.PriceScrapperData = {
-    OUTPUTS,
     buildCompareHref,
     buildCompareUrl,
     fillProductCard,
     formatCurrency,
     loadCatalogBundles,
+    loadProductCatalog,
+    loadProductComparison,
     normalizeText,
+    prepareCatalogProducts,
     prepareProductsFromBundle,
   };
 })();

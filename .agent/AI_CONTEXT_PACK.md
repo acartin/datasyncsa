@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-04-19T16:59:40Z`
+- Generated UTC: `2026-05-02T20:10:33Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-18`
-- Git commit: `fd94051`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-02`
+- Git commit: `5de3fce`
 - Policy: high-signal only; enfocado en stack actual.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-04-19T16:59:40Z`
+- Generated UTC: `2026-05-02T20:10:33Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Abril-18`
-- Git commit: `fd94051`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-02`
+- Git commit: `5de3fce`
 
 ## 1. MAPA DE INTENCIONES (STACK ACTUAL)
 
@@ -52,20 +52,20 @@
 ## 4. SERVICIOS DOCKER ACTIVOS
 
 ```text
-redis
 postgres
+redis
 scoring-core
-ai-runtime
-chat-web-renderer-api
-portainer
 scoring-core-worker
-chat-web-renderer-ui
-datasyncsa-web
-etl-docs
-etl-docs-worker
-test-ui
 admin-console-api
 admin-console-web
+ai-runtime
+chat-web-renderer-api
+chat-web-renderer-ui
+etl-docs-worker
+test-ui
+datasyncsa-web
+etl-docs
+portainer
 ```
 
 ## 5. ENTRY POINTS PRINCIPALES
@@ -99,7 +99,7 @@ admin-console-web
 ```
 # Active DB Prompts
 
-- Generated UTC: `2026-04-19T16:59:41Z`
+- Generated UTC: `2026-05-02T20:10:34Z`
 - Source: `postgres.public.lead_scoring_prompts`
 - Refresh command: `bash .agent/refresh_db_prompts.sh`
 - Cache policy: usar este snapshot en bootstrap y refrescarlo una vez por sesion cuando la tarea toque realtor, scoring, lead capture o phrasing conversacional.
@@ -284,20 +284,20 @@ SLOT_HINTS CONVERSACIONALES
 ### Servicios activos del compose
 
 ```text
-redis
 postgres
+redis
 scoring-core
-scoring-core-worker
+ai-runtime
+chat-web-renderer-api
+portainer
 test-ui
 admin-console-api
 admin-console-web
-ai-runtime
-chat-web-renderer-api
 chat-web-renderer-ui
-etl-docs-worker
-portainer
 datasyncsa-web
 etl-docs
+etl-docs-worker
+scoring-core-worker
 ```
 ### `docker-compose.yml:1-220`
 
@@ -830,26 +830,13 @@ services/web/admin-console/backend/scripts/check_hash_config.py:27:if __name__ =
 services/web/admin-console/backend/scripts/restore_pass.py:20:if __name__ == "__main__":
 services/web/admin-console/backend/scripts/verify_password_change.py:73:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_shared_policy_decoupling.py:143:if __name__ == "__main__":
+services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_vertical_policies.py:70:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_state_migrations.py:31:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_prompt_composer.py:52:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_vertical_contract.py:47:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_capture_memory_entities_node.py:54:if __name__ == "__main__":
 services/ai_runtime/tests/unit/test_realtor_quick_actions.py:145:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_progressive_profile.py:171:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_pending_decisions.py:199:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
-services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
-services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
-services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
-services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
-services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
-services/web/admin-console/backend/app/dal/inspect_schema.py:31:if __name__ == "__main__":
 services/web/admin-console/backend/app/main.py:27:app = FastAPI(title="Web IAFirst Operational API")
 services/web/admin-console/backend/app/main.py:61:app.include_router(base_dash_router, tags=["Dashboard (Base)"]) # Root prefix for app-init
 services/web/admin-console/backend/app/main.py:62:app.include_router(manager_workspace_router, prefix="/dashboard")
@@ -868,11 +855,24 @@ services/web/admin-console/backend/app/main.py:75:app.include_router(users_route
 services/web/admin-console/backend/app/main.py:76:app.include_router(roles_router)
 services/web/admin-console/backend/app/main.py:77:app.include_router(contacts_router, tags=["Contacts"])
 services/web/admin-console/backend/app/main.py:78:app.include_router(grid_presets_router)
+services/ai_runtime/tests/unit/test_render_cards_node.py:107:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_progressive_profile.py:171:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_cta_planner.py:79:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_synthesize_node.py:39:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_prompt_context.py:63:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_pending_decisions.py:199:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_scoring_hybrid.py:17:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_llm_model_routing.py:45:if __name__ == "__main__":
+services/ai_runtime/tests/unit/test_realtor_cta_selector.py:67:if __name__ == "__main__":
+services/ai_runtime/scripts/export_graph_diagrams.py:388:if __name__ == "__main__":
+services/ai_runtime/scripts/prompt_context_audit.py:464:if __name__ == "__main__":
+services/ai_runtime/main.py:8:app = FastAPI(title=settings.app_name)
+services/ai_runtime/main.py:9:app.include_router(router, prefix=settings.api_prefix)
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_web_proxy.py:57:if __name__ == "__main__":
 services/web/chat-web-renderer/backend/tests/smoke/test_smoke_runtime.py:36:if __name__ == "__main__":
-services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
-services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
 services/etl-docs/tests/smoke/test_smoke_etl_docs.py:42:if __name__ == "__main__":
+services/etl-docs/main.py:19:app = FastAPI(title="ETL Docs API", version="1.0.0")
+services/web/chat-web-renderer/backend/app/main.py:13:app = FastAPI(title="Chat Web Renderer")
 ```
 
 ## Rutas API Detectadas
@@ -942,6 +942,10 @@ services/web/admin-console/backend/app/modules/countries/router.py:99:@router.pu
 services/web/admin-console/backend/app/modules/countries/router.py:106:@router.delete("/countries/{country_id}")
 services/web/admin-console/backend/app/modules/campaigns/router.py:8:@router.get("/", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/campaigns/router.py:9:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
+services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
+services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
+services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
 services/ai_runtime/api.py:124:@router.get("/health", response_model=HealthResponse)
 services/ai_runtime/api.py:129:@router.post("/chat", response_model=ChatResponse)
 services/ai_runtime/api.py:143:@router.post("/internal/memory/reset", response_model=InternalMemoryResetResponse)
@@ -961,10 +965,6 @@ services/ai_runtime/api.py:248:@router.get("/debug/conversation-suites/assets/{a
 services/ai_runtime/api.py:256:@router.get("/debug/generated-conversation-suites/config")
 services/ai_runtime/api.py:264:@router.get("/debug/generated-conversation-suites/bundles")
 services/ai_runtime/api.py:271:@router.get("/debug/generated-conversation-suites/bundles/{bundle_id}")
-services/web/admin-console/backend/app/modules/system_public_docs/router.py:63:@router.get("", response_model=WebIAFirstResponse)
-services/web/admin-console/backend/app/modules/system_public_docs/router.py:154:@router.get("/data", response_model=List[dict])
-services/web/admin-console/backend/app/modules/system_public_docs/router.py:173:@router.post("/upload")
-services/web/admin-console/backend/app/modules/system_public_docs/router.py:211:@router.delete("/{content_id}")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:151:@router.get("", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:529:@router.get("/lookups/verticals")
 services/web/admin-console/backend/app/modules/leads_v2/admin_scoring_router.py:534:@router.get("/lookups/models")
@@ -1029,8 +1029,6 @@ services/web/admin-console/backend/app/dashboards/seller_workspace/router.py:60:
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:10:@router.get("/app-init", response_model=UIAppShell)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:72:@router.get("/base", response_model=WebIAFirstResponse)
 services/web/admin-console/backend/app/dashboards/base_dash/router.py:94:@router.get("/check-contract", response_model=WebIAFirstResponse)
-services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
-services/web/chat-web-renderer/backend/app/api/external.py:290:@router.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:34:@app.get("/health")
 services/web/chat-web-renderer/backend/app/main.py:39:@app.get("/health/dependencies")
 services/web/chat-web-renderer/backend/app/main.py:102:@app.post("/chat/init", response_model=SDUIResponse)
@@ -1038,6 +1036,8 @@ services/web/chat-web-renderer/backend/app/main.py:114:@app.post("/chat/session/
 services/web/chat-web-renderer/backend/app/main.py:151:@app.post("/chat", response_model=SDUIResponse)
 services/web/chat-web-renderer/backend/app/main.py:383:@app.get("/")
 services/web/chat-web-renderer/backend/app/main.py:397:@app.post("/internal/memory/reset")
+services/web/chat-web-renderer/backend/app/api/external.py:66:@router.post(
+services/web/chat-web-renderer/backend/app/api/external.py:290:@router.get("/health")
 services/etl-docs/main.py:28:@app.get("/")
 services/etl-docs/main.py:33:@app.post("/documents/upload", status_code=202)
 services/etl-docs/main.py:90:@app.get("/documents/list/{client_id}")
@@ -1762,7 +1762,6 @@ settings = AISettings()
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import httpx
@@ -1810,7 +1809,7 @@ async def _do_scoring_enqueue(
     payload: dict[str, object],
     token: str,
     timeout: float,
-) -> None:
+) -> dict[str, object] | None:
     """Fire-and-forget HTTP call to scoring-core enqueue endpoint."""
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if token:
@@ -1825,6 +1824,7 @@ async def _do_scoring_enqueue(
                 data.get("id"),
                 payload.get("conversation_id"),
             )
+            return data if isinstance(data, dict) else None
     except Exception:
         logger.warning(
             "scoring_enqueue failed (fire-and-forget, non-blocking) "
@@ -1832,6 +1832,7 @@ async def _do_scoring_enqueue(
             payload.get("conversation_id"),
             exc_info=True,
         )
+    return None
 
 
 class InlineWorkerDispatcher:
@@ -1850,20 +1851,17 @@ class InlineWorkerDispatcher:
         self._internal_token = internal_token
         self._enqueue_timeout = enqueue_timeout
 
-    async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> None:
+    async def fire_and_forget(self, task_name: str, payload: dict[str, object]) -> dict[str, object] | None:
         if task_name == "scoring_enqueue" and self._scoring_enqueue_enabled:
-            task = asyncio.create_task(
-                _do_scoring_enqueue(
-                    url=self._scoring_enqueue_url,
-                    payload=payload,
-                    token=self._internal_token,
-                    timeout=self._enqueue_timeout,
-                )
+            return await _do_scoring_enqueue(
+                url=self._scoring_enqueue_url,
+                payload=payload,
+                token=self._internal_token,
+                timeout=self._enqueue_timeout,
             )
-            # Suppress "Task exception was never retrieved" warnings
-            task.add_done_callback(
-                lambda t: t.exception() if not t.cancelled() else None
-            )
+        if task_name == "lead_worker":
+            return None
+        return None
 
 
 engine = build_engine()
@@ -3527,7 +3525,7 @@ async def chat_interaction(req: InternalChatRequest):
     
     client_id = str(req.client_id)
     channel = req.channel
-    channel_user_id = req.channel_user_id
+    channel_user_id = str(req.channel_user_id or f"web_{client_id}").strip()
     metadata = dict(req.metadata or {})
     trace_id = str(metadata.get("debug_trace_id") or "")
     incoming_session_id = normalize_session_id(req.session_id)

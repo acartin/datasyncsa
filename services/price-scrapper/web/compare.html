@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Comparar por EAN | Price Scrapper</title>
+    <title>Comparar productos | Price Scrapper</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,22 +18,23 @@
         <div class="hero-copy">
           <a class="back-link" href="./index.html">Volver al catalogo</a>
           <p class="eyebrow">Price Scrapper</p>
-          <h1>Comparar por EAN</h1>
+          <h1>Comparar productos</h1>
           <p class="hero-text">
-            Esta vista reune todas las coincidencias cargadas localmente para un mismo EAN y te
-            deja contrastar precios, nombres y presencia por tienda.
+            Puedes buscar por nombre, marca, SKU o EAN. Si escribes un EAN exacto, la vista lo
+            compara entre cadenas; si escribes un criterio humano, te muestra coincidencias amplias
+            para refinar desde ahi.
           </p>
         </div>
 
         <div class="hero-panel">
           <form id="compare-form" class="compare-form">
-            <label class="search-label" for="ean-input">EAN a comparar</label>
+            <label class="search-label" for="ean-input">Producto o EAN a comparar</label>
             <div class="compare-form-row">
               <input
                 id="ean-input"
                 class="search-input"
                 type="search"
-                placeholder="Ejemplo: 0751963314474"
+                placeholder="Ejemplo: manteca, clover, 0751963314474"
                 autocomplete="off"
               />
               <button id="compare-submit" class="pager-button compare-submit" type="submit">
@@ -109,7 +110,7 @@
       </article>
     </template>
 
-    <script src="./catalog-data.js?v=20260501-megasuper"></script>
-    <script src="./compare.js?v=20260501-megasuper"></script>
+    <script src="./catalog-data.js?v=20260506-search2"></script>
+    <script src="./compare.js?v=20260506-search2"></script>
   </body>
 </html>
