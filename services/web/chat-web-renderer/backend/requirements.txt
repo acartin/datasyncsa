@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-pydantic
-redis
-httpx
-psycopg2-binary
-google-genai>=1.0.0

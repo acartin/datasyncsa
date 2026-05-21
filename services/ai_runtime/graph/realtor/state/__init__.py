@@ -1,2 +1,0 @@
-"""Realtor graph state package."""
-

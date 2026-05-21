@@ -1,2 +1,0 @@
-"""Generic graph tools package."""
-

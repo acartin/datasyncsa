@@ -1,1 +1,0 @@
-# scoring-core package

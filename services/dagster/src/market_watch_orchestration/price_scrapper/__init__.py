@@ -1,0 +1,2 @@
+"""Price Scrapper orchestration adapter."""
+

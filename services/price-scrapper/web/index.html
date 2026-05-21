@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Instrument+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260514-unit-price" />
   </head>
   <body>
     <div class="page-shell">
@@ -82,6 +82,26 @@
 
         <section id="status-banner" class="status-banner" aria-live="polite"></section>
 
+        <section id="cart-panel" class="cart-panel" aria-live="polite">
+          <div class="cart-header">
+            <div>
+              <p class="cart-kicker">Planificador</p>
+              <h2>Carrito de compra</h2>
+              <p id="cart-copy">Agrega productos para calcular el ahorro por compra total.</p>
+            </div>
+            <div class="cart-actions">
+              <span id="cart-count" class="cart-count">0 productos</span>
+              <button id="cart-plan-button" class="pager-button" type="button">Organizar compra</button>
+              <button id="cart-clear-button" class="pager-button" type="button">Vaciar</button>
+            </div>
+          </div>
+
+          <div id="cart-status" class="cart-status"></div>
+          <div id="cart-empty" class="cart-empty">Tu carrito esta vacio.</div>
+          <div id="cart-items" class="cart-items"></div>
+          <div id="cart-plan" class="cart-plan"></div>
+        </section>
+
         <section id="product-grid" class="product-grid" aria-live="polite"></section>
 
         <nav class="pagination" aria-label="Paginacion del catalogo">
@@ -106,6 +126,7 @@
 
           <div class="product-meta">
             <span class="product-measure"></span>
+            <span class="product-unit-price"></span>
             <span class="product-sku"></span>
           </div>
 
@@ -117,6 +138,7 @@
           <div class="product-footer">
             <span class="product-ean"></span>
             <div class="product-actions">
+              <button class="cart-link" type="button">Agregar al carrito</button>
               <a class="compare-link">Comparar</a>
               <a class="product-link" target="_blank" rel="noreferrer noopener">Ver producto</a>
             </div>
@@ -125,7 +147,7 @@
       </article>
     </template>
 
-    <script src="./catalog-data.js?v=20260506-search"></script>
-    <script src="./app.js?v=20260506-search"></script>
+    <script src="./catalog-data.js?v=20260514-unit-price"></script>
+    <script src="./app.js?v=20260514-unit-price"></script>
   </body>
 </html>

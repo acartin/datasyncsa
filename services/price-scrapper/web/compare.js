@@ -189,6 +189,17 @@ function sortSearchMatches(products) {
 
 function sortComparisonMatches(products) {
   return [...products].sort((left, right) => {
+    const leftUnitPrice = dataApi.getUnitPrice(left)?.value;
+    const rightUnitPrice = dataApi.getUnitPrice(right)?.value;
+
+    if (leftUnitPrice !== undefined && rightUnitPrice !== undefined) {
+      return (
+        leftUnitPrice - rightUnitPrice ||
+        Number(left.price ?? Number.MAX_SAFE_INTEGER) - Number(right.price ?? Number.MAX_SAFE_INTEGER) ||
+        String(left._catalogLabel || "").localeCompare(String(right._catalogLabel || ""), "es")
+      );
+    }
+
     return (
       Number(left.price ?? Number.MAX_SAFE_INTEGER) - Number(right.price ?? Number.MAX_SAFE_INTEGER) ||
       String(left._catalogLabel || "").localeCompare(String(right._catalogLabel || ""), "es")

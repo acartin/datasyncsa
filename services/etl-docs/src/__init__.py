@@ -1,2 +1,0 @@
-"""ETL Docs source package."""
-

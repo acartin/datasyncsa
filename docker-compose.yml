@@ -1,14 +1,10 @@
 services:
   # ---------------------------------------------------------------------------
-  # INFRASTRUCTURE SERVICES
+  # INFRASTRUCTURE
   # ---------------------------------------------------------------------------
-  
-  # Database (Replaces CT 101)
   postgres:
-    build:
-      context: ./services/database
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-infra-postgres
+    image: datasyncsa-postgres:latest
+    container_name: ${ENV_PREFIX:-ds-dev}-infra-postgres
     restart: always
     command: ["postgres", "-c", "timezone=${TZ:-UTC}"]
     environment:
@@ -17,16 +13,15 @@ services:
       POSTGRES_DB: ${DB_NAME}
       TZ: ${TZ:-UTC}
     ports:
-      - "${DB_PORT}:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal_network
 
-  # Redis (Shared by Chat Web Renderer and ETL Queue)
   redis:
     image: redis:alpine
-    container_name: ${ENV_PREFIX}-infra-redis
+    container_name: ${ENV_PREFIX:-ds-dev}-infra-redis
     restart: always
     command: redis-server --appendonly yes
     environment:
@@ -36,10 +31,9 @@ services:
     networks:
       - internal_network
 
-  # Portainer (Container Management UI)
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: ${ENV_PREFIX}-infra-portainer
+    container_name: ${ENV_PREFIX:-ds-dev}-infra-portainer
     restart: always
     security_opt:
       - no-new-privileges:true
@@ -48,346 +42,170 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - portainer_data:/data
     ports:
-      - "${PORTAINER_PORT}:9000"
+      - "${PORTAINER_PORT:-9000}:9000"
     environment:
       TZ: ${TZ:-UTC}
     networks:
       - internal_network
 
   # ---------------------------------------------------------------------------
-  # BACKEND SERVICES
+  # DATA ORCHESTRATION
   # ---------------------------------------------------------------------------
-  # AI Runtime (LangGraph multitenant assistant)
-  ai-runtime:
+  dagster-webserver:
     build:
-      context: .
-      dockerfile: ./services/ai_runtime/Dockerfile
-    container_name: ${ENV_PREFIX}-backend-ai-runtime
-    restart: always
-    command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --workers
-      - ${AI_RUNTIME_WEB_CONCURRENCY:-1}
-    ports:
-      - "${AI_RUNTIME_PORT:-8096}:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
-      - LLM_ANALYZE_TURN_MODEL=${LLM_ANALYZE_TURN_MODEL}
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - PYTHONPATH=/app
-      - SCORING_CORE_API=http://scoring-core:8000
-      - SCORING_CORE_API_PREFIX=/api/v1
-      - SCORING_ENQUEUE_ENABLED=${SCORING_ENQUEUE_ENABLED:-true}
-      - SCORING_ENQUEUE_TIMEOUT_SECS=${SCORING_ENQUEUE_TIMEOUT_SECS:-2.0}
-    volumes:
-      - ./schemas:/app/schemas:ro
-      - ./log:/app/log
-    depends_on:
-      - postgres
-      - redis
-      - scoring-core
-    networks:
-      - internal_network
-
-  # Scoring Core API (async scoring domain service)
-  scoring-core:
-    build:
-      context: ./services/scoring-core
+      context: ./services/dagster
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-scoring-core
-    restart: always
-    command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --workers
-      - ${SCORING_CORE_WEB_CONCURRENCY:-1}
+    container_name: ${ENV_PREFIX:-ds-dev}-dagster-webserver
+    restart: unless-stopped
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/opt/dagster/app/workspace.yaml"]
     ports:
-      - "${SCORING_CORE_PORT:-8097}:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
-      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
-      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
-      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
-      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
-      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
-      - LLM_TRACE_ROOT=/app/log
-      - LLM_TRACE_ENABLED=true
-    volumes:
-      - ./schemas:/app/schemas:ro
-      - ./log:/app/log
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - internal_network
-
-  # Scoring Core async worker
-  scoring-core-worker:
-    build:
-      context: ./services/scoring-core
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-scoring-core-worker
-    restart: always
-    command: ["python", "worker.py"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - TZ=${TZ:-UTC}
-      - REDIS_URL=redis://redis:6379/0
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - LOG_LEVEL=INFO
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL}
-      - LLM_TIMEOUT_SECS=${LLM_TIMEOUT_SECS}
-      - SCORING_API_PREFIX=${SCORING_API_PREFIX:-/api/v1}
-      - SCORING_LLM_TIMEOUT_SECS=${SCORING_LLM_TIMEOUT_SECS:-60}
-      - SCORING_LLM_HARD_TIMEOUT_SECS=${SCORING_LLM_HARD_TIMEOUT_SECS:-10}
-      - SCORING_LLM_MAX_OUTPUT_TOKENS=${SCORING_LLM_MAX_OUTPUT_TOKENS:-512}
-      - SCORING_JOB_DEBOUNCE_SECS=${SCORING_JOB_DEBOUNCE_SECS:-1.5}
-      - SCORING_WORKER_POLL_SECS=${SCORING_WORKER_POLL_SECS:-2.0}
-      - SCORING_WORKER_CONCURRENCY=${SCORING_WORKER_CONCURRENCY:-1}
-      - SCORING_JOB_MAX_ATTEMPTS=${SCORING_JOB_MAX_ATTEMPTS:-3}
-      - SCORING_JOB_LOCK_TTL_SECS=${SCORING_JOB_LOCK_TTL_SECS:-120}
-      - SCORING_RETRY_DELAY_SECS=${SCORING_RETRY_DELAY_SECS:-5}
-      - SCORING_ALLOW_HEURISTIC_FALLBACK=${SCORING_ALLOW_HEURISTIC_FALLBACK:-false}
-      - LLM_TRACE_ROOT=/app/log
-      - LLM_TRACE_ENABLED=true
-    volumes:
-      - ./schemas:/app/schemas:ro
-      - ./log:/app/log
-    depends_on:
-      - postgres
-      - redis
-      - scoring-core
-    networks:
-      - internal_network
-
-  # ETL Docs API
-  etl-docs:
-    build:
-      context: ./services/etl-docs
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-etl-docs
-    restart: always
-    ports:
-      - "${ETL_DOCS_PORT}:8000"
+      - "${DAGSTER_PORT:-3010}:3000"
     environment:
       - TZ=${TZ:-UTC}
+      - DAGSTER_HOME=/opt/dagster/dagster_home
+      - DAGSTER_POSTGRES_HOST=postgres
+      - DAGSTER_POSTGRES_USER=${DAGSTER_DB_USER:-dagster}
+      - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
+      - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
+      - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
-      - REDIS_URL=redis://redis:6379/0
-      - PATH_STAGING=/app/data/staging
-      - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
-      - MEMORY_RESET_TIMEOUT=8
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - MARKET_WATCH_API_URL=http://market-watch-api:8000
     volumes:
-      - ${HOST_PATH_STAGING}:/app/data/staging
-      - ${HOST_PATH_STORAGE}:/app/data/storage
-      - ./schemas:/app/schemas:ro
+      - dagster_home:/opt/dagster/dagster_home
+      - ./services/price-scrapper:/workspace/services/price-scrapper:ro
     depends_on:
       - postgres
-      - redis
+      - market-watch-api
     networks:
       - internal_network
 
-  # ETL Docs Worker (RQ)
-  etl-docs-worker:
+  dagster-daemon:
     build:
-      context: ./services/etl-docs
+      context: ./services/dagster
       dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-backend-etl-docs-worker
-    restart: always
-    command: ["rq", "worker", "docs", "--url", "redis://redis:6379/0"]
+    container_name: ${ENV_PREFIX:-ds-dev}-dagster-daemon
+    restart: unless-stopped
+    command: ["dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
     environment:
       - TZ=${TZ:-UTC}
+      - DAGSTER_HOME=/opt/dagster/dagster_home
+      - DAGSTER_POSTGRES_HOST=postgres
+      - DAGSTER_POSTGRES_USER=${DAGSTER_DB_USER:-dagster}
+      - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
+      - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
+      - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
-      - REDIS_URL=redis://redis:6379/0
-      - PATH_STAGING=/app/data/staging
-      - PATH_STORAGE=/app/data/storage
-      - MEMORY_RESET_URL=http://chat-web-renderer-api:8000/internal/memory/reset
-      - MEMORY_RESET_TIMEOUT=8
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - MARKET_WATCH_API_URL=http://market-watch-api:8000
     volumes:
-      - ${HOST_PATH_STAGING}:/app/data/staging
-      - ${HOST_PATH_STORAGE}:/app/data/storage
-      - ./schemas:/app/schemas:ro
+      - dagster_home:/opt/dagster/dagster_home
+      - ./services/price-scrapper:/workspace/services/price-scrapper:ro
     depends_on:
       - postgres
-      - redis
+      - market-watch-api
     networks:
       - internal_network
 
   # ---------------------------------------------------------------------------
-  # WEB SERVICES (Frontend + BFF)
+  # MARKET WATCH PRODUCT
   # ---------------------------------------------------------------------------
+  market-watch-api:
+    build:
+      context: ./services/market-watch-api
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX:-ds-dev}-market-watch-api
+    restart: unless-stopped
+    ports:
+      - "${MARKET_WATCH_API_PORT:-8100}:8000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - DATABASE_URL=${DATABASE_URL}
+      - MARKET_WATCH_API_PREFIX=${MARKET_WATCH_API_PREFIX:-/api/v1}
+      - MARKET_WATCH_API_TOKEN=${MARKET_WATCH_API_TOKEN:-}
+      - MARKET_WATCH_DEMO_CLIENT_ID=${MARKET_WATCH_DEMO_CLIENT_ID:-}
+      - MARKET_WATCH_DEMO_ROLE=${MARKET_WATCH_DEMO_ROLE:-system-admin}
+      - MARKET_WATCH_ALLOWED_ORIGINS=${MARKET_WATCH_ALLOWED_ORIGINS:-http://localhost:8101,http://127.0.0.1:8101}
+      - MARKET_WATCH_SUPERSET_BASE_URL=${MARKET_WATCH_SUPERSET_BASE_URL:-http://192.168.10.32:8088}
+      - MARKET_WATCH_KEYCLOAK_ISSUER_URL=${MARKET_WATCH_KEYCLOAK_ISSUER_URL:-}
+    depends_on:
+      - postgres
+    networks:
+      - internal_network
 
-  # Admin Console API (BFF) - Renamed from AiFirst
+  market-watch-web:
+    build:
+      context: ./services/web/market-watch
+      dockerfile: Dockerfile
+    container_name: ${ENV_PREFIX:-ds-dev}-market-watch-web
+    restart: unless-stopped
+    ports:
+      - "${MARKET_WATCH_WEB_PORT:-8101}:3000"
+    environment:
+      - TZ=${TZ:-UTC}
+      - MARKET_WATCH_API_BASE_URL=http://market-watch-api:8000/api/v1
+      - MARKET_WATCH_PUBLIC_SUPERSET_URL=${MARKET_WATCH_SUPERSET_BASE_URL:-http://192.168.10.32:8088}
+    depends_on:
+      - market-watch-api
+    networks:
+      - internal_network
+
+  # ---------------------------------------------------------------------------
+  # TEMPORARY ADMIN CONSOLE
+  # ---------------------------------------------------------------------------
   admin-console-api:
     build:
       context: ./services/web/admin-console/backend
       dockerfile: Dockerfile
       args:
         INSTALL_DEV_DEPS: "true"
-    container_name: ${ENV_PREFIX}-web-admin-console-api
+    container_name: ${ENV_PREFIX:-ds-dev}-web-admin-console-api
     restart: unless-stopped
     ports:
-      - "${ADMIN_CONSOLE_API_PORT}:8000"
-    environment:
-      - TZ=${TZ:-UTC}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - ETL_SERVICE_URL=${ETL_SERVICE_URL} # External URL
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    volumes:
-      - ./schemas:/app/schemas:ro
-    depends_on:
-      - postgres
-    env_file:
-      - .env
-    networks:
-      - internal_network
-
-  # Admin Console Frontend (Nginx) - Renamed from AiFirst
-  admin-console-web:
-    image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-admin-console-ui
-    restart: unless-stopped
-    ports:
-      - "${ADMIN_CONSOLE_WEB_PORT}:80"
-    volumes:
-      - ./services/web/admin-console/frontend:/usr/share/nginx/html:ro
-      - ./services/web/admin-console/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-    environment:
-      - TZ=${TZ:-UTC}
-      - API_HOST=${ENV_PREFIX}-web-admin-console-api
-      - APP_VERSION=${APP_VERSION}
-    depends_on:
-      - admin-console-api
-    networks:
-      - internal_network
-
-  # Chat Web Renderer API (Bridge)
-  chat-web-renderer-api:
-    build:
-      context: ./services/web/chat-web-renderer/backend
-      dockerfile: Dockerfile
-    container_name: ${ENV_PREFIX}-web-chat-web-renderer-api
-    restart: unless-stopped
-    ports:
-      - "${REALTOR_BRIDGE_PORT}:8000"
+      - "${ADMIN_CONSOLE_API_PORT:-8084}:8000"
     environment:
       - TZ=${TZ:-UTC}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
-      - DB_DATABASE=${DB_NAME}
       - DB_USER=${DB_USER}
-      - DB_USERNAME=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - DB_PASSWORD=${DB_PASS}
-      - REDIS_URL=redis://redis:6379/0
-      - AI_RUNTIME_API=http://ai-runtime:8000
-      - AI_RUNTIME_API_PREFIX=/api/v1
-      - AI_RUNTIME_RESET_URL=http://ai-runtime:8000/api/v1/internal/memory/reset
-      - SCORING_CORE_RESET_URL=http://scoring-core:8000/api/v1/internal/memory/reset
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+      - DATABASE_URL=${DATABASE_URL}
+      - ETL_SERVICE_URL=${ETL_SERVICE_URL:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - ./schemas:/app/schemas:ro
     depends_on:
       - postgres
-      - redis
-      - ai-runtime
     networks:
       - internal_network
 
-  # Chat Web Renderer Frontend (Nginx)
-  chat-web-renderer-ui:
+  admin-console-web:
     image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-chat-web-renderer-ui
+    container_name: ${ENV_PREFIX:-ds-dev}-web-admin-console-ui
     restart: unless-stopped
     ports:
-      - "${REALTOR_WEB_PORT}:80"
+      - "${ADMIN_CONSOLE_WEB_PORT:-8085}:80"
     volumes:
-      - ./services/web/chat-web-renderer/frontend:/usr/share/nginx/html:rw
-      - ./services/web/chat-web-renderer/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./services/web/admin-console/frontend:/usr/share/nginx/html:ro
+      - ./services/web/admin-console/frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       - TZ=${TZ:-UTC}
-      - API_HOST=chat-web-renderer-api
+      - API_HOST=admin-console-api
+      - APP_VERSION=${APP_VERSION:-1}
     depends_on:
-      - chat-web-renderer-api
+      - admin-console-api
     networks:
       - internal_network
 
-  # Corporate Website (Static)
-  datasyncsa-web:
-    image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-corporate
-    restart: unless-stopped
-    ports:
-      - "${CORPORATE_WEB_PORT}:80"
-    environment:
-      - TZ=${TZ:-UTC}
-    volumes:
-      - ./services/web/datasyncsa:/usr/share/nginx/html:ro
-    networks:
-      - internal_network
-
-  # Test UI (Development Only)
-  test-ui:
-    image: nginx:alpine
-    container_name: ${ENV_PREFIX}-web-test-ui
-    restart: unless-stopped
-    ports:
-      - "${TEST_UI_PORT}:80"
-    environment:
-      - TZ=${TZ:-UTC}
-    volumes:
-      - ./services/web/tests:/usr/share/nginx/html:ro
-    networks:
-      - internal_network
-
-# ---------------------------------------------------------------------------
-# NETWORKS & VOLUMES
-# ---------------------------------------------------------------------------
 networks:
   internal_network:
     driver: bridge
@@ -395,4 +213,5 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  dagster_home:
   portainer_data:

@@ -12,8 +12,6 @@ MAX_FILE_SIZE_KB="${MAX_FILE_SIZE_KB:-256}"
 OUT_DIR=".agent"
 BRAIN_FILE="$OUT_DIR/BRAIN_MAP.md"
 OUT_FILE="$OUT_DIR/AI_CONTEXT_PACK.md"
-DB_PROMPTS_FILE="$OUT_DIR/ACTIVE_DB_PROMPTS.md"
-DB_PROMPTS_REFRESH_SCRIPT="$OUT_DIR/refresh_db_prompts.sh"
 
 mkdir -p "$OUT_DIR"
 
@@ -79,63 +77,46 @@ append_range_excerpt() {
   append '```'
 }
 
-refresh_db_prompts_snapshot() {
-  if [[ ! -f "$DB_PROMPTS_REFRESH_SCRIPT" ]]; then
-    return 0
-  fi
-
-  if bash "$DB_PROMPTS_REFRESH_SCRIPT" >/dev/null 2>&1; then
-    echo "OK: DB prompts snapshot refrescado en '$DB_PROMPTS_FILE'"
-    return 0
-  fi
-
-  if [[ -f "$DB_PROMPTS_FILE" ]]; then
-    echo "WARN: no se pudo refrescar '$DB_PROMPTS_FILE'; se reutiliza snapshot cacheado" >&2
-    return 0
-  fi
-
-  echo "WARN: no se pudo generar '$DB_PROMPTS_FILE' y no existe cache local" >&2
-}
-
 compose_services() {
+  local compose_file="${1:-docker-compose.yml}"
+
+  if [[ ! -f "$compose_file" ]]; then
+    return 0
+  fi
+
   if command -v docker >/dev/null 2>&1; then
-    if docker compose config --services >/dev/null 2>&1; then
-      docker compose config --services
+    if docker compose -f "$compose_file" config --services >/dev/null 2>&1; then
+      docker compose -f "$compose_file" config --services
       return 0
     fi
   fi
 
   awk '
     /^services:/ { in_services=1; next }
-    /^networks:/ { in_services=0 }
-    /^volumes:/ { in_services=0 }
+    /^[a-zA-Z0-9._-]+:/ { if ($0 !~ /^services:/) in_services=0 }
     in_services && $0 ~ /^  [a-zA-Z0-9._-]+:$/ {
       gsub(":", "", $1)
       print $1
     }
-  ' docker-compose.yml
+  ' "$compose_file"
 }
 
-active_entrypoints() {
-  rg -n --no-heading 'FastAPI\(|app\.include_router|if __name__ == "__main__"|uvicorn\.run\(' \
-    services/ai_runtime \
-    services/scoring-core \
-    services/web/chat-web-renderer/backend \
-    services/web/admin-console/backend \
-    services/etl-docs \
-    -g '*.py' \
-    | sed 's|^\./||'
+tree_if_exists() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    find "$path" -maxdepth 3 \
+      \( -path '*/__pycache__' -o -path '*/output' -o -path '*/output/*' -o -path '*/.next' -o -path '*/node_modules' \) -prune \
+      -o -type d -print | sort | sed 's|^\./||'
+  fi
 }
 
-active_routes() {
-  rg -n --no-heading '^@router\.(get|post|put|patch|delete)\(|^@app\.(get|post|put|patch|delete)\(' \
-    services/ai_runtime \
-    services/scoring-core \
-    services/web/chat-web-renderer/backend \
-    services/web/admin-console/backend \
-    services/etl-docs \
-    -g '*.py' \
-    | sed 's|^\./||'
+files_if_exists() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    find "$path" -maxdepth 3 \
+      \( -path '*/__pycache__' -o -path '*/output' -o -path '*/output/*' -o -path '*/.next' -o -path '*/node_modules' -o -name '*.pyc' \) -prune \
+      -o -type f -print | sort | sed 's|^\./||' | head -n 240
+  fi
 }
 
 cat > "$BRAIN_FILE" <<EOF
@@ -146,68 +127,50 @@ cat > "$BRAIN_FILE" <<EOF
 - Git branch: \`$branch\`
 - Git commit: \`$commit\`
 
-## 1. MAPA DE INTENCIONES (STACK ACTUAL)
+## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
 | Carpeta | Responsabilidad Tecnica | Importancia (1-5) |
 |---|---|---:|
-| \`docker-compose.yml\` | Orquestacion oficial del stack local. | 5 |
-| \`services/ai_runtime\` | Runtime conversacional LangGraph multitenant; autoridad principal de chat. | 5 |
-| \`services/scoring-core\` | Dominio separado de scoring asincrono con API y worker propios. | 5 |
-| \`services/web/chat-web-renderer\` | Canal web y renderer SDUI que consume \`ai-runtime\`. | 5 |
-| \`services/web/admin-console\` | Consola operativa multi-tenant. | 4 |
-| \`services/etl-docs\` | ETL documental, vectorizacion y reseteo de memoria best-effort. | 4 |
-| \`services/data\` | Repositorios y caches compartidos del runtime conversacional. | 5 |
-| \`schemas\` | Contratos compartidos entre servicios. | 4 |
-| \`tests\` | Pruebas cross-service, smoke y sandboxes. | 4 |
+| \`docker-compose.yml\` | Compose heredado/actual del repo; revisar antes de tocar infraestructura. | 4 |
+| \`services/dagster\` | Orquestacion de Market Watch: assets, jobs, schedules y sensores para coordinar ETL. | 4 |
+| \`services/price-scrapper\` | Bounded context de scraping, ETL, campañas, facts y queries base. | 5 |
+| \`services/market-watch-api\` | API de producto: auth/multitenancy, datasets livianos, control de \`client_id\`. | 5 |
+| \`services/web/market-watch\` | Frontend cliente: SEO, dashboards, tablas, pivots y reportes. | 5 |
+| \`.agent\` | Reglas operativas para agentes en el repo recortado. | 4 |
 
-## 2. ZONAS NO AUTORITATIVAS
+## 2. LIMITES DE ARQUITECTURA
 
-| Carpeta | Estado |
-|---|---|
-| \`services/etl-processor\` | Deprecado. |
-| \`services/ai-agents\` | Exploracion; no participa en el runtime operativo. |
+- \`price-scrapper\` no aloja el producto cliente final.
+- \`dagster\` orquesta ETL/assets; no aloja portal cliente ni duplica scraping pesado.
+- \`market-watch-api\` no ejecuta scraping ni ETL pesado durante requests web.
+- \`web/market-watch\` no se conecta directo a Postgres.
+- No reutilizar \`services/web/admin-console\` ni \`services/web/chat-web-renderer\` como base del producto.
+- Mantener contratos simples para facilitar separacion futura del repo.
 
-## 3. ARQUITECTURA CORE
-
-- \`ai-runtime\` resuelve tenant, vertical, flow y estado de sesion.
-- \`realtor_flow\` y \`basic_flow\` son selectores logicos internos.
-- \`analyze_turn\` e \`intent_detector\` son prompts semanticos por vertical; \`shared\` solo debe contener piezas tecnicas neutrales.
-- \`VerticalPolicy\` y \`VerticalAdapters\` son las costuras activas para desacoplar logica y dependencias por vertical.
-- \`scoring-core\` permanece separado y no debe absorber decisiones conversacionales.
-- \`chat-web-renderer\` es consumidor/canal, no autoridad de negocio.
-- Toda operacion conversacional debe mantener scope por \`client_id\`.
-
-## 4. SERVICIOS DOCKER ACTIVOS
+## 3. SERVICIOS DOCKER ACTUALES
 
 \`\`\`text
-$(compose_services)
+$(compose_services docker-compose.yml)
 \`\`\`
 
-## 5. ENTRY POINTS PRINCIPALES
+## 4. TOPOLOGIA DE TRABAJO
 
-- \`services/ai_runtime/main.py\`
-- \`services/scoring-core/main.py\`
-- \`services/web/chat-web-renderer/backend/app/main.py\`
-- \`services/web/admin-console/backend/app/main.py\`
-- \`services/etl-docs/main.py\`
+\`\`\`text
+$(tree_if_exists services/price-scrapper)
+$(tree_if_exists services/dagster)
+$(tree_if_exists services/market-watch-api)
+$(tree_if_exists services/web/market-watch)
+\`\`\`
 
-## 6. REFERENCIAS CANONICAS
+## 5. ARCHIVOS RELEVANTES
 
-- \`services/ai_runtime/ARCHITECTURE.md\`
-- \`.agent/RULES.md\`
-- \`.agent/PY_EXECUTION_MAP.md\`
-- \`.agent/ACTIVE_DB_PROMPTS.md\`
-
-## 7. ENTIDADES Y CAPAS CRITICAS
-
-- Tenancy/runtime: \`client_id\`, \`tenant_config\`, \`session_id\`, \`conversation_id\`
-- Estado conversacional: \`services/ai_runtime/domain/state.py\`
-- Datos compartidos: \`services/data/cache/**\`, \`services/data/repositories/**\`
-- Scoring: \`lead_scorecards\`, \`lead_score_items\`, \`lead_scoring_models\`, \`lead_scoring_prompts\`
-- RAG: FAQ por tenant y documentos por tenant en Postgres/pgvector
+\`\`\`text
+$(files_if_exists services/price-scrapper)
+$(files_if_exists services/dagster)
+$(files_if_exists services/market-watch-api)
+$(files_if_exists services/web/market-watch)
+\`\`\`
 EOF
-
-refresh_db_prompts_snapshot
 
 append "# AI Context Pack"
 append ""
@@ -215,77 +178,47 @@ append "- Generated UTC: \`$now_utc\`"
 append "- Repo root: \`$repo_root\`"
 append "- Git branch: \`$branch\`"
 append "- Git commit: \`$commit\`"
-append "- Policy: high-signal only; enfocado en stack actual."
+append "- Policy: high-signal only; enfocado en Market Watch / pricing."
 
 append_section "Contexto Maestro"
 append_file_excerpt "$BRAIN_FILE"
 
-append_section "Prompts DB Activos"
-if [[ -f "$DB_PROMPTS_FILE" ]]; then
-  append_file_excerpt "$DB_PROMPTS_FILE"
-else
-  append "- Snapshot no disponible. Intentar: \`bash .agent/refresh_db_prompts.sh\`"
-fi
+append_section "Reglas Operativas"
+append_file_excerpt ".agent/RULES.md"
+append_file_excerpt ".agent/PY_EXECUTION_MAP.md"
+append_file_excerpt "AGENTS.md"
 
 append_section "Compose y Variables"
-append "### Servicios activos del compose"
+append "### Servicios del compose principal"
 append ""
-append_codeblock text "$(compose_services)"
+append_codeblock text "$(compose_services docker-compose.yml)"
 append_range_excerpt "docker-compose.yml" 1 220
-append_range_excerpt "docker-compose.yml" 300 360
-append_range_excerpt ".env.example" 50 120
+append_file_excerpt ".env.example"
 
-append_section "Topologia Relevante"
+append_section "Topologia Market Watch"
 append_codeblock text \
-"$(find services/ai_runtime services/scoring-core services/data services/web/chat-web-renderer services/web/admin-console services/etl-docs schemas tests -maxdepth 3 -type d 2>/dev/null | sort | sed 's|^\./||')"
+"$(tree_if_exists services/price-scrapper)
+$(tree_if_exists services/dagster)
+$(tree_if_exists services/market-watch-api)
+$(tree_if_exists services/web/market-watch)"
 
-append_section "Entry Points Detectados"
-append_codeblock text "$(active_entrypoints)"
-
-append_section "Rutas API Detectadas"
-append_codeblock text "$(active_routes)"
-
-append_section "AI Runtime"
-append_file_excerpt ".agent/AI_RUNTIME_BOOTSTRAP.md"
-append_range_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md" 1 29
-append_range_excerpt "docs/AI_RUNTIME_PROMPT_RUNTIME.md" 33 180
-append_file_excerpt "services/ai_runtime/ARCHITECTURE.md"
-append_file_excerpt "services/ai_runtime/main.py"
-append_file_excerpt "services/ai_runtime/api.py"
-append_file_excerpt "services/ai_runtime/runtime/settings.py"
-append_file_excerpt "services/ai_runtime/runtime/bootstrap.py"
-append_file_excerpt "services/ai_runtime/runtime/service.py"
-append_file_excerpt "services/ai_runtime/domain/state.py"
-append_file_excerpt "services/ai_runtime/domain/policies.py"
-append_file_excerpt "services/ai_runtime/domain/vertical_adapters.py"
-append_file_excerpt "services/ai_runtime/verticals.py"
-append_file_excerpt "services/ai_runtime/graph/registry.py"
-append_file_excerpt "services/ai_runtime/graph/generic/graph.py"
-append_file_excerpt "services/ai_runtime/graph/realtor/graph.py"
-append_file_excerpt "services/ai_runtime/graph/_shared/nodes/mail_node.py"
-
-append_section "Canal Web"
-append_file_excerpt "services/web/chat-web-renderer/backend/app/core/runtime_client.py"
-append_file_excerpt "services/web/chat-web-renderer/backend/app/core/memory_reset.py"
-append_file_excerpt "services/web/chat-web-renderer/backend/app/main.py"
-
-append_section "Data Layer Compartida"
-append_file_excerpt "services/data/repositories/base.py"
-append_file_excerpt "services/data/cache/session_store.py"
-append_file_excerpt "services/ai_runtime/config/tenant_loader.py"
-append_file_excerpt "services/ai_runtime/config/prompt_composer.py"
-
-append_section "Scoring Boundary"
-append_file_excerpt "services/scoring-core/README.md"
-append_file_excerpt "services/scoring-core/main.py"
-append_file_excerpt "services/scoring-core/worker.py"
-
-append_section "Pruebas y Sandboxes"
+append_section "Archivos Market Watch"
 append_codeblock text \
-"$(find tests -maxdepth 3 -type f 2>/dev/null | sort | sed 's|^\./||' | sed -n '1,400p')"
+"$(files_if_exists services/price-scrapper)
+$(files_if_exists services/dagster)
+$(files_if_exists services/market-watch-api)
+$(files_if_exists services/web/market-watch)"
+
+append_section "Extractos de Servicio"
+append_file_excerpt "services/price-scrapper/README.md"
+append_file_excerpt "services/price-scrapper/requirements.txt"
+append_file_excerpt "services/dagster/README.md"
+append_file_excerpt "services/dagster/workspace.yaml"
+append_file_excerpt "services/dagster/dagster.yaml"
+append_file_excerpt "services/market-watch-api/README.md"
+append_file_excerpt "services/web/market-watch/README.md"
+append_file_excerpt "services/web/market-watch/package.json"
 
 mv "$tmp_file" "$OUT_FILE"
 
-echo "OK: BRAIN_MAP generado en '$BRAIN_FILE'"
-echo "OK: AI context pack generado en '$OUT_FILE' ($(du -h "$OUT_FILE" | cut -f1))"
-echo "Tip: MAX_LINES_PER_FILE=$MAX_LINES_PER_FILE MAX_FILE_SIZE_KB=$MAX_FILE_SIZE_KB"
+echo "OK: contexto regenerado en '$BRAIN_FILE' y '$OUT_FILE'"

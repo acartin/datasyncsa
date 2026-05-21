@@ -72,6 +72,7 @@
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim();
   }
 
@@ -84,6 +85,76 @@
     }).format(amount);
   }
 
+  function normalizeUnit(unit) {
+    return String(unit || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  function getUnitPrice(product) {
+    const price = Number(product?.price || 0);
+    const quantity = Number(product?.quantity || 0);
+    const unit = normalizeUnit(product?.unit);
+
+    if (!price || !quantity || !unit) {
+      return null;
+    }
+
+    const conversions = {
+      g: { factor: 1, unit: "g" },
+      gr: { factor: 1, unit: "g" },
+      gramo: { factor: 1, unit: "g" },
+      gramos: { factor: 1, unit: "g" },
+      kg: { factor: 1000, unit: "g" },
+      kilogramo: { factor: 1000, unit: "g" },
+      kilogramos: { factor: 1000, unit: "g" },
+      ml: { factor: 1, unit: "ml" },
+      mililitro: { factor: 1, unit: "ml" },
+      mililitros: { factor: 1, unit: "ml" },
+      l: { factor: 1000, unit: "ml" },
+      lt: { factor: 1000, unit: "ml" },
+      litro: { factor: 1000, unit: "ml" },
+      litros: { factor: 1000, unit: "ml" },
+      un: { factor: 1, unit: "un" },
+      unidad: { factor: 1, unit: "un" },
+      unidades: { factor: 1, unit: "un" },
+    };
+
+    const conversion = conversions[unit];
+    if (!conversion) {
+      return null;
+    }
+
+    const comparableQuantity = quantity * conversion.factor;
+    if (!comparableQuantity) {
+      return null;
+    }
+
+    return {
+      value: price / comparableQuantity,
+      unit: conversion.unit,
+    };
+  }
+
+  function formatUnitPrice(product) {
+    const unitPrice = getUnitPrice(product);
+    if (!unitPrice) {
+      return "Sin precio unitario";
+    }
+
+    const value =
+      unitPrice.value >= 100
+        ? unitPrice.value.toLocaleString("es-CR", { maximumFractionDigits: 0 })
+        : unitPrice.value.toLocaleString("es-CR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+
+    return `₡${value}/${unitPrice.unit}`;
+  }
+
   function buildSearchIndex(product) {
     return normalizeText(
       [
@@ -93,6 +164,9 @@
         product.ean,
         product.sku,
         product.product_id,
+        ...(product.aliases?.listing_names || []),
+        ...(product.aliases?.source_product_ids || []),
+        ...(product.aliases?.source_skus || []),
         product._catalogLabel,
         product._catalogShortLabel,
       ].join(" ")
@@ -120,6 +194,11 @@
       pricing_scope: product.pricing_scope || null,
       available_chain_count: Number(product.available_chain_count || 0),
       available_chains: Array.isArray(product.available_chains) ? product.available_chains : [],
+      aliases: {
+        listing_names: Array.isArray(product.aliases?.listing_names) ? product.aliases.listing_names : [],
+        source_product_ids: Array.isArray(product.aliases?.source_product_ids) ? product.aliases.source_product_ids : [],
+        source_skus: Array.isArray(product.aliases?.source_skus) ? product.aliases.source_skus : [],
+      },
     };
   }
 
@@ -245,6 +324,7 @@
     const name = card.querySelector(".product-name");
     const brand = card.querySelector(".product-brand");
     const measure = card.querySelector(".product-measure");
+    const unitPrice = card.querySelector(".product-unit-price");
     const sku = card.querySelector(".product-sku");
     const price = card.querySelector(".product-price");
     const listPrice = card.querySelector(".product-list-price");
@@ -284,6 +364,9 @@
       product.quantity && product.unit
         ? `${product.quantity} ${product.unit}`
         : "Medida no disponible";
+    if (unitPrice) {
+      unitPrice.textContent = formatUnitPrice(product);
+    }
     sku.textContent = `SKU ${product.sku || "-"}`;
     price.textContent = formatCurrency(product.price);
 
@@ -303,6 +386,8 @@
     buildCompareUrl,
     fillProductCard,
     formatCurrency,
+    formatUnitPrice,
+    getUnitPrice,
     loadCatalogBundles,
     loadProductCatalog,
     loadProductComparison,

@@ -52,24 +52,22 @@ copy (
     coalesce(c.short_label, c.chain_name) as short_label,
     r.run_key,
     coalesce(r.catalog_id, c.chain_id) as catalog_id,
-    r.started_at::text as started_at,
-    r.finished_at::text as finished_at,
+    r.run_started_at::text as started_at,
+    r.run_finished_at::text as finished_at,
     r.catalog_records::text as catalog_records,
-    r.raw_metadata::text as raw_metadata
+    r.run_metadata::text as raw_metadata
   from public.mkt_dim_chain as c
   left join lateral (
     select
       run_key,
       catalog_id,
-      started_at,
-      finished_at,
+      run_started_at,
+      run_finished_at,
       catalog_records,
-      raw_metadata
-    from public.mkt_run
+      run_metadata
+    from public.mw_fact_comparative_listing_snapshot
     where chain_key = c.chain_key
-      and run_status = 'succeeded'
-      and run_kind = 'comparative'
-    order by started_at desc, run_key desc
+    order by run_started_at desc, run_key desc
     limit 1
   ) as r on true
   where c.is_active = true
@@ -109,29 +107,23 @@ def _load_snapshot_rows_for_runs(env: dict[str, str], run_keys: list[int]) -> li
 copy (
   select
     f.run_key::text as run_key,
-    l.source_product_id,
-    l.source_sku,
-    p.gtin_norm as source_gtin,
-    p.brand_name,
-    coalesce(l.listing_name, p.product_name) as product_name,
+    f.source_product_id,
+    f.source_sku,
+    f.gtin_norm as source_gtin,
+    f.brand_name,
+    coalesce(f.listing_name, f.product_name) as product_name,
     f.price_amount::text as price_amount,
     f.list_price_amount::text as list_price_amount,
     f.has_discount::text as has_discount,
-    p.content_unit as unit,
-    p.content_quantity::text as quantity,
-    coalesce(l.root_category_name, l.root_category_slug, '') as category,
-    l.product_url,
-    l.image_url,
-    r.pricing_scope
-  from public.mkt_fact_listing_snapshot as f
-  join public.mkt_run as r
-    on r.run_key = f.run_key
-  join public.mkt_dim_listing as l
-    on l.listing_key = f.listing_key
-  join public.mkt_dim_product as p
-    on p.product_key = f.product_key
+    f.content_unit as unit,
+    f.content_quantity::text as quantity,
+    coalesce(f.root_category_name, f.root_category_slug, '') as category,
+    f.product_url,
+    f.image_url,
+    f.pricing_scope
+  from public.mw_fact_comparative_listing_snapshot as f
   where f.run_key in ({run_keys_sql})
-  order by f.run_key, l.chain_key, l.source_product_id, l.source_sku
+  order by f.run_key, f.chain_key, f.source_product_id, f.source_sku
 ) to stdout with (format csv, header true);
 """,
     )
@@ -260,59 +252,62 @@ def _load_product_catalog_rows(env: dict[str, str]) -> list[dict[str, str]]:
         sql="""
 copy (
   with latest_runs as (
-    select distinct on (r.chain_key)
-      r.run_key,
-      r.chain_key
-    from public.mkt_run as r
+    select distinct on (v.chain_key)
+      v.run_key,
+      v.chain_key
+    from public.mw_fact_comparative_listing_snapshot as v
     join public.mkt_dim_chain as c
-      on c.chain_key = r.chain_key
-    where r.run_status = 'succeeded'
-      and r.run_kind = 'comparative'
-      and c.is_active = true
-    order by r.chain_key, r.started_at desc, r.run_key desc
+      on c.chain_key = v.chain_key
+    where c.is_active = true
+    order by v.chain_key, v.run_started_at desc, v.run_key desc
   ),
   latest_snapshots as (
     select
-      f.product_key,
-      c.chain_id,
-      l.source_product_id,
-      l.source_sku,
-      l.listing_name,
-      l.product_url,
-      l.image_url,
-      coalesce(l.root_category_name, l.root_category_slug, '') as category,
-      f.price_amount,
-      f.list_price_amount,
-      f.has_discount,
+      v.product_key,
+      v.chain_id,
+      v.source_product_id,
+      v.source_sku,
+      v.listing_name,
+      v.product_url,
+      v.image_url,
+      coalesce(v.root_category_name, v.root_category_slug, '') as category,
+      v.price_amount,
+      v.list_price_amount,
+      v.has_discount,
       row_number() over (
-        partition by f.product_key
+        partition by v.product_key
         order by
           case
-            when f.price_amount is not null and f.price_amount > 0 then 0
+            when v.price_amount is not null and v.price_amount > 0 then 0
             else 1
           end,
           case
-            when f.available_quantity is not null and f.available_quantity > 0 then 0
+            when v.available_quantity is not null and v.available_quantity > 0 then 0
             else 1
           end,
-          (f.price_amount is null),
-          f.price_amount,
-          c.chain_id,
-          f.listing_key
+          (v.price_amount is null),
+          v.price_amount,
+          v.chain_id,
+          v.listing_key
       ) as product_rank
-    from public.mkt_fact_listing_snapshot as f
+    from public.mw_fact_comparative_listing_snapshot as v
     join latest_runs as r
-      on r.run_key = f.run_key
-    join public.mkt_dim_chain as c
-      on c.chain_key = f.chain_key
-    join public.mkt_dim_listing as l
-      on l.listing_key = f.listing_key
+      on r.run_key = v.run_key
   ),
   chain_rollup as (
     select
       product_key,
-      count(*)::text as available_chain_count,
-      json_agg(chain_id order by chain_id)::text as available_chains
+      count(distinct chain_id)::text as available_chain_count,
+      json_agg(distinct chain_id order by chain_id)::text as available_chains
+    from latest_snapshots
+    group by product_key
+  ),
+  product_aliases as (
+    select
+      product_key,
+      array_to_json(array_remove(array_agg(distinct listing_name), null))::text as listing_aliases,
+      array_to_json(array_remove(array_agg(distinct source_product_id), null))::text as source_product_ids,
+      array_to_json(array_remove(array_agg(distinct source_sku), null))::text as source_skus
     from latest_snapshots
     group by product_key
   )
@@ -333,10 +328,15 @@ copy (
     rep.category,
     rep.price_amount::text as price_amount,
     rep.list_price_amount::text as list_price_amount,
-    rep.has_discount::text as has_discount
+    rep.has_discount::text as has_discount,
+    coalesce(pa.listing_aliases, '[]') as listing_aliases,
+    coalesce(pa.source_product_ids, '[]') as source_product_ids,
+    coalesce(pa.source_skus, '[]') as source_skus
   from public.mkt_dim_product as p
   left join chain_rollup as cr
     on cr.product_key = p.product_key
+  left join product_aliases as pa
+    on pa.product_key = p.product_key
   left join latest_snapshots as rep
     on rep.product_key = p.product_key
    and rep.product_rank = 1
@@ -355,6 +355,9 @@ def _normalize_catalog_product(row: dict[str, str]) -> dict[str, Any]:
         return float(value)
 
     available_chains = json.loads(row["available_chains"]) if row["available_chains"] else []
+    listing_aliases = json.loads(row["listing_aliases"]) if row["listing_aliases"] else []
+    source_product_ids = json.loads(row["source_product_ids"]) if row["source_product_ids"] else []
+    source_skus = json.loads(row["source_skus"]) if row["source_skus"] else []
     available_chain_count = int(row["available_chain_count"] or 0)
     chain_label = (
         f"{available_chain_count} cadena"
@@ -381,6 +384,11 @@ def _normalize_catalog_product(row: dict[str, str]) -> dict[str, Any]:
         "pricing_scope": "comparative",
         "available_chain_count": available_chain_count,
         "available_chains": available_chains,
+        "aliases": {
+            "listing_names": listing_aliases,
+            "source_product_ids": source_product_ids,
+            "source_skus": source_skus,
+        },
         "_catalogId": "all",
         "_catalogLabel": chain_label,
         "_catalogShortLabel": chain_label,
@@ -467,54 +475,45 @@ def _load_product_comparison_rows(env: dict[str, str], *, product_key: int) -> l
         sql=f"""
 copy (
   with latest_runs as (
-    select distinct on (r.chain_key)
-      r.run_key,
-      r.chain_key,
-      r.pricing_scope,
-      r.started_at,
-      r.finished_at
-    from public.mkt_run as r
+    select distinct on (v.chain_key)
+      v.run_key,
+      v.chain_key
+    from public.mw_fact_comparative_listing_snapshot as v
     join public.mkt_dim_chain as c
-      on c.chain_key = r.chain_key
-    where r.run_status = 'succeeded'
-      and r.run_kind = 'comparative'
-      and c.is_active = true
-    order by r.chain_key, r.started_at desc, r.run_key desc
+      on c.chain_key = v.chain_key
+    where c.is_active = true
+    order by v.chain_key, v.run_started_at desc, v.run_key desc
   ),
   ranked as (
     select
-      c.chain_id,
-      c.chain_name,
-      coalesce(c.short_label, c.chain_name) as short_label,
-      r.run_key,
-      r.pricing_scope,
-      r.started_at::text as run_started_at,
-      r.finished_at::text as run_finished_at,
-      l.source_product_id,
-      l.source_sku,
-      l.seller_id,
-      l.seller_name,
-      l.listing_name,
-      l.product_url,
-      l.image_url,
-      coalesce(l.root_category_name, l.root_category_slug, '') as category,
-      f.price_amount::text as price_amount,
-      f.list_price_amount::text as list_price_amount,
-      f.has_discount::text as has_discount,
-      f.available_quantity::text as available_quantity,
-      f.currency_code,
+      v.chain_id,
+      v.chain_name,
+      v.chain_short_label as short_label,
+      v.run_key,
+      v.pricing_scope,
+      v.run_started_at::text as run_started_at,
+      v.run_finished_at::text as run_finished_at,
+      v.source_product_id,
+      v.source_sku,
+      v.seller_id,
+      v.seller_name,
+      v.listing_name,
+      v.product_url,
+      v.image_url,
+      coalesce(v.root_category_name, v.root_category_slug, '') as category,
+      v.price_amount::text as price_amount,
+      v.list_price_amount::text as list_price_amount,
+      v.has_discount::text as has_discount,
+      v.available_quantity::text as available_quantity,
+      v.currency_code,
       row_number() over (
-        partition by c.chain_key
-        order by (f.price_amount is null), f.price_amount, f.listing_key
+        partition by v.chain_key
+        order by (v.price_amount is null), v.price_amount, v.listing_key
       ) as chain_rank
     from latest_runs as r
-    join public.mkt_dim_chain as c
-      on c.chain_key = r.chain_key
-    join public.mkt_fact_listing_snapshot as f
-      on f.run_key = r.run_key
-     and f.product_key = {int(product_key)}
-    join public.mkt_dim_listing as l
-      on l.listing_key = f.listing_key
+    join public.mw_fact_comparative_listing_snapshot as v
+      on v.run_key = r.run_key
+     and v.product_key = {int(product_key)}
   )
   select
     chain_id,

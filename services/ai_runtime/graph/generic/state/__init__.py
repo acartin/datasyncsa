@@ -1,2 +1,0 @@
-"""Generic graph state package."""
-
