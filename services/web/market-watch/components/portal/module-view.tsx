@@ -1,17 +1,39 @@
+"use client";
+
 import { ArrowUpRight, Database, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
+import { CrudToolbar } from "@/components/market-watch/crud-toolbar";
+import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
+import { KpiCard } from "@/components/market-watch/kpi-card";
+import { RowActions } from "@/components/market-watch/row-actions";
 import { ModulePayload } from "@/lib/types";
+import { Feedback } from "@/lib/feedback";
 
-function renderValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Si" : "No";
-  if (value === null || value === undefined) return "-";
-  return String(value);
-}
-
-export function ModuleView({ payload }: { payload: ModulePayload }) {
-  const columns = Array.from(new Set(payload.records.flatMap((record) => Object.keys(record)))).slice(0, 6);
+export function ModuleView({ payload, feedback }: { payload: ModulePayload; feedback?: Feedback | null }) {
+  const hiddenColumns = new Set(["primary_role_id", "default_client_id", "client_options", "assigned_users", "assigned_permissions"]);
+  const columns = Array.from(new Set(payload.records.flatMap((record) => Object.keys(record))))
+    .filter((column) => !hiddenColumns.has(column))
+    .slice(0, 6);
+  const dataGridColumns: DataGridColumn<Record<string, unknown>>[] = columns.map((column) => ({
+    id: column,
+    header: column
+  }));
+  const isSettingsModule = payload.module.id.startsWith("settings.");
+  const gridColumns = isSettingsModule
+    ? [
+        ...dataGridColumns,
+        {
+          id: "actions",
+          header: "Acciones",
+          headerClassName: "text-right",
+          className: "w-32 text-right",
+          cell: (record: Record<string, unknown>) => <RowActions payload={payload} record={record} />
+        }
+      ]
+    : dataGridColumns;
 
   return (
     <div className="space-y-6">
@@ -35,35 +57,21 @@ export function ModuleView({ payload }: { payload: ModulePayload }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-3">
-            <Database className="h-5 w-5 text-primary" />
-            <div>
-              <div className="text-2xl font-semibold">{payload.records.length}</div>
-              <div className="text-sm text-muted-foreground">Registros placeholder</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3">
-            <Settings2 className="h-5 w-5 text-primary" />
-            <div>
-              <div className="text-2xl font-semibold">{payload.actions.length}</div>
-              <div className="text-sm text-muted-foreground">Acciones configuradas</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3">
-            <ArrowUpRight className="h-5 w-5 text-primary" />
-            <div>
-              <div className="text-2xl font-semibold">API</div>
-              <div className="text-sm text-muted-foreground">{payload.module.id}</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {feedback ? (
+        <Alert variant={feedback.type} title={feedback.type === "error" ? "No se pudo guardar" : "Operacion completada"}>
+          {feedback.message}
+        </Alert>
+      ) : null}
+
+      {isSettingsModule ? <CrudToolbar payload={payload} /> : null}
+
+      {!isSettingsModule ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <KpiCard icon={Database} value={payload.records.length} label="Registros placeholder" />
+          <KpiCard icon={Settings2} value={payload.actions.length} label="Acciones configuradas" />
+          <KpiCard icon={ArrowUpRight} value="API" label={payload.module.id} />
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -73,36 +81,12 @@ export function ModuleView({ payload }: { payload: ModulePayload }) {
           </div>
         </CardHeader>
         <CardContent>
-          {payload.records.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    {columns.map((column) => (
-                      <th key={column} className="px-3 py-2 font-medium">
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {payload.records.map((record, index) => (
-                    <tr key={index} className="border-b last:border-0">
-                      {columns.map((column) => (
-                        <td key={column} className="px-3 py-3">
-                          {renderValue(record[column])}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Sin registros para este modulo.
-            </div>
-          )}
+          <DataGrid
+            columns={gridColumns}
+            records={payload.records}
+            emptyTitle="Sin registros para este modulo"
+            emptyDescription="El contrato esta listo para conectar datos reales desde la API."
+          />
         </CardContent>
       </Card>
     </div>

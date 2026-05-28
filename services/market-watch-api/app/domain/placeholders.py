@@ -13,12 +13,14 @@ def user_payload(context: ClientContext) -> dict[str, object]:
         },
         "tenant": {
             "client_id": context.client_id,
-            "name": "Cliente demo",
-            "mode": "simulated-until-keycloak",
+            "name": context.client_name,
+            "mode": "session",
         },
         "auth": {
-            "provider": "keycloak",
-            "status": "planned",
+            "provider": "market-watch-auth",
+            "status": "active",
+            "can_simulate_roles": context.can_simulate_roles,
+            "is_role_simulated": context.is_role_simulated,
         },
     }
 

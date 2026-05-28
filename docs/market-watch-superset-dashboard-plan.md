@@ -1,12 +1,29 @@
-# Market Watch Superset Dashboard Plan
+# Market Watch BI Dashboard Plan
 
 ## Dashboard Inicial
 
 ```text
-MW Product | Pricing | Price Intelligence
+Pricing Competitive Basket
 ```
 
-Este dashboard usa vistas de presentacion `mw_superset_*`. No debe construirse directamente sobre facts, runs, listings ni megavistas semanticas internas.
+Este dashboard usa vistas de presentacion `mw_bi_*`. No debe construirse directamente sobre facts, runs, listings, `mw_core_*` ni `mw_signal_*`.
+
+Las vistas `mw_superset_*` quedaron fuera de uso. La capa nueva separa:
+
+```text
+mw_core_*   = semantica base, tool-agnostic
+mw_signal_* = contrato estable para Signal Engine
+mw_bi_*     = datasets para Superset/Metabase/portal
+```
+
+## Idioma De Interfaz
+
+La interfaz visible usa ingles:
+
+- Dashboards, tabs y charts en Title Case.
+- Columnas de datasets `mw_bi_*` en `snake_case` ingles.
+- Narrativa ejecutiva generada por Signal Engine en ingles.
+- Documentacion interna puede permanecer en espanol.
 
 ## Regla Rectora
 
@@ -38,7 +55,7 @@ No mezclar precios absolutos de surtidos distintos en vistas marca/cadena, porqu
 Dataset:
 
 ```text
-mw_superset_senales_ejecutivas
+mw_bi_executive_signal_feed
 ```
 
 Objetivo:
@@ -82,7 +99,7 @@ precio absoluto por marca/cadena
 Dataset:
 
 ```text
-mw_superset_benchmark_marca_cadena
+mw_bi_brand_chain_price_index
 ```
 
 Objetivo:
@@ -108,11 +125,11 @@ fecha/periodo + campana + marca + cadena
 Metricas permitidas:
 
 ```text
-indice_precio
-diferencia_vs_mercado_pct
-ranking_precio
-visibilidad_pct
-lectura_precio
+price_index
+gap_vs_market_pct
+price_rank
+visibility_pct
+price_reading
 ```
 
 Tipos visuales permitidos:
@@ -126,7 +143,7 @@ tabla resumen pequena por marca/cadena
 No usar:
 
 ```text
-precio_promedio_colones como comparativo principal de marca/cadena
+average_price_crc como comparativo principal de marca/cadena
 tablas SKU
 eventos historicos
 ```
@@ -140,7 +157,8 @@ El precio absoluto por marca/cadena mezcla surtidos, presentaciones y cobertura 
 Dataset:
 
 ```text
-mw_superset_oportunidades_sku
+mw_bi_sku_price_drivers
+mw_bi_sku_store_price_evidence
 ```
 
 Objetivo:
@@ -166,14 +184,14 @@ fecha/periodo + campana + producto + marca + cadena
 Metricas permitidas:
 
 ```text
-precio_promedio
-mejor_precio_mercado
-brecha_colones
-brecha_pct
-indice_precio
-ranking_precio
-lectura_precio
-accion_sugerida
+average_price
+market_best_price
+gap_amount
+gap_pct
+price_index
+price_rank
+price_reading
+suggested_action
 ```
 
 Tipos visuales permitidos:
@@ -197,7 +215,7 @@ promedios de surtido por marca
 Dataset:
 
 ```text
-mw_superset_eventos
+mw_bi_price_events
 ```
 
 Objetivo:
@@ -238,17 +256,16 @@ tablas de precio SKU sin cambio detectado
 ## Filtros Globales Recomendados
 
 ```text
-cliente
-campana
-marca
-cadena
-semana_inicio
-mes_inicio
-fecha
-es_ultima_fecha
+client
+campaign
+brand
+chain
+week_start
+month_start
+business_date
 ```
 
-Para charts flexibles, usar filtros globales de `fecha`, `semana_inicio` o `mes_inicio` y no fijar `es_ultima_fecha` dentro del chart. Usar `es_ultima_fecha = true` solo en charts cuyo nombre indique explicitamente `Latest`.
+Para charts flexibles, usar filtros globales de `business_date`, `week_start` o `month_start`. La seleccion de "ultimo dia" debe venir del filtro temporal o del portal, no de una columna fija en la vista.
 
 ## Regla De Construccion
 
@@ -263,7 +280,7 @@ Que cambios relevantes ocurrieron esta semana?
 Donde esta una marca sobre mercado?
 ```
 
-Evitar charts basados en columnas tecnicas como `run_key`, `date_key`, `listing_key`, `market_min_price_amount` o nombres internos. Si una metrica tecnica es necesaria, debe venir traducida desde una vista `mw_superset_*`.
+Evitar charts basados en columnas tecnicas como `run_key`, `date_key`, `listing_key`, `market_best_price_amount` o nombres internos. Si una metrica tecnica es necesaria, debe venir traducida desde una vista `mw_bi_*`.
 
 ## Estado Actual
 
@@ -282,7 +299,7 @@ Brand & Chain Benchmark
 Dataset:
 
 ```text
-mw_superset_benchmark_marca_cadena
+mw_bi_brand_chain_price_index
 ```
 
 Pregunta:

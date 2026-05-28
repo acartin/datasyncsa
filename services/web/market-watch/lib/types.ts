@@ -28,6 +28,8 @@ export type MenuPayload = {
   auth: {
     provider: string;
     status: string;
+    can_simulate_roles?: boolean;
+    is_role_simulated?: boolean;
   };
   sections: MenuSection[];
 };

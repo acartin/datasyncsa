@@ -41,6 +41,10 @@ def _parse_copy_csv(output: str) -> list[dict[str, str]]:
     return [dict(row) for row in reader]
 
 
+def _parse_bool_text(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"t", "true", "1", "yes", "y"}
+
+
 def _load_chain_runs(env: dict[str, str]) -> list[dict[str, Any]]:
     output = run_psql(
         env,
@@ -167,7 +171,7 @@ def _normalize_stage_item(row: dict[str, str]) -> dict[str, Any]:
         "ean": row["source_gtin"] or None,
         "price": maybe_number(row["price_amount"]),
         "list_price": maybe_number(row["list_price_amount"]),
-        "has_discount": row["has_discount"] == "t",
+        "has_discount": _parse_bool_text(row["has_discount"]),
         "unit": row["unit"] or None,
         "quantity": maybe_number(row["quantity"]),
         "category": row["category"] or "",
@@ -375,7 +379,7 @@ def _normalize_catalog_product(row: dict[str, str]) -> dict[str, Any]:
         "ean": row["gtin_norm"] or None,
         "price": maybe_number(row["price_amount"]),
         "list_price": maybe_number(row["list_price_amount"]),
-        "has_discount": row["has_discount"] == "t",
+        "has_discount": _parse_bool_text(row["has_discount"]),
         "unit": row["content_unit"] or None,
         "quantity": maybe_number(row["content_quantity"]),
         "category": row["category"] or "",
@@ -565,7 +569,7 @@ def _normalize_comparison_match(
         "ean": product["ean"],
         "price": maybe_number(row["price_amount"]),
         "list_price": maybe_number(row["list_price_amount"]),
-        "has_discount": row["has_discount"] == "t",
+        "has_discount": _parse_bool_text(row["has_discount"]),
         "unit": product["unit"],
         "quantity": product["quantity"],
         "category": row["category"] or "",

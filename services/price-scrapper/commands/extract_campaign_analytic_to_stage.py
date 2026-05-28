@@ -291,6 +291,7 @@ def extract_campaign_analytic_to_stage(
                         location_name=location.location_name,
                         sales_channel=location.sales_channel,
                         region_id=location.region_id,
+                        postal_code=location.postal_code,
                     ),
                     sleep_min=sleep_min,
                     sleep_max=sleep_max,

@@ -8,10 +8,10 @@ export default function NotFound() {
         <div className="text-sm font-medium text-muted-foreground">404</div>
         <h1 className="mt-2 text-2xl font-semibold">Modulo no disponible</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          La ruta no existe o el rol simulado no tiene permiso para verla.
+          La ruta no existe o tu usuario no tiene permiso para verla.
         </p>
         <Button asChild className="mt-5">
-          <Link href="/?role=system-admin">Volver al portal</Link>
+          <Link href="/pricing/executive-signals">Volver al portal</Link>
         </Button>
       </div>
     </main>

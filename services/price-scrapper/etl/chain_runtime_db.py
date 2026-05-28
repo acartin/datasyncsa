@@ -15,6 +15,10 @@ def _sql_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _parse_bool_text(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"t", "true", "1", "yes", "y"}
+
+
 def list_active_chain_ids(env: dict[str, str]) -> list[str]:
     output = run_psql(
         env,
@@ -124,7 +128,7 @@ order by cat.category_name;
             "name": name,
             "slug": slug,
             "url": url or None,
-            "enabled": is_enabled == "t",
+            "enabled": _parse_bool_text(is_enabled),
         }
         if category_reference:
             category_payload["category_reference"] = category_reference

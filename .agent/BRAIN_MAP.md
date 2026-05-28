@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-05-14T15:37:05Z`
+- Generated UTC: `2026-05-24T02:39:38Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-11`
-- Git commit: `6eaac86`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
+- Git commit: `c65fc71`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -34,8 +34,8 @@ admin-console-web
 market-watch-api
 dagster-daemon
 dagster-webserver
-market-watch-web
 portainer
+market-watch-web
 redis
 ```
 
@@ -55,6 +55,7 @@ services/price-scrapper/web_backend
 services/dagster
 services/dagster/src
 services/dagster/src/market_watch_orchestration
+services/dagster/src/market_watch_orchestration/price_scrapper
 services/market-watch-api
 services/market-watch-api/app
 services/market-watch-api/app/api
@@ -136,6 +137,7 @@ services/price-scrapper/schemas/canonical_product_v1.schema.json
 services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun_competencia_cr_megasuper.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
+services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html

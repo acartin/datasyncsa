@@ -33,6 +33,7 @@ class CampaignLocationRow:
     location_code: str
     sales_channel: str | None
     region_id: str | None
+    postal_code: str | None
     source_location_ref: str | None
     source_internal_id: str | None
 
@@ -82,6 +83,10 @@ def _flatten_text(value: str | None) -> str | None:
     return text or None
 
 
+def _parse_bool_text(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"t", "true", "1", "yes", "y"}
+
+
 def load_campaign_row(env: dict[str, str], campaign_id: int) -> CampaignRow:
     output = run_psql(
         env,
@@ -111,7 +116,7 @@ copy (
         slug=row["slug"].strip(),
         frequency_type=row["frequency_type"].strip(),
         frequency_note=_flatten_text(row["frequency_note"]),
-        is_active=row["is_active"] == "t",
+        is_active=_parse_bool_text(row["is_active"]),
     )
 
 
@@ -154,6 +159,7 @@ copy (
     l.location_code,
     l.sales_channel,
     l.region_id,
+    l.postal_code,
     l.source_location_ref,
     l.source_internal_id
   from public.mkt_campaign_location cl
@@ -182,6 +188,7 @@ copy (
                 location_code=payload["location_code"].strip(),
                 sales_channel=_flatten_text(payload["sales_channel"]),
                 region_id=_flatten_text(payload["region_id"]),
+                postal_code=_flatten_text(payload["postal_code"]),
                 source_location_ref=_flatten_text(payload["source_location_ref"]),
                 source_internal_id=_flatten_text(payload["source_internal_id"]),
             )

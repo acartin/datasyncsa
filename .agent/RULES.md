@@ -7,6 +7,7 @@ Precondicion obligatoria al iniciar cada nueva sesion:
 1. Carga base obligatoria:
    - Leer `.agent/RULES.md`
    - Leer `.agent/PY_EXECUTION_MAP.md`
+   - Leer `.agent/MARKET_WATCH_UI_STANDARDS.md`
 2. Determinar si se requiere regeneracion de contexto:
    - faltan `.agent/BRAIN_MAP.md` o `.agent/AI_CONTEXT_PACK.md`
    - el commit actual difiere del commit registrado en `.agent/BRAIN_MAP.md`
@@ -29,8 +30,9 @@ Regla de precedencia:
 1. Codigo ejecutable vigente
 2. `.agent/RULES.md`
 3. `.agent/PY_EXECUTION_MAP.md`
-4. `.agent/BRAIN_MAP.md`
-5. `.agent/AI_CONTEXT_PACK.md`
+4. `.agent/MARKET_WATCH_UI_STANDARDS.md`
+5. `.agent/BRAIN_MAP.md`
+6. `.agent/AI_CONTEXT_PACK.md`
 
 ## 2. Scope Operativo Actual
 
@@ -103,6 +105,7 @@ Servicios o carpetas no autoritativas para este producto:
 - No meter el producto final dentro de `services/price-scrapper/web`.
 - Las pantallas deben priorizar workflows de producto: dashboards, tablas, pivots, reportes, filtros y seleccion de cliente/mercado cuando aplique.
 - SEO pertenece al frontend del producto, no al ETL.
+- Toda implementacion visual o CRUD debe seguir `.agent/MARKET_WATCH_UI_STANDARDS.md`.
 
 ## 7. Infra y Operacion
 
@@ -176,7 +179,7 @@ Rechazar cambios que:
 Antes de empezar trabajo nuevo:
 
 1. aplicar la seccion 1
-2. usar `.agent/RULES.md` + `.agent/PY_EXECUTION_MAP.md` como base
+2. usar `.agent/RULES.md` + `.agent/PY_EXECUTION_MAP.md` + `.agent/MARKET_WATCH_UI_STANDARDS.md` como base
 3. consultar `BRAIN_MAP` y `AI_CONTEXT_PACK` solo lo necesario
 4. limitar exploracion inicial a `services/price-scrapper`, `services/web/market-watch`, `services/market-watch-api` si existe, `docker-compose*.yml` y `.env.example`, salvo que el usuario pida mas
 

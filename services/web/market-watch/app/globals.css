@@ -15,10 +15,32 @@
   --muted-foreground: 217 12% 43%;
   --accent: 43 92% 58%;
   --accent-foreground: 35 60% 14%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
   --border: 214 22% 84%;
   --input: 214 22% 84%;
   --ring: 197 84% 32%;
   --radius: 0.5rem;
+}
+
+.dark {
+  --background: 222 28% 9%;
+  --foreground: 210 24% 92%;
+  --card: 222 25% 12%;
+  --card-foreground: 210 24% 92%;
+  --primary: 195 78% 42%;
+  --primary-foreground: 210 28% 96%;
+  --secondary: 218 22% 18%;
+  --secondary-foreground: 210 24% 88%;
+  --muted: 220 18% 16%;
+  --muted-foreground: 215 12% 68%;
+  --accent: 43 82% 54%;
+  --accent-foreground: 35 52% 13%;
+  --destructive: 0 63% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 18% 24%;
+  --input: 220 18% 24%;
+  --ring: 195 78% 42%;
 }
 
 * {
@@ -35,4 +57,16 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.shell-focus .focus-hidden {
+  display: none;
+}
+
+.shell-focus .focus-grid-card {
+  height: calc(100vh - 4.5rem);
+}
+
+.shell-focus .focus-grid-scroll {
+  max-height: calc(100vh - 10rem);
 }

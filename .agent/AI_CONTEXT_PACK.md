@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-05-14T15:37:05Z`
+- Generated UTC: `2026-05-24T02:39:38Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-11`
-- Git commit: `6eaac86`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
+- Git commit: `c65fc71`
 - Policy: high-signal only; enfocado en Market Watch / pricing.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-05-14T15:37:05Z`
+- Generated UTC: `2026-05-24T02:39:38Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-11`
-- Git commit: `6eaac86`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
+- Git commit: `c65fc71`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -47,8 +47,8 @@ admin-console-web
 market-watch-api
 dagster-daemon
 dagster-webserver
-market-watch-web
 portainer
+market-watch-web
 redis
 ```
 
@@ -68,6 +68,7 @@ services/price-scrapper/web_backend
 services/dagster
 services/dagster/src
 services/dagster/src/market_watch_orchestration
+services/dagster/src/market_watch_orchestration/price_scrapper
 services/market-watch-api
 services/market-watch-api/app
 services/market-watch-api/app/api
@@ -149,6 +150,7 @@ services/price-scrapper/schemas/canonical_product_v1.schema.json
 services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun_competencia_cr_megasuper.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
+services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -189,8 +191,6 @@ services/web/market-watch/app/layout.tsx
 services/web/market-watch/app/not-found.tsx
 services/web/market-watch/app/page.tsx
 services/web/market-watch/components/portal/app-shell.tsx
-services/web/market-watch/components/portal/module-view.tsx
-services/web/market-watch/components/portal/sidebar.tsx
 ```
 
 ## Reglas Operativas
@@ -509,14 +509,14 @@ Regla de ejecucion:
 
 ```text
 postgres
+admin-console-api
 market-watch-api
-dagster-daemon
 dagster-webserver
+redis
+admin-console-web
+dagster-daemon
 market-watch-web
 portainer
-admin-console-api
-admin-console-web
-redis
 ```
 ### `docker-compose.yml:1-220`
 
@@ -794,6 +794,7 @@ ADMIN_CONSOLE_API_PORT=8084
 ADMIN_CONSOLE_WEB_PORT=8085
 APP_VERSION=1
 GOOGLE_API_KEY=replace-with-real-key
+LLM_DEFAULT_MODEL=gemini-2.5-flash-lite
 ETL_SERVICE_URL=
 
 # --- OPERATIONS ---
@@ -816,6 +817,7 @@ services/price-scrapper/web_backend
 services/dagster
 services/dagster/src
 services/dagster/src/market_watch_orchestration
+services/dagster/src/market_watch_orchestration/price_scrapper
 services/market-watch-api
 services/market-watch-api/app
 services/market-watch-api/app/api
@@ -897,6 +899,7 @@ services/price-scrapper/schemas/canonical_product_v1.schema.json
 services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun_competencia_cr_megasuper.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
+services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -1166,6 +1169,29 @@ Limites:
 - No reemplaza `market-watch-api`.
 - No ejecuta scraping dentro de requests web.
 - No importa codigo de `market-watch-api` ni del frontend.
+
+Estructura de codigo:
+
+- `src/market_watch_orchestration/definitions.py`
+  - define assets, ops, jobs y schedules de Dagster.
+  - debe describir el flujo, no contener SQL largo ni armado detallado de comandos.
+- `src/market_watch_orchestration/resources.py`
+  - facade liviana para recursos de Dagster.
+  - mantiene compatibilidad con `definitions.py` y delega a adapters por dominio.
+- `src/market_watch_orchestration/price_scrapper/`
+  - adapter del bounded context `services/price-scrapper`.
+  - `command_runner.py`: ejecucion generica de scripts.
+  - `commands.py`: API de comandos ETL disponibles.
+  - `postgres_runner.py`: ejecucion SQL contra Postgres operacional.
+  - `repository.py`: queries SQL usadas por la orquestacion.
+
+Regla de crecimiento:
+
+- Si aparece otro dominio (`rh`, `logistica`, `mantenimiento`, etc.), crear un paquete
+  hermano con sus propios `commands.py`, `repository.py` y runners si aplica.
+- No hacer crecer `resources.py` con SQL, transformaciones o logica de negocio.
+- Dagster debe quedar como mapa operativo; la complejidad de cada dominio vive
+  detras de adapters pequeños.
 
 Servicios:
 

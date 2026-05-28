@@ -109,6 +109,10 @@ def flatten_text(value: str | None) -> str | None:
     return text or None
 
 
+def parse_bool_text(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"t", "true", "1", "yes", "y"}
+
+
 def _parse_copy_csv(output: str) -> list[dict[str, str]]:
     reader = csv.DictReader(io.StringIO(output))
     return [dict(row) for row in reader]
@@ -202,7 +206,7 @@ copy (
                 source_gtin=flatten_text(payload["source_gtin"]),
                 snapshot_ts=payload["snapshot_ts"].strip(),
                 currency_code=flatten_text(payload["currency_code"]),
-                has_discount=payload["has_discount"] == "t",
+                has_discount=parse_bool_text(payload["has_discount"]),
                 price_amount=flatten_text(payload["price_amount"]),
                 list_price_amount=flatten_text(payload["list_price_amount"]),
                 price_without_discount_amount=flatten_text(

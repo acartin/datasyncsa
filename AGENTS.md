@@ -5,11 +5,12 @@
 1. Leer en este orden:
    - `.agent/RULES.md`
    - `.agent/PY_EXECUTION_MAP.md`
+   - `.agent/MARKET_WATCH_UI_STANDARDS.md`
 2. Regenerar contexto (`bash .agent/regenerar_contexto.sh`) solo si aplica:
    - faltan `.agent/BRAIN_MAP.md` o `.agent/AI_CONTEXT_PACK.md`
-- cambio de commit vs `BRAIN_MAP.md`
-- solicitud explicita del usuario
-- cambio grande en `services/price-scrapper`, `services/dagster`, `services/web/market-watch`, `services/market-watch-api` o `docker-compose.yml`
+   - cambio de commit vs `BRAIN_MAP.md`
+   - solicitud explicita del usuario
+   - cambio grande en `services/price-scrapper`, `services/dagster`, `services/web/market-watch`, `services/market-watch-api` o `docker-compose.yml`
 3. Leer `BRAIN_MAP.md` y `AI_CONTEXT_PACK.md` solo por secciones necesarias, sin carga masiva.
 
 No iniciar implementacion/debug/review sin los pasos anteriores.

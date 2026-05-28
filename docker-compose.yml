@@ -153,6 +153,7 @@ services:
       - TZ=${TZ:-UTC}
       - MARKET_WATCH_API_BASE_URL=http://market-watch-api:8000/api/v1
       - MARKET_WATCH_PUBLIC_SUPERSET_URL=${MARKET_WATCH_SUPERSET_BASE_URL:-http://192.168.10.32:8088}
+      - MARKET_WATCH_SECURE_COOKIES=${MARKET_WATCH_SECURE_COOKIES:-false}
     depends_on:
       - market-watch-api
     networks:

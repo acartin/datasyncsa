@@ -37,6 +37,20 @@ MENU_SECTIONS = (
         label="Analytics",
         items=(
             MenuItem(
+                id="executive-signals",
+                label="Executive Signals",
+                href="/pricing/executive-signals",
+                description="Senales comerciales priorizadas para gerentes.",
+                roles=ALL_ROLES,
+            ),
+            MenuItem(
+                id="intraday-radar",
+                label="Radar de precios y ofertas",
+                href="/pricing/intraday-radar",
+                description="Cambios dia contra dia de precio y promocion en productos monitoreados.",
+                roles=ALL_ROLES,
+            ),
+            MenuItem(
                 id="dashboards",
                 label="Dashboards",
                 href="/analytics/dashboards",

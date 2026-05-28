@@ -49,6 +49,7 @@ class VtexAnalyticLocation:
     location_name: str
     sales_channel: str
     region_id: str
+    postal_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,25 @@ class VtexAnalyticChainConfig:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def normalize_number(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def has_price_discount(price: float | None, *candidates: float | None) -> bool:
+    if price is None:
+        return False
+    return any(candidate is not None and candidate > price for candidate in candidates)
+
+
+def has_promotion_signals(*values: Any) -> bool:
+    return any(bool(value) for value in values)
 
 
 class VtexAnalyticScraper:
@@ -84,7 +104,7 @@ class VtexAnalyticScraper:
     def _build_session(self) -> BrowserSession:
         session = create_browser_session(
             headers={
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept": "application/json, text/plain, text/html, */*",
                 "Accept-Language": "es-CR,es;q=0.9,en;q=0.8",
                 "Cache-Control": "no-cache",
                 "Pragma": "no-cache",
@@ -131,6 +151,190 @@ class VtexAnalyticScraper:
         self.request_counter += 1
         response.raise_for_status()
         return response.text
+
+    def fetch_json(self, url: str, *, params: dict[str, Any] | None = None) -> Any:
+        self._sleep_if_needed()
+        response = request_with_retry(
+            self.session,
+            "GET",
+            url,
+            params=params,
+            timeout=REQUEST_TIMEOUT,
+        )
+        self.request_counter += 1
+        response.raise_for_status()
+        return response.json()
+
+    def post_json(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        payload: dict[str, Any],
+    ) -> Any:
+        self._sleep_if_needed()
+        response = request_with_retry(
+            self.session,
+            "POST",
+            url,
+            params=params,
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+        self.request_counter += 1
+        response.raise_for_status()
+        return response.json()
+
+    def fetch_catalog_product(self, target: VtexAnalyticTarget) -> dict[str, Any]:
+        endpoint = f"{self.chain.base_url}/api/catalog_system/pub/products/search"
+        lookups = [
+            ("skuId", target.source_sku),
+            ("productId", target.source_product_id),
+        ]
+        for field_name, field_value in lookups:
+            if not field_value:
+                continue
+            payload = self.fetch_json(
+                endpoint,
+                params={
+                    "fq": f"{field_name}:{field_value}",
+                    "sc": self.location.sales_channel,
+                },
+            )
+            if isinstance(payload, list) and payload:
+                return payload[0]
+        raise RuntimeError(
+            "El API VTEX catalog_system no devolvió producto para "
+            f"sku={target.source_sku!r} product_id={target.source_product_id!r}."
+        )
+
+    @staticmethod
+    def _select_item(product_payload: dict[str, Any], target: VtexAnalyticTarget) -> dict[str, Any]:
+        items = product_payload.get("items") or []
+        for item in items:
+            if str(item.get("itemId") or "") == str(target.source_sku):
+                return item
+        return items[0] if items else {}
+
+    @staticmethod
+    def _select_seller(item_payload: dict[str, Any], target: VtexAnalyticTarget) -> dict[str, Any]:
+        sellers = item_payload.get("sellers") or []
+        preferred_ids = [target.seller_id, "1"]
+        for seller_id in preferred_ids:
+            if not seller_id:
+                continue
+            for seller in sellers:
+                if str(seller.get("sellerId") or "") == str(seller_id):
+                    return seller
+        return sellers[0] if sellers else {}
+
+    @classmethod
+    def derive_catalog_offer_payload(
+        cls,
+        product_payload: dict[str, Any],
+        target: VtexAnalyticTarget,
+    ) -> dict[str, Any]:
+        item = cls._select_item(product_payload, target)
+        seller = cls._select_seller(item, target)
+        offer = seller.get("commertialOffer") if seller else {}
+        if not isinstance(offer, dict):
+            offer = {}
+
+        price = normalize_number(offer.get("Price"))
+        list_price = normalize_number(offer.get("ListPrice"))
+        price_without_discount = normalize_number(offer.get("PriceWithoutDiscount"))
+        spot_price = normalize_number(offer.get("spotPrice"))
+        discount_highlights = offer.get("DiscountHighLight") or []
+        teasers = offer.get("teasers") or []
+
+        return {
+            "currency": "CRC",
+            "price": price,
+            "list_price": list_price if list_price is not None else price,
+            "price_without_discount": (
+                price_without_discount if price_without_discount is not None else price
+            ),
+            "spot_price": spot_price,
+            "has_discount": has_price_discount(price, list_price, price_without_discount)
+            or has_promotion_signals(discount_highlights, teasers),
+            "price_valid_until": offer.get("PriceValidUntil"),
+            "available_quantity": normalize_number(offer.get("AvailableQuantity")),
+            "availability_schema": None,
+            "seller_name_observed": seller.get("sellerName") if seller else None,
+            "discount_highlights": discount_highlights,
+            "teasers": teasers,
+            "pricing_signal_kind": "catalog_system_products_search",
+        }
+
+    def fetch_checkout_simulation(self, target: VtexAnalyticTarget) -> dict[str, Any] | None:
+        endpoint = f"{self.chain.base_url}/api/checkout/pub/orderForms/simulation"
+        payload: dict[str, Any] = {
+            "items": [
+                {
+                    "id": target.source_sku,
+                    "quantity": 1,
+                    "seller": target.seller_id or "1",
+                }
+            ],
+            "country": "CRI",
+        }
+        if self.location.postal_code:
+            payload["postalCode"] = self.location.postal_code
+
+        simulation = self.post_json(
+            endpoint,
+            params={"sc": self.location.sales_channel},
+            payload=payload,
+        )
+        return simulation if isinstance(simulation, dict) else None
+
+    @staticmethod
+    def derive_checkout_promotion_payload(simulation_payload: dict[str, Any] | None) -> dict[str, Any]:
+        if not simulation_payload:
+            return {
+                "price_tags": [],
+                "simulation_teasers": [],
+                "simulation_price": None,
+                "simulation_list_price": None,
+                "simulation_selling_price": None,
+            }
+
+        items = simulation_payload.get("items") or []
+        item = items[0] if items and isinstance(items[0], dict) else {}
+        rates = simulation_payload.get("ratesAndBenefitsData") or {}
+        return {
+            "price_tags": item.get("priceTags") or [],
+            "simulation_teasers": rates.get("teaser") or [],
+            "simulation_price": normalize_number(item.get("price")),
+            "simulation_list_price": normalize_number(item.get("listPrice")),
+            "simulation_selling_price": normalize_number(item.get("sellingPrice")),
+        }
+
+    def derive_observed_payload(self, target: VtexAnalyticTarget) -> dict[str, Any]:
+        catalog_payload = self.fetch_catalog_product(target)
+        observed = self.derive_catalog_offer_payload(catalog_payload, target)
+        try:
+            simulation_payload = self.fetch_checkout_simulation(target)
+        except Exception as exc:
+            observed["checkout_simulation_error"] = str(exc)
+            return observed
+
+        simulation = self.derive_checkout_promotion_payload(simulation_payload)
+        observed.update(simulation)
+        observed["has_discount"] = bool(
+            observed.get("has_discount")
+            or has_promotion_signals(
+                simulation["price_tags"],
+                simulation["simulation_teasers"],
+            )
+            or has_price_discount(
+                simulation["simulation_selling_price"],
+                simulation["simulation_price"],
+                simulation["simulation_list_price"],
+            )
+        )
+        observed["pricing_signal_kind"] = "catalog_system_search_with_checkout_simulation"
+        return observed
 
     def extract_product_ld_json(self, html: str) -> dict[str, Any]:
         for script_text in PRODUCT_LD_JSON_PATTERN.findall(html):
@@ -224,13 +428,31 @@ class VtexAnalyticScraper:
             "availability": {
                 "available_quantity": observed.get("available_quantity"),
             },
+            "attributes": {
+                "properties": [],
+                "specification_groups": [],
+                "selected_properties": [],
+                "variations": [],
+                "cluster_highlights": {},
+                "product_clusters": {},
+                "discount_highlights": observed.get("discount_highlights") or [],
+                "teasers": (observed.get("teasers") or [])
+                + (observed.get("simulation_teasers") or []),
+            },
             "raw_debug": {
                 "availability_schema": observed.get("availability_schema"),
                 "location_key": self.location.location_key,
                 "location_name": self.location.location_name,
                 "sales_channel": self.location.sales_channel,
                 "region_id": self.location.region_id,
-                "availability_signal_kind": "binary_pdp_offer",
+                "postal_code": self.location.postal_code,
+                "availability_signal_kind": observed.get(
+                    "pricing_signal_kind",
+                    "binary_pdp_offer",
+                ),
+                "pricing_signal_kind": observed.get("pricing_signal_kind"),
+                "price_tags": observed.get("price_tags") or [],
+                "checkout_simulation_error": observed.get("checkout_simulation_error"),
             },
         }
 
@@ -240,9 +462,12 @@ class VtexAnalyticScraper:
 
         for target in targets:
             try:
-                html = self.fetch_html(target.product_url)
-                product_ld = self.extract_product_ld_json(html)
-                observed = self.derive_offer_payload(product_ld)
+                try:
+                    observed = self.derive_observed_payload(target)
+                except Exception:
+                    html = self.fetch_html(target.product_url)
+                    product_ld = self.extract_product_ld_json(html)
+                    observed = self.derive_offer_payload(product_ld)
                 records.append(self.build_record(target, observed))
             except Exception as exc:
                 errors.append(
