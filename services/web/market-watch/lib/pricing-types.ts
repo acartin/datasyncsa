@@ -147,6 +147,7 @@ export type IntradayRadarFilters = {
   campaigns: SignalFilterOption[];
   brands: SignalFilterOption[];
   chains: SignalFilterOption[];
+  products: SignalFilterOption[];
   event_areas: SignalFilterOption[];
   severities: SignalFilterOption[];
 };
@@ -248,6 +249,7 @@ export type IntradayRadarSearchParams = {
   date_key?: string;
   brand?: string;
   chain?: string;
+  product_key?: string;
   event_area?: string;
   severity?: string;
   q?: string;

@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { Activity, AlertTriangle, Bell, Percent } from "lucide-react";
 import { FocusModeToggle } from "@/components/portal/focus-mode-toggle";
-import { IntradayRadarFiltersForm } from "@/components/market-watch/intraday-radar-filters-form";
+import { DataViewToolbar, DataViewFilterConfig } from "@/components/market-watch/data-view-toolbar";
 import { IntradayRadarGrid } from "@/components/market-watch/intraday-radar-grid";
 import { KpiCard } from "@/components/market-watch/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { costaRicaYesterdayInputValue } from "@/lib/closed-day";
 import { IntradayRadarPayload, IntradayRadarSearchParams } from "@/lib/pricing-types";
+import { DataViewState, SavedTableView } from "@/lib/data-views";
 
 function pageHref(filters: IntradayRadarSearchParams, offset: number, limit: number) {
   const params = new URLSearchParams();
@@ -21,7 +23,9 @@ function pageHref(filters: IntradayRadarSearchParams, offset: number, limit: num
 
 function selectedCampaign(payload: IntradayRadarPayload, values: IntradayRadarSearchParams) {
   if (values.campaign_id) {
-    return payload.filters.campaigns.find((campaign) => campaign.id === values.campaign_id)?.label ?? values.campaign_id;
+    const selected = splitValues(values.campaign_id);
+    if (selected.length > 1) return `${selected.length} campañas`;
+    return payload.filters.campaigns.find((campaign) => campaign.id === selected[0])?.label ?? selected[0];
   }
   return payload.items[0]?.campaign ?? "All campaigns";
 }
@@ -33,13 +37,49 @@ function displayDateKey(value?: number | null) {
   return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
 }
 
+function splitValues(value?: string) {
+  return value ? value.split(",").filter(Boolean) : [];
+}
+
+function currentViewState(filters: IntradayRadarSearchParams): DataViewState {
+  return {
+    search: filters.q,
+    filters: {
+      campaign_id: splitValues(filters.campaign_id),
+      brand: splitValues(filters.brand),
+      chain: splitValues(filters.chain),
+      product_key: splitValues(filters.product_key),
+      event_area: splitValues(filters.event_area),
+      severity: splitValues(filters.severity),
+    },
+    dates: filters.date_key ? { date_key: { mode: "single", value: filters.date_key } } : undefined,
+  };
+}
+
+function toolbarFilters(payload: IntradayRadarPayload): DataViewFilterConfig[] {
+  return [
+    { key: "campaign_id", label: "Campaña", type: "multiselect", options: payload.filters.campaigns, searchable: true },
+    { key: "product_key", label: "Producto", type: "product", options: payload.filters.products, searchable: true },
+    { key: "brand", label: "Marca", type: "multiselect", options: payload.filters.brands, searchable: true },
+    { key: "chain", label: "Cadena", type: "multiselect", options: payload.filters.chains, searchable: true },
+    { key: "event_area", label: "Área", type: "multiselect", options: payload.filters.event_areas },
+    { key: "severity", label: "Severidad", type: "multiselect", options: payload.filters.severities },
+  ];
+}
+
 export function IntradayRadarPage({
   payload,
-  filters
+  filters,
+  tableViews,
+  viewKey
 }: {
   payload: IntradayRadarPayload;
   filters: IntradayRadarSearchParams;
+  tableViews: SavedTableView[];
+  viewKey: string;
 }) {
+  const viewState = currentViewState(filters);
+
   return (
     <div className="space-y-6">
       <div className="focus-hidden flex flex-col justify-between gap-4 md:flex-row md:items-start">
@@ -65,7 +105,15 @@ export function IntradayRadarPage({
       </div>
 
       <div className="focus-hidden">
-        <IntradayRadarFiltersForm filters={payload.filters} values={filters} />
+        <DataViewToolbar
+          basePath="/pricing/intraday-radar"
+          viewKey={viewKey}
+          title="Movimientos día contra día"
+          currentState={viewState}
+          views={tableViews}
+          filters={toolbarFilters(payload)}
+          dateFilters={[{ key: "date_key", label: "Día cerrado", max: costaRicaYesterdayInputValue() }]}
+        />
       </div>
 
       <Card className="focus-grid-card">

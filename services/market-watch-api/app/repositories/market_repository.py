@@ -415,6 +415,7 @@ class MarketRepository:
         date_key: int | None,
         brand: str | None,
         chain: str | None,
+        product_key: str | None,
         event_area: str | None,
         severity: str | None,
         query: str | None,
@@ -425,10 +426,11 @@ class MarketRepository:
             "client_id": client_id,
             "campaign_id": campaign_id,
             "date_key": date_key,
-            "brand": brand or None,
-            "chain": chain or None,
-            "event_area": event_area or None,
-            "severity": severity or None,
+            "brands": [value for value in (brand or "").split(",") if value],
+            "chains": [value for value in (chain or "").split(",") if value],
+            "product_keys": [value for value in (product_key or "").split(",") if value],
+            "event_areas": [value for value in (event_area or "").split(",") if value],
+            "severities": [value for value in (severity or "").split(",") if value],
             "query": f"%{query.strip()}%" if query and query.strip() else None,
             "limit": limit,
             "offset": offset,
@@ -439,190 +441,78 @@ class MarketRepository:
                 with connection.cursor() as cursor:
                     cursor.execute(
                         """
-                        with selected_scope as (
+                        with selected_date as (
                           select coalesce(
                             %(date_key)s::int,
                             (
-                              select max(o.date_key)
-                              from public.mw_core_sku_store_observation o
+                              select max(date_key)
+                              from public.mkt_market_event e
                               join public.mkt_campaign_client_access cca
-                                on cca.campaign_id = o.campaign_id
-                               and cca.is_active
-                               and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                               and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                                on cca.campaign_id = e.campaign_id and cca.is_active
                               where cca.client_id::text = %(client_id)s
-                                and (o.client_id is null or o.client_id = cca.client_id)
-                                and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                                and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
+                                and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
+                                and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
                             )
                           ) as selected_date_key
                         ),
-                        prior_scope as (
-                          select max(o.date_key) as prior_date_key
-                          from public.mw_core_sku_store_observation o
+                        enriched as (
+                          select
+                            md5(concat_ws(':', 'dod', e.date_key, e.client_id, e.campaign_id, e.chain, e.event_type, coalesce(e.evidence_json->>'product_key', ''))) as event_id,
+                            case
+                              when e.event_type in ('promo_started','promo_ended') then 'promotion'
+                              else 'price'
+                            end as event_area,
+                            e.event_type,
+                            e.severity,
+                            e.business_date::text as business_date,
+                            e.date_key,
+                            e.campaign_id,
+                            coalesce(e.campaign_name, '') as campaign,
+                            e.chain,
+                            e.evidence_json->>'brand' as brand,
+                            e.evidence_json->>'product' as product,
+                            e.evidence_json->>'gtin' as gtin,
+                            e.evidence_json->>'product_key' as product_key,
+                            e.business_date::text as captured_at_cr,
+                            null::text as previous_captured_at_cr,
+                            (e.metrics_json->>'previous_value')::numeric(12,2) as previous_value,
+                            (e.metrics_json->>'current_value')::numeric(12,2) as current_value,
+                            (e.metrics_json->>'change_abs')::numeric(12,2) as change_amount,
+                            (e.metrics_json->>'change_pct')::numeric(12,2) as change_pct,
+                            case when e.event_type in ('promo_started','promo_ended')
+                              then (e.metrics_json->>'promo_share_current')::numeric(5,2)
+                              else null
+                            end as promo_share_pct,
+                            null::numeric(5,2) as discount_pct,
+                            null::int as observed_locations,
+                            null::int as visible_locations,
+                            null::int as available_locations,
+                            e.evidence_json->>'product_url' as product_url
+                          from public.mkt_market_event e
+                          cross join selected_date sd
                           join public.mkt_campaign_client_access cca
-                            on cca.campaign_id = o.campaign_id
-                           and cca.is_active
-                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
-                          cross join selected_scope selected
+                            on cca.campaign_id = e.campaign_id and cca.is_active
                           where cca.client_id::text = %(client_id)s
-                            and (o.client_id is null or o.client_id = cca.client_id)
-                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                            and o.date_key < selected.selected_date_key
-                        ),
-                        store_day as (
-                          select
-                            o.date_key,
-                            o.business_date,
-                            cca.client_id,
-                            o.campaign_id,
-                            o.campaign_name as campaign,
-                            o.chain_key,
-                            o.chain_label as chain,
-                            o.location_key,
-                            o.location_name,
-                            o.product_key,
-                            o.gtin_norm as gtin,
-                            o.brand_name as brand,
-                            o.product_name as product,
-                            o.content_quantity,
-                            o.content_unit,
-                            max(o.captured_at_cr) as captured_at_cr,
-                            bool_or(coalesce(o.is_available, false)) as is_available,
-                            round(avg(o.reference_price_amount) filter (where o.is_available and o.reference_price_amount is not null), 2) as normal_price,
-                            round(avg(o.spot_price_amount) filter (where o.is_available and o.spot_price_amount is not null), 2) as promo_price,
-                            bool_or(o.is_available and o.spot_price_amount is not null) as promo_detected,
-                            max(o.product_url) filter (where o.product_url is not null) as product_url,
-                            max(o.image_url) filter (where o.image_url is not null) as image_url
-                          from public.mw_core_sku_store_observation o
-                          join public.mkt_campaign_client_access cca
-                            on cca.campaign_id = o.campaign_id
-                           and cca.is_active
-                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
-                          cross join selected_scope selected
-                          cross join prior_scope prior
-                          where cca.client_id::text = %(client_id)s
-                            and (o.client_id is null or o.client_id = cca.client_id)
-                            and o.date_key in (selected.selected_date_key, prior.prior_date_key)
-                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                            and (%(brand)s::text is null or o.brand_name = %(brand)s)
-                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
-                          group by
-                            o.date_key, o.business_date, cca.client_id, o.campaign_id, o.campaign_name,
-                            o.chain_key, o.chain_label, o.location_key, o.location_name,
-                            o.product_key, o.gtin_norm, o.brand_name, o.product_name,
-                            o.content_quantity, o.content_unit
-                        ),
-                        paired as (
-                          select
-                            curr.*,
-                            prev.date_key as previous_date_key,
-                            prev.captured_at_cr as previous_captured_at_cr,
-                            prev.normal_price as previous_normal_price,
-                            prev.promo_price as previous_promo_price,
-                            prev.promo_detected as previous_promo_detected
-                          from store_day curr
-                          join store_day prev
-                            on prev.client_id = curr.client_id
-                           and prev.campaign_id = curr.campaign_id
-                           and prev.chain_key = curr.chain_key
-                           and prev.location_key = curr.location_key
-                           and prev.product_key = curr.product_key
-                          cross join selected_scope selected
-                          cross join prior_scope prior
-                          where curr.date_key = selected.selected_date_key
-                            and prev.date_key = prior.prior_date_key
-                            and curr.is_available
-                        ),
-                        store_events as (
-                          select *, 'promotion'::text as event_area, 'promo_started'::text as event_type
-                          from paired
-                          where promo_detected and coalesce(previous_promo_detected, false) = false
-                          union all
-                          select *, 'promotion'::text as event_area, 'promo_ended'::text as event_type
-                          from paired
-                          where promo_detected = false and coalesce(previous_promo_detected, false)
-                          union all
-                          select *,
-                            'price'::text as event_area,
-                            case when promo_price > previous_promo_price then 'promo_price_increase' else 'promo_price_decrease' end as event_type
-                          from paired
-                          where promo_detected and previous_promo_detected
-                            and promo_price is not null and previous_promo_price is not null
-                            and promo_price <> previous_promo_price
-                          union all
-                          select *,
-                            'price'::text as event_area,
-                            case when normal_price > previous_normal_price then 'regular_price_increase' else 'regular_price_decrease' end as event_type
-                          from paired
-                          where normal_price is not null and previous_normal_price is not null
-                            and normal_price <> previous_normal_price
-                        ),
-                        event_rows as (
-                          select
-                            md5(concat_ws(':', 'dod', date_key, client_id, campaign_id, chain_key, product_key, event_type)) as event_id,
-                            event_area,
-                            event_type,
-                            case
-                              when count(*) >= 5 or abs(avg(coalesce(promo_price, normal_price, 0)) - avg(coalesce(previous_promo_price, previous_normal_price, 0))) >= 500 then 'high'
-                              when count(*) >= 2 or abs(avg(coalesce(promo_price, normal_price, 0)) - avg(coalesce(previous_promo_price, previous_normal_price, 0))) >= 100 then 'medium'
-                              else 'low'
-                            end as severity,
-                            max(business_date)::text as business_date,
-                            date_key,
-                            max(previous_date_key) as previous_date_key,
-                            campaign_id,
-                            max(campaign) as campaign,
-                            max(chain) as chain,
-                            max(brand) as brand,
-                            max(product) as product,
-                            max(gtin) as gtin,
-                            product_key::text as product_key,
-                            max(captured_at_cr) as captured_at_cr,
-                            max(previous_captured_at_cr) as previous_captured_at_cr,
-                            case
-                              when event_area = 'promotion' then round((count(*) filter (where previous_promo_detected)::numeric / nullif(count(*), 0)) * 100, 2)
-                              when event_type like 'promo_price%%' then round(avg(previous_promo_price), 2)
-                              else round(avg(previous_normal_price), 2)
-                            end as previous_value,
-                            case
-                              when event_area = 'promotion' then round((count(*) filter (where promo_detected)::numeric / nullif(count(*), 0)) * 100, 2)
-                              when event_type like 'promo_price%%' then round(avg(promo_price), 2)
-                              else round(avg(normal_price), 2)
-                            end as current_value,
-                            case
-                              when event_area = 'promotion' then round(((count(*) filter (where promo_detected)::numeric - count(*) filter (where previous_promo_detected)::numeric) / nullif(count(*), 0)) * 100, 2)
-                              when event_type like 'promo_price%%' then round(avg(promo_price) - avg(previous_promo_price), 2)
-                              else round(avg(normal_price) - avg(previous_normal_price), 2)
-                            end as change_amount,
-                            case
-                              when event_area = 'price' and event_type like 'promo_price%%' then round(((avg(promo_price) - avg(previous_promo_price)) / nullif(avg(previous_promo_price), 0)) * 100, 2)
-                              when event_area = 'price' then round(((avg(normal_price) - avg(previous_normal_price)) / nullif(avg(previous_normal_price), 0)) * 100, 2)
-                            end as change_pct,
-                            round((count(*) filter (where promo_detected)::numeric / nullif(count(*), 0)) * 100, 2) as promo_share_pct,
-                            case
-                              when avg(normal_price) > 0 and avg(promo_price) is not null then round(((avg(normal_price) - avg(promo_price)) / avg(normal_price)) * 100, 2)
-                            end as discount_pct,
-                            count(*)::int as observed_locations,
-                            count(*)::int as visible_locations,
-                            count(*)::int as available_locations,
-                            max(product_url) filter (where product_url is not null) as product_url
-                          from store_events
-                          group by date_key, client_id, campaign_id, chain_key, product_key, event_area, event_type
-                        ),
-                        scoped as (
-                          select *
-                          from event_rows
-                          where (%(event_area)s::text is null or event_area = %(event_area)s)
-                            and (%(severity)s::text is null or severity = %(severity)s)
+                            and e.date_key = sd.selected_date_key
+                            and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+                            and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
+                            and (%(brands)s::text[] = '{}'::text[] or e.evidence_json->>'brand' = any(%(brands)s::text[]))
+                            and (%(chains)s::text[] = '{}'::text[] or e.chain = any(%(chains)s::text[]))
+                            and (%(product_keys)s::text[] = '{}'::text[] or e.evidence_json->>'product_key' = any(%(product_keys)s::text[]))
+                            and (
+                              %(event_areas)s::text[] = '{}'::text[]
+                              or case
+                                when e.event_type in ('promo_started','promo_ended') then 'promotion'
+                                else 'price'
+                              end = any(%(event_areas)s::text[])
+                            )
+                            and (%(severities)s::text[] = '{}'::text[] or e.severity = any(%(severities)s::text[]))
                             and (
                               %(query)s::text is null
-                              or product ilike %(query)s
-                              or brand ilike %(query)s
-                              or chain ilike %(query)s
-                              or event_type ilike %(query)s
+                              or e.evidence_json->>'product' ilike %(query)s
+                              or e.evidence_json->>'brand' ilike %(query)s
+                              or e.chain ilike %(query)s
+                              or e.event_type ilike %(query)s
                             )
                         )
                         select
@@ -631,7 +521,7 @@ class MarketRepository:
                           count(*) filter (where event_area = 'price') over()::int as total_price_events,
                           count(*) filter (where event_area = 'promotion') over()::int as total_promo_events,
                           count(*) filter (where lower(coalesce(severity, '')) = 'high') over()::int as total_high_severity_events
-                        from scoped
+                        from enriched
                         order by
                           case lower(coalesce(severity, ''))
                             when 'high' then 1
@@ -649,41 +539,16 @@ class MarketRepository:
 
                     cursor.execute(
                         """
-                        with selected_scope as (
-                          select coalesce(
-                            %(date_key)s::int,
-                            (
-                              select max(o.date_key)
-                              from public.mw_core_sku_store_observation o
-                              join public.mkt_campaign_client_access cca
-                                on cca.campaign_id = o.campaign_id
-                               and cca.is_active
-                               and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                               and (cca.valid_to is null or o.business_date <= cca.valid_to)
-                              where cca.client_id::text = %(client_id)s
-                                and (o.client_id is null or o.client_id = cca.client_id)
-                                and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                                and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
-                            )
-                          ) as selected_date_key
-                        )
                         select
-                          selected.selected_date_key,
-                          (
-                            select max(o.date_key)
-                            from public.mw_core_sku_store_observation o
-                            join public.mkt_campaign_client_access cca
-                              on cca.campaign_id = o.campaign_id
-                             and cca.is_active
-                             and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                             and (cca.valid_to is null or o.business_date <= cca.valid_to)
-                            where cca.client_id::text = %(client_id)s
-                              and (o.client_id is null or o.client_id = cca.client_id)
-                              and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                              and o.date_key < selected.selected_date_key
-                          ) as prior_closed_date_key,
+                          max(e.date_key) as selected_date_key,
+                          null::int as prior_closed_date_key,
                           to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int as current_cr_date_key
-                        from selected_scope selected;
+                        from public.mkt_market_event e
+                        join public.mkt_campaign_client_access cca
+                          on cca.campaign_id = e.campaign_id and cca.is_active
+                        where cca.client_id::text = %(client_id)s
+                          and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
+                          and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease');
                         """,
                         params,
                     )
@@ -691,7 +556,6 @@ class MarketRepository:
 
                     stats = rows[0] if rows else {}
                     selected_date_key = date_meta.get("selected_date_key") or max((row.get("date_key") for row in rows if row.get("date_key") is not None), default=date_key)
-                    prior_date_key = date_meta.get("prior_closed_date_key") or max((row.get("previous_date_key") for row in rows if row.get("previous_date_key") is not None), default=None)
                     latest_capture = max((row.get("captured_at_cr") for row in rows if row.get("captured_at_cr")), default=None)
                     kpis = {
                         "total_events": stats.get("total_count", len(rows)),
@@ -704,7 +568,7 @@ class MarketRepository:
                         "latest_date_key": selected_date_key,
                         "latest_capture": latest_capture,
                         "selected_date_key": selected_date_key,
-                        "prior_closed_date_key": prior_date_key,
+                        "prior_closed_date_key": date_meta.get("prior_closed_date_key"),
                         "current_cr_date_key": date_meta.get("current_cr_date_key"),
                     }
 
@@ -868,7 +732,7 @@ class MarketRepository:
                           district,
                           observed_price,
                           reference_price,
-                          discount_pct,
+null::numeric(5,2) as discount_pct,
                           is_available,
                           promo_detected,
                           available_quantity,
@@ -1137,69 +1001,55 @@ class MarketRepository:
                         detail_params,
                     )
                     price_history = [self._json_ready(row) for row in cursor.fetchall()]
-
-                    current_history = [row for row in price_history if row.get("date_key") == detail_params["date_key"]]
-                    prior_history = [row for row in price_history if row.get("date_key") and row.get("date_key") < detail_params["date_key"]]
-                    current_day = current_history[-1] if current_history else (price_history[-1] if price_history else None)
-                    previous_day = prior_history[-1] if prior_history else None
                     events = []
-                    if current_day and previous_day:
-                        current_promo = current_day.get("promo_price_amount") is not None
-                        previous_promo = previous_day.get("promo_price_amount") is not None
 
-                        def product_event(event_type: str, event_area: str, previous_value: float | None, current_value: float | None) -> dict[str, Any]:
-                            change_amount = (
-                                round(float(current_value) - float(previous_value), 2)
-                                if previous_value is not None and current_value is not None
-                                else None
-                            )
-                            change_pct = (
-                                round((change_amount / float(previous_value)) * 100, 2)
-                                if change_amount is not None and previous_value not in (None, 0)
-                                else None
-                            )
-                            severity = "high" if abs(change_pct or change_amount or 0) >= 10 else "medium"
-                            return {
-                                "event_id": f"dod:{detail_params['date_key']}:{product_row.get('product_key')}:{product_row.get('chain')}:{event_type}",
-                                "event_area": event_area,
-                                "event_type": event_type,
-                                "severity": severity,
-                                "business_date": current_day.get("business_date"),
-                                "date_key": current_day.get("date_key"),
-                                "previous_date_key": previous_day.get("date_key"),
-                                "campaign_id": product_row.get("campaign_id"),
-                                "campaign": product_row.get("campaign"),
-                                "chain": product_row.get("chain"),
-                                "brand": product_row.get("brand"),
-                                "product": product_row.get("product"),
-                                "gtin": product_row.get("gtin"),
-                                "product_key": product_row.get("product_key"),
-                                "captured_at_cr": current_day.get("captured_at_cr"),
-                                "previous_captured_at_cr": previous_day.get("captured_at_cr"),
-                                "previous_value": previous_value,
-                                "current_value": current_value,
-                                "change_amount": change_amount,
-                                "change_pct": change_pct,
-                                "promo_share_pct": 100.0 if current_promo else 0.0,
-                                "discount_pct": current_day.get("discount_pct"),
-                                "observed_locations": None,
-                                "visible_locations": None,
-                                "available_locations": None,
-                                "product_url": product_row.get("product_url"),
-                            }
-
-                        if current_promo and not previous_promo:
-                            events.append(product_event("promo_started", "promotion", 0.0, 100.0))
-                        elif previous_promo and not current_promo:
-                            events.append(product_event("promo_ended", "promotion", 100.0, 0.0))
-
-                        if current_promo and previous_promo and current_day.get("promo_price_amount") != previous_day.get("promo_price_amount"):
-                            event_type = "promo_price_increase" if (current_day.get("promo_price_amount") or 0) > (previous_day.get("promo_price_amount") or 0) else "promo_price_decrease"
-                            events.append(product_event(event_type, "price", previous_day.get("promo_price_amount"), current_day.get("promo_price_amount")))
-
-                        if current_day.get("reference_price_amount") != previous_day.get("reference_price_amount"):
-                            event_type = "regular_price_increase" if (current_day.get("reference_price_amount") or 0) > (previous_day.get("reference_price_amount") or 0) else "regular_price_decrease"
-                            events.append(product_event(event_type, "price", previous_day.get("reference_price_amount"), current_day.get("reference_price_amount")))
+                    cursor.execute(
+                        """
+                        select
+                            e.event_type,
+                            e.severity,
+                            e.business_date::text as business_date,
+                            e.date_key,
+                            e.campaign_id,
+                            coalesce(e.campaign_name, '') as campaign,
+                            e.chain,
+                            e.evidence_json->>'brand' as brand,
+                            e.evidence_json->>'product' as product,
+                            e.evidence_json->>'gtin' as gtin,
+                            e.evidence_json->>'product_key' as product_key,
+                            (e.metrics_json->>'previous_value')::numeric(12,2) as previous_value,
+                            (e.metrics_json->>'current_value')::numeric(12,2) as current_value,
+                            (e.metrics_json->>'change_abs')::numeric(12,2) as change_amount,
+                            (e.metrics_json->>'change_pct')::numeric(12,2) as change_pct,
+                            case when e.event_type in ('promo_started','promo_ended')
+                                then (e.metrics_json->>'promo_share_current')::numeric(5,2)
+                                else null
+                            end as promo_share_pct,
+                            null::numeric(5,2) as discount_pct,
+                            e.evidence_json->>'product_url' as product_url,
+                            case
+                                when e.event_type in ('promo_started','promo_ended') then 'promotion'
+                                else 'price'
+                            end as event_area
+                        from public.mkt_market_event e
+                        join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = e.campaign_id and cca.is_active
+                        where cca.client_id::text = %(client_id)s
+                            and e.evidence_json->>'product_key' = %(product_key)s
+                            and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+                        order by e.date_key desc
+                        """,
+                        detail_params,
+                    )
+                    events = [self._json_ready(row) for row in cursor.fetchall()]
+                    for event in events:
+                        event["event_id"] = f"dod:{event.get('date_key')}:{event.get('product_key')}:{event.get('chain')}:{event.get('event_type')}"
+                        event["captured_at_cr"] = event.get("business_date")
+                        event["previous_captured_at_cr"] = None
+                        event["observed_locations"] = None
+                        event["visible_locations"] = None
+                        event["available_locations"] = None
+                        event["previous_date_key"] = None
 
         except errors.UndefinedTable:
             return {"client_id": client_id, "product": None, "chain_snapshot": [], "daily_history": [], "history": [], "price_history": [], "events": []}
@@ -1268,6 +1118,7 @@ class MarketRepository:
                 "campaigns": [],
                 "brands": [],
                 "chains": [],
+                "products": [],
                 "event_areas": [],
                 "severities": [],
             },
@@ -1279,6 +1130,7 @@ class MarketRepository:
         campaigns: dict[str, dict[str, object]] = {}
         brands: set[str] = set()
         chains: set[str] = set()
+        products: dict[str, dict[str, object]] = {}
         event_areas: set[str] = set()
         severities: set[str] = set()
 
@@ -1293,6 +1145,12 @@ class MarketRepository:
                 brands.add(str(row["brand"]))
             if row.get("chain"):
                 chains.add(str(row["chain"]))
+            if row.get("product_key"):
+                product_key = str(row["product_key"])
+                products[product_key] = {
+                    "id": product_key,
+                    "label": str(row.get("product") or product_key),
+                }
             if row.get("event_area"):
                 event_areas.add(str(row["event_area"]))
             if row.get("severity"):
@@ -1302,6 +1160,7 @@ class MarketRepository:
             "campaigns": sorted(campaigns.values(), key=lambda item: str(item["label"])),
             "brands": [{"id": value, "label": value} for value in sorted(brands)],
             "chains": [{"id": value, "label": value} for value in sorted(chains)],
+            "products": sorted(products.values(), key=lambda item: str(item["label"])),
             "event_areas": [{"id": value, "label": value} for value in sorted(event_areas)],
             "severities": [{"id": value, "label": value} for value in sorted(severities)],
         }

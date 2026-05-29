@@ -76,3 +76,9 @@ export async function getIntradayProductDetail(
     `/datasets/intraday-radar/products/${encodeURIComponent(productKey)}${queryString(params)}`
   );
 }
+
+import type { SavedTableViewsPayload } from "./data-views";
+
+export async function getTableViews(viewKey: string): Promise<SavedTableViewsPayload> {
+  return getJson<SavedTableViewsPayload>(`/table-views?view_key=${encodeURIComponent(viewKey)}`);
+}

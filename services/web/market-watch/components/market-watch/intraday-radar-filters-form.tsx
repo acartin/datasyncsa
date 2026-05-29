@@ -40,7 +40,7 @@ export function IntradayRadarFiltersForm({
 
   return (
     <form className="rounded-lg border bg-card p-4" action="/pricing/intraday-radar">
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <SelectFilter name="campaign_id" label="Campaign" value={values.campaign_id} options={filters.campaigns} />
         <label className="grid gap-1 text-sm">
           <span className="font-medium">Día cerrado</span>
@@ -54,8 +54,6 @@ export function IntradayRadarFiltersForm({
         </label>
         <SelectFilter name="brand" label="Brand" value={values.brand} options={filters.brands} />
         <SelectFilter name="chain" label="Chain" value={values.chain} options={filters.chains} />
-        <SelectFilter name="event_area" label="Area" value={values.event_area} options={filters.event_areas} />
-        <SelectFilter name="severity" label="Severity" value={values.severity} options={filters.severities} />
         <label className="grid gap-1 text-sm">
           <span className="font-medium">Search</span>
           <input

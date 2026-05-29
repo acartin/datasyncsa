@@ -68,6 +68,7 @@ services:
       - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
       - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
       - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -78,6 +79,7 @@ services:
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./services/price-scrapper:/workspace/services/price-scrapper:ro
+      - ./services/retail-signal-engine:/workspace/services/retail-signal-engine:ro
     depends_on:
       - postgres
       - market-watch-api
@@ -99,6 +101,7 @@ services:
       - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
       - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
       - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -109,6 +112,7 @@ services:
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./services/price-scrapper:/workspace/services/price-scrapper:ro
+      - ./services/retail-signal-engine:/workspace/services/retail-signal-engine:ro
     depends_on:
       - postgres
       - market-watch-api

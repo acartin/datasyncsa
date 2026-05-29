@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-05-24T02:39:38Z`
+- Generated UTC: `2026-05-28T19:28:48Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
-- Git commit: `c65fc71`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-28`
+- Git commit: `7bea645`
 - Policy: high-signal only; enfocado en Market Watch / pricing.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-05-24T02:39:38Z`
+- Generated UTC: `2026-05-28T19:28:48Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
-- Git commit: `c65fc71`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-28`
+- Git commit: `7bea645`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -41,15 +41,15 @@
 ## 3. SERVICIOS DOCKER ACTUALES
 
 ```text
+redis
 postgres
 admin-console-api
-admin-console-web
 market-watch-api
-dagster-daemon
 dagster-webserver
-portainer
 market-watch-web
-redis
+portainer
+admin-console-web
+dagster-daemon
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO
@@ -80,7 +80,16 @@ services/web/market-watch
 services/web/market-watch/app
 services/web/market-watch/app/[group]
 services/web/market-watch/app/[group]/[module]
+services/web/market-watch/app/api
+services/web/market-watch/app/api/auth
+services/web/market-watch/app/api/settings
+services/web/market-watch/app/login
+services/web/market-watch/app/pricing
+services/web/market-watch/app/pricing/executive-signals
+services/web/market-watch/app/pricing/intraday-radar
+services/web/market-watch/app/pricing/signals
 services/web/market-watch/components
+services/web/market-watch/components/market-watch
 services/web/market-watch/components/portal
 services/web/market-watch/components/ui
 services/web/market-watch/lib
@@ -151,6 +160,9 @@ services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
+services/price-scrapper/seeds/2026-05-26_create_auth_security_baseline.sql
+services/price-scrapper/seeds/2026-05-27_create_mkt_campaign_client_access.sql
+services/price-scrapper/seeds/2026-05-27_create_mw_exp_intraday_radar.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -179,18 +191,6 @@ services/market-watch-api/app/core/security.py
 services/market-watch-api/app/domain/__init__.py
 services/market-watch-api/app/domain/navigation.py
 services/market-watch-api/app/domain/placeholders.py
-services/market-watch-api/app/main.py
-services/market-watch-api/app/repositories/__init__.py
-services/market-watch-api/app/repositories/market_repository.py
-services/market-watch-api/main.py
-services/market-watch-api/requirements.txt
-services/web/market-watch/Dockerfile
-services/web/market-watch/README.md
-services/web/market-watch/app/globals.css
-services/web/market-watch/app/layout.tsx
-services/web/market-watch/app/not-found.tsx
-services/web/market-watch/app/page.tsx
-services/web/market-watch/components/portal/app-shell.tsx
 ```
 
 ## Reglas Operativas
@@ -207,6 +207,7 @@ Precondicion obligatoria al iniciar cada nueva sesion:
 1. Carga base obligatoria:
    - Leer `.agent/RULES.md`
    - Leer `.agent/PY_EXECUTION_MAP.md`
+   - Leer `.agent/MARKET_WATCH_UI_STANDARDS.md`
 2. Determinar si se requiere regeneracion de contexto:
    - faltan `.agent/BRAIN_MAP.md` o `.agent/AI_CONTEXT_PACK.md`
    - el commit actual difiere del commit registrado en `.agent/BRAIN_MAP.md`
@@ -229,8 +230,9 @@ Regla de precedencia:
 1. Codigo ejecutable vigente
 2. `.agent/RULES.md`
 3. `.agent/PY_EXECUTION_MAP.md`
-4. `.agent/BRAIN_MAP.md`
-5. `.agent/AI_CONTEXT_PACK.md`
+4. `.agent/MARKET_WATCH_UI_STANDARDS.md`
+5. `.agent/BRAIN_MAP.md`
+6. `.agent/AI_CONTEXT_PACK.md`
 
 ## 2. Scope Operativo Actual
 
@@ -303,6 +305,7 @@ Servicios o carpetas no autoritativas para este producto:
 - No meter el producto final dentro de `services/price-scrapper/web`.
 - Las pantallas deben priorizar workflows de producto: dashboards, tablas, pivots, reportes, filtros y seleccion de cliente/mercado cuando aplique.
 - SEO pertenece al frontend del producto, no al ETL.
+- Toda implementacion visual o CRUD debe seguir `.agent/MARKET_WATCH_UI_STANDARDS.md`.
 
 ## 7. Infra y Operacion
 
@@ -375,9 +378,6 @@ Rechazar cambios que:
 
 Antes de empezar trabajo nuevo:
 
-1. aplicar la seccion 1
-2. usar `.agent/RULES.md` + `.agent/PY_EXECUTION_MAP.md` como base
-3. consultar `BRAIN_MAP` y `AI_CONTEXT_PACK` solo lo necesario
 ```
 ### `.agent/PY_EXECUTION_MAP.md`
 
@@ -455,11 +455,12 @@ Referencia contractual: `.env.example`
 1. Leer en este orden:
    - `.agent/RULES.md`
    - `.agent/PY_EXECUTION_MAP.md`
+   - `.agent/MARKET_WATCH_UI_STANDARDS.md`
 2. Regenerar contexto (`bash .agent/regenerar_contexto.sh`) solo si aplica:
    - faltan `.agent/BRAIN_MAP.md` o `.agent/AI_CONTEXT_PACK.md`
-- cambio de commit vs `BRAIN_MAP.md`
-- solicitud explicita del usuario
-- cambio grande en `services/price-scrapper`, `services/dagster`, `services/web/market-watch`, `services/market-watch-api` o `docker-compose.yml`
+   - cambio de commit vs `BRAIN_MAP.md`
+   - solicitud explicita del usuario
+   - cambio grande en `services/price-scrapper`, `services/dagster`, `services/web/market-watch`, `services/market-watch-api` o `docker-compose.yml`
 3. Leer `BRAIN_MAP.md` y `AI_CONTEXT_PACK.md` solo por secciones necesarias, sin carga masiva.
 
 No iniciar implementacion/debug/review sin los pasos anteriores.
@@ -509,14 +510,14 @@ Regla de ejecucion:
 
 ```text
 postgres
-admin-console-api
 market-watch-api
-dagster-webserver
-redis
-admin-console-web
 dagster-daemon
 market-watch-web
 portainer
+redis
+admin-console-api
+admin-console-web
+dagster-webserver
 ```
 ### `docker-compose.yml:1-220`
 
@@ -591,6 +592,7 @@ services:
       - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
       - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
       - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -601,6 +603,7 @@ services:
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./services/price-scrapper:/workspace/services/price-scrapper:ro
+      - ./services/retail-signal-engine:/workspace/services/retail-signal-engine:ro
     depends_on:
       - postgres
       - market-watch-api
@@ -622,6 +625,7 @@ services:
       - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_DB_PASSWORD:-dagster}
       - DAGSTER_POSTGRES_DB=${DAGSTER_DB_NAME:-dagster}
       - PRICE_SCRAPPER_ROOT=/workspace/services/price-scrapper
+      - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -632,6 +636,7 @@ services:
     volumes:
       - dagster_home:/opt/dagster/dagster_home
       - ./services/price-scrapper:/workspace/services/price-scrapper:ro
+      - ./services/retail-signal-engine:/workspace/services/retail-signal-engine:ro
     depends_on:
       - postgres
       - market-watch-api
@@ -676,6 +681,7 @@ services:
       - TZ=${TZ:-UTC}
       - MARKET_WATCH_API_BASE_URL=http://market-watch-api:8000/api/v1
       - MARKET_WATCH_PUBLIC_SUPERSET_URL=${MARKET_WATCH_SUPERSET_BASE_URL:-http://192.168.10.32:8088}
+      - MARKET_WATCH_SECURE_COOKIES=${MARKET_WATCH_SECURE_COOKIES:-false}
     depends_on:
       - market-watch-api
     networks:
@@ -736,8 +742,6 @@ networks:
 volumes:
   postgres_data:
   redis_data:
-  dagster_home:
-  portainer_data:
 ```
 ### `.env.example`
 
@@ -767,6 +771,7 @@ MARKET_WATCH_API_TOKEN=
 MARKET_WATCH_DEMO_CLIENT_ID=
 MARKET_WATCH_DEMO_ROLE=system-admin
 MARKET_WATCH_ALLOWED_ORIGINS=http://localhost:8101,http://127.0.0.1:8101
+MARKET_WATCH_SECURE_COOKIES=false
 
 # --- MARKET WATCH AUTH / KEYCLOAK (PLANNED) ---
 MARKET_WATCH_KEYCLOAK_BASE_URL=http://192.168.10.37:8080
@@ -829,7 +834,16 @@ services/web/market-watch
 services/web/market-watch/app
 services/web/market-watch/app/[group]
 services/web/market-watch/app/[group]/[module]
+services/web/market-watch/app/api
+services/web/market-watch/app/api/auth
+services/web/market-watch/app/api/settings
+services/web/market-watch/app/login
+services/web/market-watch/app/pricing
+services/web/market-watch/app/pricing/executive-signals
+services/web/market-watch/app/pricing/intraday-radar
+services/web/market-watch/app/pricing/signals
 services/web/market-watch/components
+services/web/market-watch/components/market-watch
 services/web/market-watch/components/portal
 services/web/market-watch/components/ui
 services/web/market-watch/lib
@@ -900,6 +914,9 @@ services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
+services/price-scrapper/seeds/2026-05-26_create_auth_security_baseline.sql
+services/price-scrapper/seeds/2026-05-27_create_mkt_campaign_client_access.sql
+services/price-scrapper/seeds/2026-05-27_create_mw_exp_intraday_radar.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -930,6 +947,7 @@ services/market-watch-api/app/domain/navigation.py
 services/market-watch-api/app/domain/placeholders.py
 services/market-watch-api/app/main.py
 services/market-watch-api/app/repositories/__init__.py
+services/market-watch-api/app/repositories/auth_repository.py
 services/market-watch-api/app/repositories/market_repository.py
 services/market-watch-api/main.py
 services/market-watch-api/requirements.txt
@@ -937,17 +955,52 @@ services/web/market-watch/Dockerfile
 services/web/market-watch/README.md
 services/web/market-watch/app/globals.css
 services/web/market-watch/app/layout.tsx
+services/web/market-watch/app/login/page.tsx
 services/web/market-watch/app/not-found.tsx
 services/web/market-watch/app/page.tsx
+services/web/market-watch/components/market-watch/crud-toolbar.tsx
+services/web/market-watch/components/market-watch/data-grid.tsx
+services/web/market-watch/components/market-watch/executive-signals-page.tsx
+services/web/market-watch/components/market-watch/filter-bar.tsx
+services/web/market-watch/components/market-watch/intraday-product-grids.tsx
+services/web/market-watch/components/market-watch/intraday-product-page.tsx
+services/web/market-watch/components/market-watch/intraday-radar-filters-form.tsx
+services/web/market-watch/components/market-watch/intraday-radar-grid.tsx
+services/web/market-watch/components/market-watch/intraday-radar-page.tsx
+services/web/market-watch/components/market-watch/kpi-card.tsx
+services/web/market-watch/components/market-watch/product-history-chart.tsx
+services/web/market-watch/components/market-watch/product-visual.tsx
+services/web/market-watch/components/market-watch/row-actions.tsx
+services/web/market-watch/components/market-watch/signal-detail-page.tsx
+services/web/market-watch/components/market-watch/signal-filters-form.tsx
+services/web/market-watch/components/market-watch/signal-grid.tsx
+services/web/market-watch/components/market-watch/signal-kpi-cards.tsx
+services/web/market-watch/components/market-watch/signal-severity-badge.tsx
+services/web/market-watch/components/market-watch/signal-status-badge.tsx
+services/web/market-watch/components/market-watch/sku-price-drivers-grid.tsx
+services/web/market-watch/components/market-watch/store-evidence-grid.tsx
 services/web/market-watch/components/portal/app-shell.tsx
+services/web/market-watch/components/portal/focus-mode-toggle.tsx
 services/web/market-watch/components/portal/module-view.tsx
+services/web/market-watch/components/portal/role-simulator.tsx
+services/web/market-watch/components/portal/shell-state.tsx
 services/web/market-watch/components/portal/sidebar.tsx
 services/web/market-watch/components/portal/topbar.tsx
+services/web/market-watch/components/ui/alert.tsx
 services/web/market-watch/components/ui/badge.tsx
 services/web/market-watch/components/ui/button.tsx
 services/web/market-watch/components/ui/card.tsx
+services/web/market-watch/components/ui/empty-state.tsx
+services/web/market-watch/components/ui/loading-state.tsx
+services/web/market-watch/components/ui/modal.tsx
+services/web/market-watch/components/ui/tabs.tsx
+services/web/market-watch/components/ui/theme-toggle.tsx
 services/web/market-watch/lib/api.ts
+services/web/market-watch/lib/closed-day.ts
+services/web/market-watch/lib/feedback.ts
 services/web/market-watch/lib/modules.ts
+services/web/market-watch/lib/pricing-types.ts
+services/web/market-watch/lib/request-url.ts
 services/web/market-watch/lib/types.ts
 services/web/market-watch/lib/utils.ts
 services/web/market-watch/next-env.d.ts
@@ -1160,6 +1213,7 @@ Dagster vive en este repo como orquestador de Market Watch / pricing.
 Responsabilidades:
 
 - Orquestar jobs, assets, schedules y sensores de `services/price-scrapper`.
+- Ejecutar el pipeline de generacion de señales (`daily_signal_generation_job`).
 - Exponer UI operativa en `DAGSTER_PORT` (`3010` por defecto).
 - Mantener metadatos de orquestacion en la base `dagster` del Postgres principal del compose.
 
@@ -1170,86 +1224,68 @@ Limites:
 - No ejecuta scraping dentro de requests web.
 - No importa codigo de `market-watch-api` ni del frontend.
 
-Estructura de codigo:
+## Estructura de codigo
 
-- `src/market_watch_orchestration/definitions.py`
-  - define assets, ops, jobs y schedules de Dagster.
-  - debe describir el flujo, no contener SQL largo ni armado detallado de comandos.
-- `src/market_watch_orchestration/resources.py`
-  - facade liviana para recursos de Dagster.
-  - mantiene compatibilidad con `definitions.py` y delega a adapters por dominio.
-- `src/market_watch_orchestration/price_scrapper/`
-  - adapter del bounded context `services/price-scrapper`.
-  - `command_runner.py`: ejecucion generica de scripts.
-  - `commands.py`: API de comandos ETL disponibles.
-  - `postgres_runner.py`: ejecucion SQL contra Postgres operacional.
-  - `repository.py`: queries SQL usadas por la orquestacion.
+```
+src/market_watch_orchestration/
+├── __init__.py
+├── definitions.py          # assets, ops, jobs, schedules
+├── resources.py            # facade de recursos
+└── price_scrapper/         # adapter del bounded context price-scrapper
+    ├── command_runner.py   # ejecucion generica de scripts
+    ├── commands.py         # API de comandos ETL disponibles
+    ├── postgres_runner.py  # ejecucion SQL contra Postgres operacional
+    └── repository.py       # queries SQL
+```
 
 Regla de crecimiento:
 
-- Si aparece otro dominio (`rh`, `logistica`, `mantenimiento`, etc.), crear un paquete
+- Si aparece otro dominio (señales, rh, logistica, etc.), crear un paquete
   hermano con sus propios `commands.py`, `repository.py` y runners si aplica.
 - No hacer crecer `resources.py` con SQL, transformaciones o logica de negocio.
 - Dagster debe quedar como mapa operativo; la complejidad de cada dominio vive
   detras de adapters pequeños.
 
-Servicios:
+## Jobs
+
+### ETL principal: `daily_active_campaigns_analytic_job`
+
+- Descubre campañas activas desde `mkt_dim_campaign.is_active = true`
+- Agrupa extracciones por `campaign_id + engine`
+- Ejecuta extracciones en paralelo con spread hasta `18:00` Costa Rica
+- Transforma y carga al final, usando todos los `run_keys` exitosos del día
+- Schedule: `daily_active_campaigns_analytic_schedule` (`0 8 * * *`, apagado por defecto)
+
+### ETL legacy: `campaign_analytic_walmart_family_job` / `campaign_analytic_megasuper_job`
+
+- Ejecutan batch directo sin discovery de campañas
+- Schedules sugeridos (apagados por defecto):
+  - Walmart family: `daily_campaign_analytic_walmart_family_schedule` (`0 5 * * *`)
+  - Megasuper: `daily_campaign_analytic_megasuper_schedule` (`15 5 * * *`)
+
+### Señales: `daily_signal_generation_job`
+
+- Ejecuta `generate_retail_signals` que llama al `retail-signal-engine`
+- Lee datos de la campaña, genera señales ejecutivas y eventos de transicion
+- No tiene schedule automatico; se lanza desde Launchpad
+
+Run config para signals:
+
+```yaml
+ops:
+  generate_retail_signals:
+    config:
+      campaign_id: 1
+      business_date: "2026-05-27"
+      skip_llm: true
+```
+
+## Servicios
 
 - `dagster-webserver`: UI y API de Dagster.
 - `dagster-daemon`: schedules y sensores.
 
-Job recomendado:
-
-- `daily_active_campaigns_analytic_job`
-  - descubre campañas activas desde `mkt_dim_campaign.is_active = true`
-  - agrupa extracciones por `campaign_id + engine`
-  - ejecuta extracciones `extract-only` en paralelo
-  - reparte cada extracción hasta `18:00` hora Costa Rica
-  - transforma y carga una sola vez al final, usando todos los `run_keys` exitosos del día
-  - schedule sugerido: `daily_active_campaigns_analytic_schedule`
-  - cron: `0 8 * * *` en `America/Costa_Rica`
-
-Jobs legacy/manuales:
-
-- `campaign_analytic_walmart_family_job`
-  - equivalente al comando diario con `masxmenos_cr`, `maxi_pali_cr`, `walmart_cr`
-  - schedule sugerido: `daily_campaign_analytic_walmart_family_schedule`
-- `campaign_analytic_megasuper_job`
-  - equivalente al comando diario con `megasuper_cr`
-  - schedule sugerido: `daily_campaign_analytic_megasuper_schedule`
-
-Ambos schedules quedan apagados por defecto. Dagster genera `business_date`
-con la fecha local de `America/Costa_Rica` al momento programado. Para corridas
-manuales se puede sobrescribir `business_date` en la config del launchpad.
-
-Run config manual recomendado:
-
-```yaml
-ops:
-  discover_active_campaign_extract_groups:
-    config:
-      business_date: "2026-05-14"
-      spread_until_cr: "18:00"
-      only_pending: true
-```
-
-Run config manual legacy de ejemplo:
-
-```yaml
-ops:
-  run_campaign_analytic_batch:
-    config:
-      campaign_id: 1
-      chain_ids:
-        - masxmenos_cr
-        - maxi_pali_cr
-        - walmart_cr
-      business_date: "2026-05-11"
-      spread_until_cr: "20:00"
-      only_pending: true
-```
-
-Comandos:
+## Comandos
 
 ```bash
 docker compose up -d --build dagster-webserver dagster-daemon
@@ -1412,6 +1448,7 @@ La autenticacion real con Keycloak queda preparada, pero en esta iteracion el ro
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "tailwind-merge": "2.5.5"
   },
   "devDependencies": {

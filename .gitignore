@@ -23,6 +23,9 @@ logs/
 log/
 **/turn-traces/
 
+# Frontend build artifacts
+**/.next/
+
 # Python Cache
 __pycache__/
 *.py[cod]

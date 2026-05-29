@@ -39,9 +39,6 @@ class PriceScrapperResource(ConfigurableResource):
     def repository(self) -> MarketWatchRepository:
         return MarketWatchRepository(postgres=PostgresRunner())
 
-    def list_command_scripts(self) -> list[str]:
-        return self.command_runner.list_command_scripts()
-
     def discover_active_campaign_extract_groups(self) -> list[dict[str, object]]:
         return self.repository.discover_active_campaign_extract_groups()
 

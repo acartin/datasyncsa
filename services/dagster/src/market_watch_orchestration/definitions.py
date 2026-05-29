@@ -1,8 +1,10 @@
 from datetime import datetime
+import os
+import subprocess
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dagster import (
-    AssetExecutionContext,
     DefaultScheduleStatus,
     Definitions,
     DynamicOut,
@@ -11,9 +13,6 @@ from dagster import (
     MetadataValue,
     OpExecutionContext,
     RunRequest,
-    ScheduleDefinition,
-    asset,
-    define_asset_job,
     job,
     op,
     schedule,
@@ -84,24 +83,6 @@ def _log_process_result(context: OpExecutionContext, step_name: str, result) -> 
         context.log.warning(result.stderr)
     if result.returncode != 0:
         raise RuntimeError(f"{step_name} failed with return code {result.returncode}")
-
-
-@asset(group_name="price_scrapper")
-def price_scrapper_command_inventory(
-    context: AssetExecutionContext,
-    price_scrapper: PriceScrapperResource,
-) -> dict[str, object]:
-    """Inventory current ETL command scripts without executing them."""
-
-    commands = price_scrapper.list_command_scripts()
-    context.add_output_metadata(
-        {
-            "price_scrapper_root": MetadataValue.path(str(price_scrapper.root_path)),
-            "command_count": len(commands),
-            "commands": MetadataValue.json(commands),
-        }
-    )
-    return {"commands": commands}
 
 
 @op(required_resource_keys={"price_scrapper"})
@@ -407,6 +388,57 @@ def campaign_analytic_megasuper_job() -> None:
     run_campaign_analytic_batch()
 
 
+@op(
+    required_resource_keys={"price_scrapper"},
+    config_schema={
+        "campaign_id": Field(int, default_value=DEFAULT_CAMPAIGN_ID),
+        "business_date": Field(str, default_value="", description="YYYY-MM-DD. Defaults to today Costa Rica."),
+        "skip_llm": Field(bool, default_value=True, description="Skip LLM synthesis, use deterministic narratives."),
+    },
+)
+def generate_retail_signals(context: OpExecutionContext) -> dict[str, object]:
+    config = context.op_config
+    campaign_id = config["campaign_id"]
+    business_date = config["business_date"] or datetime.now(CR_TIMEZONE).strftime("%Y-%m-%d")
+    skip_llm = config["skip_llm"]
+
+    signal_root = Path(os.environ.get("RETAIL_SIGNAL_ENGINE_ROOT", "/workspace/services/retail-signal-engine"))
+    command = [
+        "python3",
+        "commands/generate_daily_signals.py",
+        f"--campaign-id={campaign_id}",
+        f"--business-date={business_date}",
+        "--skip-llm" if skip_llm else "",
+    ]
+    command = [part for part in command if part]
+
+    result = subprocess.run(
+        command,
+        cwd=str(signal_root),
+        text=True,
+        capture_output=True,
+        env=os.environ.copy(),
+    )
+    if result.stdout:
+        context.log.info(result.stdout.strip())
+    if result.stderr:
+        context.log.warning(result.stderr.strip())
+    if result.returncode != 0:
+        raise RuntimeError(f"generate_retail_signals failed: {result.stderr}")
+
+    return {
+        "campaign_id": campaign_id,
+        "business_date": business_date,
+        "skip_llm": skip_llm,
+        "returncode": result.returncode,
+    }
+
+
+@job
+def daily_signal_generation_job() -> None:
+    generate_retail_signals()
+
+
 @schedule(
     cron_schedule=DEFAULT_ANALYTIC_START_CRON,
     job=daily_active_campaigns_analytic_job,
@@ -455,27 +487,14 @@ def daily_campaign_analytic_megasuper_schedule(context) -> RunRequest:
     )
 
 
-market_watch_inventory_job = define_asset_job(
-    name="market_watch_inventory_job",
-    selection=[price_scrapper_command_inventory],
-)
-
-daily_market_watch_inventory = ScheduleDefinition(
-    name="daily_market_watch_inventory",
-    job=market_watch_inventory_job,
-    cron_schedule="0 6 * * *",
-)
-
 defs = Definitions(
-    assets=[price_scrapper_command_inventory],
     jobs=[
-        market_watch_inventory_job,
         daily_active_campaigns_analytic_job,
         campaign_analytic_walmart_family_job,
         campaign_analytic_megasuper_job,
+        daily_signal_generation_job,
     ],
     schedules=[
-        daily_market_watch_inventory,
         daily_active_campaigns_analytic_schedule,
         daily_campaign_analytic_walmart_family_schedule,
         daily_campaign_analytic_megasuper_schedule,

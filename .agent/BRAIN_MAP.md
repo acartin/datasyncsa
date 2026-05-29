@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-05-24T02:39:38Z`
+- Generated UTC: `2026-05-28T19:28:48Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-20`
-- Git commit: `c65fc71`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-28`
+- Git commit: `7bea645`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -28,15 +28,15 @@
 ## 3. SERVICIOS DOCKER ACTUALES
 
 ```text
+redis
 postgres
 admin-console-api
-admin-console-web
 market-watch-api
-dagster-daemon
 dagster-webserver
-portainer
 market-watch-web
-redis
+portainer
+admin-console-web
+dagster-daemon
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO
@@ -67,7 +67,16 @@ services/web/market-watch
 services/web/market-watch/app
 services/web/market-watch/app/[group]
 services/web/market-watch/app/[group]/[module]
+services/web/market-watch/app/api
+services/web/market-watch/app/api/auth
+services/web/market-watch/app/api/settings
+services/web/market-watch/app/login
+services/web/market-watch/app/pricing
+services/web/market-watch/app/pricing/executive-signals
+services/web/market-watch/app/pricing/intraday-radar
+services/web/market-watch/app/pricing/signals
 services/web/market-watch/components
+services/web/market-watch/components/market-watch
 services/web/market-watch/components/portal
 services/web/market-watch/components/ui
 services/web/market-watch/lib
@@ -138,6 +147,9 @@ services/price-scrapper/seeds/2026-05-08_adjust_campaign_locations_sardimar_atun
 services/price-scrapper/seeds/2026-05-08_seed_campaign_locations_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia_cr.sql
 services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
+services/price-scrapper/seeds/2026-05-26_create_auth_security_baseline.sql
+services/price-scrapper/seeds/2026-05-27_create_mkt_campaign_client_access.sql
+services/price-scrapper/seeds/2026-05-27_create_mw_exp_intraday_radar.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -168,6 +180,7 @@ services/market-watch-api/app/domain/navigation.py
 services/market-watch-api/app/domain/placeholders.py
 services/market-watch-api/app/main.py
 services/market-watch-api/app/repositories/__init__.py
+services/market-watch-api/app/repositories/auth_repository.py
 services/market-watch-api/app/repositories/market_repository.py
 services/market-watch-api/main.py
 services/market-watch-api/requirements.txt
@@ -175,17 +188,52 @@ services/web/market-watch/Dockerfile
 services/web/market-watch/README.md
 services/web/market-watch/app/globals.css
 services/web/market-watch/app/layout.tsx
+services/web/market-watch/app/login/page.tsx
 services/web/market-watch/app/not-found.tsx
 services/web/market-watch/app/page.tsx
+services/web/market-watch/components/market-watch/crud-toolbar.tsx
+services/web/market-watch/components/market-watch/data-grid.tsx
+services/web/market-watch/components/market-watch/executive-signals-page.tsx
+services/web/market-watch/components/market-watch/filter-bar.tsx
+services/web/market-watch/components/market-watch/intraday-product-grids.tsx
+services/web/market-watch/components/market-watch/intraday-product-page.tsx
+services/web/market-watch/components/market-watch/intraday-radar-filters-form.tsx
+services/web/market-watch/components/market-watch/intraday-radar-grid.tsx
+services/web/market-watch/components/market-watch/intraday-radar-page.tsx
+services/web/market-watch/components/market-watch/kpi-card.tsx
+services/web/market-watch/components/market-watch/product-history-chart.tsx
+services/web/market-watch/components/market-watch/product-visual.tsx
+services/web/market-watch/components/market-watch/row-actions.tsx
+services/web/market-watch/components/market-watch/signal-detail-page.tsx
+services/web/market-watch/components/market-watch/signal-filters-form.tsx
+services/web/market-watch/components/market-watch/signal-grid.tsx
+services/web/market-watch/components/market-watch/signal-kpi-cards.tsx
+services/web/market-watch/components/market-watch/signal-severity-badge.tsx
+services/web/market-watch/components/market-watch/signal-status-badge.tsx
+services/web/market-watch/components/market-watch/sku-price-drivers-grid.tsx
+services/web/market-watch/components/market-watch/store-evidence-grid.tsx
 services/web/market-watch/components/portal/app-shell.tsx
+services/web/market-watch/components/portal/focus-mode-toggle.tsx
 services/web/market-watch/components/portal/module-view.tsx
+services/web/market-watch/components/portal/role-simulator.tsx
+services/web/market-watch/components/portal/shell-state.tsx
 services/web/market-watch/components/portal/sidebar.tsx
 services/web/market-watch/components/portal/topbar.tsx
+services/web/market-watch/components/ui/alert.tsx
 services/web/market-watch/components/ui/badge.tsx
 services/web/market-watch/components/ui/button.tsx
 services/web/market-watch/components/ui/card.tsx
+services/web/market-watch/components/ui/empty-state.tsx
+services/web/market-watch/components/ui/loading-state.tsx
+services/web/market-watch/components/ui/modal.tsx
+services/web/market-watch/components/ui/tabs.tsx
+services/web/market-watch/components/ui/theme-toggle.tsx
 services/web/market-watch/lib/api.ts
+services/web/market-watch/lib/closed-day.ts
+services/web/market-watch/lib/feedback.ts
 services/web/market-watch/lib/modules.ts
+services/web/market-watch/lib/pricing-types.ts
+services/web/market-watch/lib/request-url.ts
 services/web/market-watch/lib/types.ts
 services/web/market-watch/lib/utils.ts
 services/web/market-watch/next-env.d.ts

@@ -273,18 +273,6 @@ def category_path_for_record(
     return " > ".join(parts) if parts else fallback
 
 
-def has_active_promotion(product: dict[str, Any]) -> bool:
-    promotion = product.get("promotion") or {}
-    if isinstance(promotion, dict) and promotion.get("isActive"):
-        return True
-    promotions = product.get("promotions") or []
-    if isinstance(promotions, list):
-        for promo in promotions:
-            if isinstance(promo, dict) and promo.get("isActive"):
-                return True
-    return False
-
-
 def canonical_product_record(
     config: InstaleapStoreConfig,
     root_category: RootCategorySelection,
@@ -310,9 +298,8 @@ def canonical_product_record(
         else:
             quantity, unit = sub_qty if sub_qty is not None else 1, measurement_unit or "un"
 
-    promotion_active = has_active_promotion(product)
     discount_vs_previous = previous_price is not None and price is not None and previous_price > price
-    has_discount = bool(promotion_active or discount_vs_previous)
+    has_discount = bool(discount_vs_previous)
 
     response_path = response_category.get("categoryNamesPath")
     category_path = category_path_for_record(response_path, root_category.name)

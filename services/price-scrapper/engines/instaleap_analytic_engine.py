@@ -129,18 +129,6 @@ def first_non_empty(values: Any) -> str | None:
     return normalize_string(values)
 
 
-def has_active_promotion(product: dict[str, Any]) -> bool:
-    promotion = product.get("promotion") or {}
-    if isinstance(promotion, dict) and promotion.get("isActive"):
-        return True
-    promotions = product.get("promotions") or []
-    if isinstance(promotions, list):
-        for promo in promotions:
-            if isinstance(promo, dict) and promo.get("isActive"):
-                return True
-    return False
-
-
 class InstaleapAnalyticScraper:
     def __init__(
         self,
@@ -226,12 +214,9 @@ class InstaleapAnalyticScraper:
         stock = normalize_number(observed.get("stock"))
         sub_qty = normalize_number(observed.get("subQty"))
         has_discount = bool(
-            has_active_promotion(observed)
-            or (
-                previous_price is not None
-                and price is not None
-                and float(previous_price) > float(price)
-            )
+            previous_price is not None
+            and price is not None
+            and float(previous_price) > float(price)
         )
         product_url = target.product_url
         slug = normalize_string(observed.get("slug"))

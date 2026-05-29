@@ -37,6 +37,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--init-schema", action="store_true", help="Apply SQL schema before generating signals.")
     parser.add_argument("--dry-run", action="store_true", help="Build signals but do not persist them.")
     parser.add_argument("--skip-llm", action="store_true", help="Use deterministic narrative templates only.")
+    parser.add_argument("--include-transitions", action="store_true", default=True, help="Generate day-over-day transition events. Default: true.")
+    parser.add_argument("--no-include-transitions", action="store_false", dest="include_transitions", help="Skip day-over-day transition events.")
     return parser
 
 
@@ -65,6 +67,7 @@ def main(argv: list[str] | None = None) -> None:
         promo_break_min_promo_share_pct=args.promo_break_min_promo_share_pct,
         dry_run=args.dry_run,
         skip_llm=args.skip_llm,
+        include_transitions=args.include_transitions,
     )
     summary = run_signal_generation(db, config)
     print(

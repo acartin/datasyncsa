@@ -33,6 +33,7 @@ class SignalRunConfig:
     promo_break_market_gap_threshold_pct: float = 20.0
     promo_break_min_visible_locations: int = 3
     promo_break_min_promo_share_pct: float = 50.0
+    include_transitions: bool = True
     dry_run: bool = False
     skip_llm: bool = False
 
@@ -627,6 +628,154 @@ def generate_promo_price_breaks(sku_rows: list[dict[str, str]], config: SignalRu
     return events, signals
 
 
+def fetch_paired_daily_rows(db: Database, config: SignalRunConfig, date_key: int) -> list[dict[str, str]]:
+    clauses = [
+        f"o.date_key in ({int(date_key)}, {int(date_key - 1)})",
+        "o.is_available",
+    ]
+    extra = scope_where(config, alias="cca")
+    if extra:
+        clauses.append(extra)
+    return db.fetch_csv(
+        f"""
+with daily as (
+    select
+        o.date_key,
+        o.business_date::text as fecha,
+        cca.client_id::text as client_id,
+        o.campaign_id::text as campaign_id,
+        o.campaign_name as campana,
+        o.chain_label as cadena,
+        o.product_key::text as product_key,
+        o.gtin_norm as gtin,
+        o.brand_name as marca,
+        o.product_name as producto,
+        o.content_quantity::text as contenido,
+        o.content_unit as unidad,
+        round(avg(o.reference_price_amount), 2)::text as precio_referencia,
+        round(avg(o.spot_price_amount), 2)::text as precio_promo,
+        bool_or(o.spot_price_amount is not null)::text as promocion_detectada,
+        o.product_url as producto_url
+    from public.mw_core_sku_store_observation o
+    join public.mkt_campaign_client_access cca
+        on cca.campaign_id = o.campaign_id and cca.is_active
+    where {" and ".join(clauses)}
+    group by o.date_key, o.business_date, cca.client_id, o.campaign_id, o.campaign_name,
+             o.chain_label, o.product_key, o.gtin_norm, o.brand_name, o.product_name,
+             o.content_quantity, o.content_unit, o.product_url
+)
+select
+    curr.date_key as fecha_key,
+    curr.fecha,
+    curr.client_id,
+    curr.campaign_id,
+    curr.campana,
+    curr.cadena,
+    curr.product_key,
+    curr.gtin,
+    curr.marca,
+    curr.producto,
+    curr.contenido,
+    curr.unidad,
+    curr.precio_referencia,
+    curr.precio_promo,
+    curr.promocion_detectada,
+    curr.producto_url,
+    prev.precio_referencia as precio_referencia_anterior,
+    prev.precio_promo as precio_promo_anterior,
+    prev.promocion_detectada as promocion_anterior_detectada
+from daily curr
+left join daily prev
+    on prev.product_key = curr.product_key
+    and prev.cadena = curr.cadena
+    and prev.campaign_id = curr.campaign_id
+    and prev.client_id = curr.client_id
+    and prev.date_key = {int(date_key - 1)}
+where curr.date_key = {int(date_key)}
+"""
+    )
+
+
+def generate_day_over_day_transition_events(
+    paired_rows: list[dict[str, str]],
+    config: SignalRunConfig,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    events: list[dict[str, Any]] = []
+    signals: list[dict[str, Any]] = []
+
+    for row in paired_rows:
+        current_ref = as_float(row.get("precio_referencia"))
+        previous_ref = as_float(row.get("precio_referencia_anterior"))
+        current_promo = as_float(row.get("precio_promo"))
+        previous_promo = as_float(row.get("precio_promo_anterior"))
+        current_promo_detected = str(row.get("promocion_detectada") or "").lower() in {"t", "true", "1", "yes"}
+        previous_promo_detected = str(row.get("promocion_anterior_detectada") or "").lower() in {"t", "true", "1", "yes"}
+
+        transition_events: list[tuple[str, str, str, float | None, float | None]] = []
+
+        if current_promo_detected and not previous_promo_detected:
+            transition_events.append(("promo_started", "promotion", "positive", 0.0, 100.0))
+        elif previous_promo_detected and not current_promo_detected:
+            transition_events.append(("promo_ended", "promotion", "negative", 100.0, 0.0))
+
+        if current_ref is not None and previous_ref is not None and current_ref != previous_ref:
+            direction = "increase" if current_ref > previous_ref else "decrease"
+            effect = "negative" if direction == "increase" else "positive"
+            transition_events.append((f"regular_price_{direction}", "price", effect, previous_ref, current_ref))
+
+        if current_promo is not None and previous_promo is not None and current_promo != previous_promo:
+            direction = "increase" if current_promo > previous_promo else "decrease"
+            effect = "negative" if direction == "increase" else "positive"
+            transition_events.append((f"promo_price_{direction}", "price", effect, previous_promo, current_promo))
+
+        context = base_context(row, config, signal_type="day_over_day")
+        for event_type, event_area, effect, previous_value, current_value in transition_events:
+            change_abs = abs((current_value or 0) - (previous_value or 0))
+            change_pct = (change_abs / previous_value * 100) if previous_value and previous_value > 0 else None
+            severity = severity_from_gap(change_abs if event_area == "price" else change_pct or 0)
+            impact = clamp(change_abs * 2 + change_pct * 0.5) if change_pct else clamp(change_abs)
+            confidence = 90.0 if current_ref and previous_ref else 70.0
+
+            metrics: dict[str, Any] = {
+                "previous_value": previous_value,
+                "current_value": current_value,
+                "change_abs": round(change_abs, 2),
+                "change_pct": round(change_pct, 2) if change_pct is not None else None,
+            }
+            if event_area == "promotion":
+                metrics["promo_share_current"] = 100.0 if current_promo_detected else 0.0
+                metrics["promo_share_previous"] = 100.0 if previous_promo_detected else 0.0
+
+            evidence: dict[str, Any] = {
+                "product": row.get("producto"),
+                "product_key": row.get("product_key"),
+                "gtin": row.get("gtin"),
+                "brand": row.get("marca"),
+                "chain": row.get("cadena"),
+                "previous_ref_price": previous_ref,
+                "current_ref_price": current_ref,
+                "previous_promo_price": previous_promo,
+                "current_promo_price": current_promo,
+            }
+
+            event_context = {**context, "event_type": event_type, "event_area": event_area}
+            event, signal = build_event_and_signal(
+                context=event_context,
+                severity=severity,
+                impact_score=impact,
+                confidence_score=confidence,
+                effect=effect,
+                metrics=metrics,
+                evidence=evidence,
+                source_view="mw_core_sku_store_observation",
+            )
+            signal["audience"] = "category_manager"
+            events.append(event)
+            signals.append(signal)
+
+    return events, signals
+
+
 def enrich_signal_narratives(db: Database, signals: list[dict[str, Any]], *, skip_llm: bool) -> tuple[list[dict[str, Any]], bool]:
     env = db.env
     model = env.get("LLM_DEFAULT_MODEL") or DEFAULT_MODEL
@@ -916,9 +1065,142 @@ where {event_where}
     from public.mkt_client_signal s
     where s.market_event_id = public.mkt_market_event.market_event_id
   );
+
+delete from public.mkt_market_event
+where {event_where}
+  and event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+  and engine_version = {sql_literal(ENGINE_VERSION)};
 commit;
 """
     )
+
+
+def save_events_only(db: Database, events: list[dict[str, Any]]) -> int:
+    if not events:
+        return 0
+    event_csv = io.StringIO()
+    event_fields = [
+        "event_key",
+        "event_fingerprint_key",
+        "event_type",
+        "business_date",
+        "date_key",
+        "client_id",
+        "campaign_id",
+        "campaign_name",
+        "category",
+        "chain",
+        "affected_brands",
+        "beneficiary_brands",
+        "disadvantaged_brands",
+        "neutral_entities",
+        "severity",
+        "impact_score",
+        "confidence_score",
+        "metrics_json",
+        "evidence_json",
+        "source_view",
+        "engine_version",
+    ]
+    writer = csv.DictWriter(event_csv, fieldnames=event_fields, lineterminator="\n")
+    writer.writeheader()
+    for event in events:
+        writer.writerow(
+            {
+                "event_key": event["event_key"],
+                "event_fingerprint_key": event["event_fingerprint_key"],
+                "event_type": event["event_type"],
+                "business_date": event["business_date"],
+                "date_key": event["date_key"],
+                "client_id": event.get("client_id"),
+                "campaign_id": event.get("campaign_id"),
+                "campaign_name": event.get("campaign_name"),
+                "category": event.get("category"),
+                "chain": event.get("chain"),
+                "affected_brands": json_text(event.get("affected_brands") or []),
+                "beneficiary_brands": json_text(event.get("beneficiary_brands") or []),
+                "disadvantaged_brands": json_text(event.get("disadvantaged_brands") or []),
+                "neutral_entities": json_text(event.get("neutral_entities") or []),
+                "severity": event["severity"],
+                "impact_score": event["impact_score"],
+                "confidence_score": event["confidence_score"],
+                "metrics_json": json_text(event.get("metrics") or {}),
+                "evidence_json": json_text(event.get("evidence") or {}),
+                "source_view": event.get("source_view"),
+                "engine_version": ENGINE_VERSION,
+            }
+        )
+
+    sql = f"""
+begin;
+create temp table tmp_market_event_load (
+  event_key text,
+  event_fingerprint_key text,
+  event_type text,
+  business_date date,
+  date_key integer,
+  client_id bigint,
+  campaign_id bigint,
+  campaign_name text,
+  category text,
+  chain text,
+  affected_brands jsonb,
+  beneficiary_brands jsonb,
+  disadvantaged_brands jsonb,
+  neutral_entities jsonb,
+  severity text,
+  impact_score numeric(8,2),
+  confidence_score numeric(8,2),
+  metrics_json jsonb,
+  evidence_json jsonb,
+  source_view text,
+  engine_version text
+);
+copy tmp_market_event_load ({", ".join(event_fields)}) from stdin with (format csv, header true);
+{event_csv.getvalue()}\\.
+insert into public.mkt_market_event (
+  event_key, event_fingerprint_key, event_type, business_date, date_key,
+  client_id, campaign_id, campaign_name, category, chain,
+  affected_brands, beneficiary_brands, disadvantaged_brands, neutral_entities,
+  severity, impact_score, confidence_score,
+  metrics_json, evidence_json, source_view, engine_version, updated_at
+)
+select
+  event_key, event_fingerprint_key, event_type, business_date, date_key,
+  client_id, campaign_id, campaign_name, category, chain,
+  affected_brands, beneficiary_brands, disadvantaged_brands, neutral_entities,
+  severity, impact_score, confidence_score,
+  metrics_json, evidence_json, source_view, engine_version, now()
+from tmp_market_event_load
+on conflict (event_key)
+do update set
+  event_type = excluded.event_type,
+  event_fingerprint_key = excluded.event_fingerprint_key,
+  business_date = excluded.business_date,
+  date_key = excluded.date_key,
+  client_id = excluded.client_id,
+  campaign_id = excluded.campaign_id,
+  campaign_name = excluded.campaign_name,
+  category = excluded.category,
+  chain = excluded.chain,
+  affected_brands = excluded.affected_brands,
+  beneficiary_brands = excluded.beneficiary_brands,
+  disadvantaged_brands = excluded.disadvantaged_brands,
+  neutral_entities = excluded.neutral_entities,
+  severity = excluded.severity,
+  impact_score = excluded.impact_score,
+  confidence_score = excluded.confidence_score,
+  metrics_json = excluded.metrics_json,
+  evidence_json = excluded.evidence_json,
+  source_view = excluded.source_view,
+  engine_version = excluded.engine_version,
+  updated_at = now();
+select count(*) from tmp_market_event_load;
+commit;
+"""
+    output = db.run_psql(sql, tuples_only=True)
+    rows = [line for line in output.splitlines() if line.strip()]
+    return int(rows[-1]) if rows else 0
 
 
 def save_signals(db: Database, events: list[dict[str, Any]], signals: list[dict[str, Any]]) -> tuple[int, int]:
@@ -1362,6 +1644,7 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
 
     all_events: list[dict[str, Any]] = []
     all_signals: list[dict[str, Any]] = []
+
     for generator_events, generator_signals in [
         generate_brand_position(brand_rows, config),
         generate_sku_price_gaps(sku_rows, config),
@@ -1388,18 +1671,35 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
         lifecycle_signals,
         skip_llm=config.skip_llm,
     )
+
+    transition_events: list[dict[str, Any]] = []
+    transition_signals: list[dict[str, Any]] = []
+    if config.include_transitions and date_key > 0:
+        try:
+            paired_rows = fetch_paired_daily_rows(db, config, date_key)
+            trans_events, trans_signals = generate_day_over_day_transition_events(
+                paired_rows, config
+            )
+            transition_events = dedupe_by_key(trans_events, "event_key")
+            transition_signals = dedupe_by_key(trans_signals, "signal_key")
+        except Exception as exc:
+            pass
+
     if config.dry_run:
         return {
             "date_key": date_key,
             "business_date": business_date,
-            "market_events": len(selected_events),
-            "client_signals": len(enriched_signals),
+            "market_events": len(selected_events) + len(transition_events),
+            "client_signals": len(enriched_signals) + len(transition_signals),
             "saved": False,
             "llm_used": llm_used,
         }
 
     delete_existing_scope(db, date_key=date_key, config=config)
     saved_events, saved_signals = save_signals(db, selected_events, enriched_signals)
+    trans_event_count = save_events_only(db, transition_events)
+    saved_events += trans_event_count
+    saved_signals += len(transition_signals)
     return {
         "date_key": date_key,
         "business_date": business_date,
