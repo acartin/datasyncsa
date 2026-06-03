@@ -17,7 +17,7 @@ function SelectFilter({
     <label className="grid gap-1 text-sm">
       <span className="font-medium">{label}</span>
       <select name={name} defaultValue={value ?? ""} className="h-10 rounded-md border bg-background px-3 text-sm">
-        <option value="">Todos</option>
+        <option value="">All</option>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
@@ -43,7 +43,7 @@ export function IntradayRadarFiltersForm({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <SelectFilter name="campaign_id" label="Campaign" value={values.campaign_id} options={filters.campaigns} />
         <label className="grid gap-1 text-sm">
-          <span className="font-medium">Día cerrado</span>
+          <span className="font-medium">Closed day</span>
           <input
             type="date"
             name="date_key"
@@ -60,7 +60,7 @@ export function IntradayRadarFiltersForm({
             name="q"
             defaultValue={values.q ?? ""}
             className="h-10 rounded-md border bg-background px-3 text-sm"
-            placeholder="Producto, marca, cadena"
+            placeholder="Product, brand, chain"
           />
         </label>
       </div>
@@ -68,7 +68,7 @@ export function IntradayRadarFiltersForm({
         <Button asChild variant="outline">
           <a href="/pricing/intraday-radar">Clear</a>
         </Button>
-        <Button type="submit">Aplicar</Button>
+        <Button type="submit">Apply</Button>
       </div>
     </form>
   );

@@ -3,60 +3,141 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 25% 98%;
-  --foreground: 222 35% 12%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 35% 12%;
-  --primary: 197 84% 32%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 160 32% 92%;
-  --secondary-foreground: 170 48% 16%;
-  --muted: 214 22% 93%;
-  --muted-foreground: 217 12% 43%;
-  --accent: 43 92% 58%;
-  --accent-foreground: 35 60% 14%;
-  --destructive: 0 72% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 214 22% 84%;
-  --input: 214 22% 84%;
-  --ring: 197 84% 32%;
-  --radius: 0.5rem;
+  --ink-primary: #0f1117;
+  --ink-secondary: #6b7280;
+  --ink-muted: #9ca3af;
+  --surface: #ffffff;
+  --surface-2: #f8f9fa;
+  --surface-3: #f1f2f4;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-2: rgba(0, 0, 0, 0.14);
+  --red: #be2d2d;
+  --amber: #92510a;
+  --green: #0f6e56;
+  --blue: #1e40af;
+  --red-bg: #fee2e2;
+  --red-text: #991b1b;
+  --amber-bg: #fef3c7;
+  --amber-text: #92400e;
+  --green-bg: #d1fae5;
+  --green-text: #065f46;
+  --blue-bg: #dbeafe;
+  --blue-text: #1e40af;
+  --purple-bg: #ede9fe;
+  --purple-text: #5b21b6;
+  --teal-bg: #ccfbf1;
+  --teal-text: #0f766e;
+  --coral-bg: #ffe4de;
+  --coral-text: #9a3412;
+  --chain-walmart-bg: #dbeafe;
+  --chain-walmart-text: #1e40af;
+  --chain-maxi-bg: #fef3c7;
+  --chain-maxi-text: #92400e;
+  --chain-maximos-bg: #ede9fe;
+  --chain-maximos-text: #5b21b6;
+  --chain-mega-bg: #d1fae5;
+  --chain-mega-text: #065f46;
+  --chart-grid: rgba(0, 0, 0, 0.06);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-pill: 20px;
+  --background: var(--surface-2);
+  --foreground: var(--ink-primary);
+  --card: var(--surface);
+  --card-foreground: var(--ink-primary);
+  --primary: var(--ink-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink-primary);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-secondary);
+  --accent: var(--amber);
+  --accent-foreground: #ffffff;
+  --destructive: var(--red);
+  --destructive-foreground: #ffffff;
+  --input: var(--border-2);
+  --ring: var(--ink-primary);
+  --radius: 10px;
 }
 
 .dark {
-  --background: 222 28% 9%;
-  --foreground: 210 24% 92%;
-  --card: 222 25% 12%;
-  --card-foreground: 210 24% 92%;
-  --primary: 195 78% 42%;
-  --primary-foreground: 210 28% 96%;
-  --secondary: 218 22% 18%;
-  --secondary-foreground: 210 24% 88%;
-  --muted: 220 18% 16%;
-  --muted-foreground: 215 12% 68%;
-  --accent: 43 82% 54%;
-  --accent-foreground: 35 52% 13%;
-  --destructive: 0 63% 45%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 18% 24%;
-  --input: 220 18% 24%;
-  --ring: 195 78% 42%;
+  --ink-primary: #f0f0ef;
+  --ink-secondary: #9ca3af;
+  --ink-muted: #6b7280;
+  --surface: #111318;
+  --surface-2: #1a1d24;
+  --surface-3: #22262f;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-2: rgba(255, 255, 255, 0.14);
+  --red: #dc4a4a;
+  --amber: #b86b20;
+  --green: #2a9176;
+  --blue: #4b6fe3;
+  --red-bg: #3b1212;
+  --red-text: #fca5a5;
+  --amber-bg: #3b2407;
+  --amber-text: #fcd34d;
+  --green-bg: #072a1c;
+  --green-text: #6ee7b7;
+  --blue-bg: #0f2140;
+  --blue-text: #93c5fd;
+  --purple-bg: #1e1544;
+  --purple-text: #c4b5fd;
+  --teal-bg: #0a2926;
+  --teal-text: #5eead4;
+  --coral-bg: #3a1509;
+  --coral-text: #fdba74;
+  --chain-walmart-bg: #0f2140;
+  --chain-walmart-text: #93c5fd;
+  --chain-maxi-bg: #3b2407;
+  --chain-maxi-text: #fcd34d;
+  --chain-maximos-bg: #1e1544;
+  --chain-maximos-text: #c4b5fd;
+  --chain-mega-bg: #072a1c;
+  --chain-mega-text: #6ee7b7;
+  --chart-grid: rgba(255, 255, 255, 0.07);
+  --background: var(--surface-2);
+  --foreground: var(--ink-primary);
+  --card: var(--surface);
+  --card-foreground: var(--ink-primary);
+  --primary: var(--ink-primary);
+  --primary-foreground: #111318;
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink-primary);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-secondary);
+  --accent: var(--amber);
+  --accent-foreground: #111318;
+  --destructive: var(--red);
+  --destructive-foreground: #111318;
+  --input: var(--border-2);
+  --ring: var(--ink-primary);
 }
 
 * {
-  border-color: hsl(var(--border));
+  border-color: var(--border);
 }
 
 body {
   margin: 0;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+  font-weight: 400;
   letter-spacing: 0;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+.font-mono,
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono), monospace;
 }
 
 .shell-focus .focus-hidden {

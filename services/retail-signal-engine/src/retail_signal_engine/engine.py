@@ -629,16 +629,24 @@ def generate_promo_price_breaks(sku_rows: list[dict[str, str]], config: SignalRu
 
 
 def fetch_paired_daily_rows(db: Database, config: SignalRunConfig, date_key: int) -> list[dict[str, str]]:
-    clauses = [
-        f"o.date_key in ({int(date_key)}, {int(date_key - 1)})",
-        "o.is_available",
-    ]
+    previous_clauses = [f"prev.date_key < {int(date_key)}", "prev.is_available"]
+    clauses = [f"(o.date_key = {int(date_key)} or o.date_key = pd.previous_date_key)", "o.is_available"]
     extra = scope_where(config, alias="cca")
     if extra:
         clauses.append(extra)
+    previous_extra = scope_where(config, alias="prev_cca")
+    if previous_extra:
+        previous_clauses.append(previous_extra)
     return db.fetch_csv(
         f"""
-with daily as (
+with previous_date as (
+    select max(prev.date_key) as previous_date_key
+    from public.mw_core_sku_store_observation prev
+    join public.mkt_campaign_client_access prev_cca
+        on prev_cca.campaign_id = prev.campaign_id and prev_cca.is_active
+    where {" and ".join(previous_clauses)}
+),
+daily as (
     select
         o.date_key,
         o.business_date::text as fecha,
@@ -659,14 +667,30 @@ with daily as (
     from public.mw_core_sku_store_observation o
     join public.mkt_campaign_client_access cca
         on cca.campaign_id = o.campaign_id and cca.is_active
-    where {" and ".join(clauses)}
+    cross join previous_date pd
+    where ({" and ".join(clauses)})
     group by o.date_key, o.business_date, cca.client_id, o.campaign_id, o.campaign_name,
              o.chain_label, o.product_key, o.gtin_norm, o.brand_name, o.product_name,
              o.content_quantity, o.content_unit, o.product_url
+),
+previous_dates as (
+    select
+        curr.client_id,
+        curr.campaign_id,
+        max(prev.date_key) as previous_date_key
+    from daily curr
+    left join daily prev
+        on prev.client_id = curr.client_id
+        and prev.campaign_id = curr.campaign_id
+        and prev.date_key < curr.date_key
+    where curr.date_key = {int(date_key)}
+    group by curr.client_id, curr.campaign_id
 )
 select
     curr.date_key as fecha_key,
+    pd.previous_date_key::text as fecha_key_anterior,
     curr.fecha,
+    prev.fecha as fecha_anterior,
     curr.client_id,
     curr.campaign_id,
     curr.campana,
@@ -685,12 +709,15 @@ select
     prev.precio_promo as precio_promo_anterior,
     prev.promocion_detectada as promocion_anterior_detectada
 from daily curr
+left join previous_dates pd
+    on pd.client_id = curr.client_id
+    and pd.campaign_id = curr.campaign_id
 left join daily prev
     on prev.product_key = curr.product_key
     and prev.cadena = curr.cadena
     and prev.campaign_id = curr.campaign_id
     and prev.client_id = curr.client_id
-    and prev.date_key = {int(date_key - 1)}
+    and prev.date_key = pd.previous_date_key
 where curr.date_key = {int(date_key)}
 """
     )
@@ -704,6 +731,8 @@ def generate_day_over_day_transition_events(
     signals: list[dict[str, Any]] = []
 
     for row in paired_rows:
+        current_date_key = as_int(row.get("fecha_key"))
+        previous_date_key = as_int(row.get("fecha_key_anterior"))
         current_ref = as_float(row.get("precio_referencia"))
         previous_ref = as_float(row.get("precio_referencia_anterior"))
         current_promo = as_float(row.get("precio_promo"))
@@ -737,6 +766,13 @@ def generate_day_over_day_transition_events(
             confidence = 90.0 if current_ref and previous_ref else 70.0
 
             metrics: dict[str, Any] = {
+                "current_date_key": current_date_key,
+                "previous_date_key": previous_date_key,
+                "calendar_gap_days": (
+                    current_date_key - previous_date_key
+                    if current_date_key is not None and previous_date_key is not None
+                    else None
+                ),
                 "previous_value": previous_value,
                 "current_value": current_value,
                 "change_abs": round(change_abs, 2),
@@ -756,9 +792,16 @@ def generate_day_over_day_transition_events(
                 "current_ref_price": current_ref,
                 "previous_promo_price": previous_promo,
                 "current_promo_price": current_promo,
+                "previous_date_key": previous_date_key,
+                "current_date_key": current_date_key,
             }
 
             event_context = {**context, "event_type": event_type, "event_area": event_area}
+            if event_type == "promo_ended" and previous_date_key is not None:
+                event_context["date_key"] = previous_date_key
+                previous_business_date = row.get("fecha_anterior")
+                if previous_business_date:
+                    event_context["business_date"] = previous_business_date
             event, signal = build_event_and_signal(
                 context=event_context,
                 severity=severity,
@@ -1068,7 +1111,12 @@ where {event_where}
 
 delete from public.mkt_market_event
 where {event_where}
-  and event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+  and event_type in (
+    select event_type
+    from public.mkt_dim_market_event_type
+    where appears_in_intraday_radar
+      and is_active
+  )
   and engine_version = {sql_literal(ENGINE_VERSION)};
 commit;
 """
@@ -1690,7 +1738,7 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
             "date_key": date_key,
             "business_date": business_date,
             "market_events": len(selected_events) + len(transition_events),
-            "client_signals": len(enriched_signals) + len(transition_signals),
+            "client_signals": len(enriched_signals),
             "saved": False,
             "llm_used": llm_used,
         }
@@ -1699,7 +1747,6 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
     saved_events, saved_signals = save_signals(db, selected_events, enriched_signals)
     trans_event_count = save_events_only(db, transition_events)
     saved_events += trans_event_count
-    saved_signals += len(transition_signals)
     return {
         "date_key": date_key,
         "business_date": business_date,

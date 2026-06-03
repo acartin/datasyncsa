@@ -215,7 +215,7 @@ promedios de surtido por marca
 Dataset:
 
 ```text
-mw_bi_price_events
+mw_bi_radar_event_feed
 ```
 
 Objetivo:

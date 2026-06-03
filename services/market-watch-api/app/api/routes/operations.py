@@ -12,8 +12,8 @@ def campaigns(context: ClientContext = Depends(require_client_context)) -> dict[
     return module_payload(
         context=context,
         module_id="operations.campaigns",
-        title="Campanas",
-        description="Configuracion operativa de campanas y cadenas objetivo.",
+        title="Campaigns",
+        description="Operational configuration for campaigns and target chains.",
         records=[
             {
                 "id": "campaign-1",
@@ -23,7 +23,7 @@ def campaigns(context: ClientContext = Depends(require_client_context)) -> dict[
             }
         ],
         actions=[
-            {"id": "create-campaign", "label": "Crear campana", "enabled": context.role != "client-viewer"},
+            {"id": "create-campaign", "label": "Create campaign", "enabled": context.role != "client-viewer"},
         ],
     )
 
@@ -33,8 +33,8 @@ def catalogs(context: ClientContext = Depends(require_client_context)) -> dict[s
     return module_payload(
         context=context,
         module_id="operations.catalogs",
-        title="Catalogos",
-        description="Fuentes y catalogos asociados a cadenas y locations.",
+        title="Catalogs",
+        description="Sources and catalogs associated with chains and locations.",
         records=[
             {"id": "walmart-family", "name": "Walmart family CR", "chains": 3, "status": "active"},
             {"id": "megasuper", "name": "Megasuper CR", "chains": 1, "status": "active"},
@@ -47,8 +47,8 @@ def monitored_products(context: ClientContext = Depends(require_client_context))
     return module_payload(
         context=context,
         module_id="operations.monitored-products",
-        title="Productos monitoreados",
-        description="Productos objetivo, GTINs y estado de matching.",
+        title="Monitored Products",
+        description="Target products, GTINs and matching status.",
         records=[
             {"id": "sku-group-atun", "name": "Atun en conserva", "status": "in-review", "matches": 0},
         ],
@@ -60,8 +60,8 @@ def competitors(context: ClientContext = Depends(require_client_context)) -> dic
     return module_payload(
         context=context,
         module_id="operations.competitors",
-        title="Competidores",
-        description="Competidores activos por mercado y cliente.",
+        title="Competitors",
+        description="Active competitors by market and client.",
         records=[
             {"id": "masxmenos_cr", "name": "Mas x Menos", "market": "CR", "status": "active"},
             {"id": "maxi_pali_cr", "name": "Maxi Pali", "market": "CR", "status": "active"},
@@ -76,12 +76,12 @@ def runs(context: ClientContext = Depends(require_client_context)) -> dict[str, 
     return module_payload(
         context=context,
         module_id="operations.runs",
-        title="Corridas",
-        description="Estado de ejecuciones ETL orquestadas por Dagster.",
+        title="Runs",
+        description="Status of ETL executions orchestrated by Dagster.",
         records=[
             {"id": "dagster", "name": "Dagster", "status": "external", "url": "http://192.168.10.37:3010"},
         ],
         actions=[
-            {"id": "open-dagster", "label": "Abrir Dagster", "enabled": True},
+            {"id": "open-dagster", "label": "Open Dagster", "enabled": True},
         ],
     )

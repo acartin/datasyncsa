@@ -79,8 +79,8 @@ def clients(
     return module_payload(
         context=context,
         module_id="settings.clients",
-        title="Clientes",
-        description="Clientes, mercados y tenants habilitados para el portal.",
+        title="Clients",
+        description="Clients, markets and tenants enabled for the portal.",
         records=repository.list_clients(),
     )
 
@@ -129,8 +129,8 @@ def users(
     return module_payload(
         context=context,
         module_id="settings.users",
-        title="Usuarios",
-        description="Usuarios locales de fase 0. El backend resuelve roles y tenant antes de exponer datos.",
+        title="Users",
+        description="Phase 0 local users. The backend resolves roles and tenant before exposing data.",
         records=repository.list_users(),
     )
 
@@ -183,7 +183,7 @@ def roles(
         context=context,
         module_id="settings.roles",
         title="Roles",
-        description="Roles y permisos base de negocio.",
+        description="Base business roles and permissions.",
         records=repository.list_roles(),
     )
 
@@ -227,8 +227,8 @@ def integrations(context: ClientContext = Depends(require_client_context)) -> di
     return module_payload(
         context=context,
         module_id="settings.integrations",
-        title="Integraciones",
-        description="Estado de integraciones externas del portal.",
+        title="Integrations",
+        description="Status of external portal integrations.",
         records=[
             {"id": "keycloak", "name": "Keycloak", "status": "planned"},
             {"id": "superset", "name": "Superset", "status": "external"},

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export function EmptyState({
-  title = "Sin resultados",
+  title = "No results",
   description,
   className
 }: {

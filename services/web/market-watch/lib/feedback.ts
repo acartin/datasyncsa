@@ -9,25 +9,25 @@ export function feedbackFromSearchParams(params?: { feedback?: string; message?:
 
   return {
     type,
-    message: params?.message?.trim() || "Operacion procesada."
+    message: params?.message?.trim() || "Operation processed."
   };
 }
 
 export function friendlyApiError(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "No se pudo completar la operacion.";
+  if (!payload || typeof payload !== "object") return "The operation could not be completed.";
   const detail = (payload as { detail?: unknown }).detail;
 
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
     const first = detail[0] as { loc?: unknown[]; msg?: string; ctx?: { min_length?: number } } | undefined;
-    const field = Array.isArray(first?.loc) ? String(first?.loc.at(-1) ?? "campo") : "campo";
+    const field = Array.isArray(first?.loc) ? String(first?.loc.at(-1) ?? "field") : "field";
     if (first?.ctx?.min_length) {
-      return `El campo ${field} debe tener al menos ${first.ctx.min_length} caracteres.`;
+      return `The ${field} field must have at least ${first.ctx.min_length} characters.`;
     }
     if (first?.msg) return `${field}: ${first.msg}`;
   }
 
-  return "No se pudo completar la operacion. Revisa los campos e intenta de nuevo.";
+  return "The operation could not be completed. Review the fields and try again.";
 }
 
 export function feedbackQuery(type: Feedback["type"], message: string) {

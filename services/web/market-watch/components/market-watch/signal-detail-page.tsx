@@ -49,8 +49,8 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
         <Card>
           <CardContent>
             <EmptyState
-              title="Senal no encontrada"
-              description="La senal no existe para el cliente activo o ya no esta publicada en la capa semantica."
+              title="Signal not found"
+              description="The signal does not exist for the active client or is no longer published in the semantic layer."
             />
           </CardContent>
         </Card>
@@ -67,11 +67,12 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
   const gtin = firstValue(payload.drivers, (item) => textValue(item.gtin)) ?? firstValue(payload.evidence, (item) => textValue(item.gtin));
   const productKey = signal.product_key ?? textValue(firstDriver?.product_key) ?? textValue(firstEvidence?.product_key);
   const productUrl = firstValue(payload.drivers, (item) => item.product_url) ?? firstValue(payload.evidence, (item) => item.product_url);
+  const hasSynthesis = Boolean(signal.summary || signal.business_reading || signal.recommended_action);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-        <div>
+        <div className="w-full max-w-5xl">
           <Button asChild variant="outline" className="mb-4">
             <Link href="/pricing/executive-signals">
               <ArrowLeft className="h-4 w-4" />
@@ -83,8 +84,29 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
             <SignalStatusBadge status={signal.signal_status} />
             <span className="text-sm text-muted-foreground">{signal.business_date}</span>
           </div>
-          <h1 className="max-w-5xl text-2xl font-semibold">{signal.headline}</h1>
+          <h1 className="max-w-5xl text-2xl font-light">{signal.headline}</h1>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{signal.summary}</p>
+          {hasSynthesis ? (
+            <div className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-card/80 shadow-sm">
+              <div className="border-b border-border/70 bg-muted/40 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">LLM Synthesis</div>
+              </div>
+              <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs font-medium uppercase text-muted-foreground">Business Reading</div>
+                    <p className="mt-1 text-sm leading-6 text-foreground/90">{signal.business_reading || "No business reading available."}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs font-medium uppercase text-muted-foreground">Recommended Action</div>
+                    <p className="mt-1 text-sm leading-6 text-foreground/90">{signal.recommended_action || "No recommended action available."}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -114,8 +136,8 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
                   label="Product URL"
                   value={
                     productUrl ? (
-                      <a className="font-medium text-primary hover:underline" href={productUrl} target="_blank" rel="noreferrer">
-                        Abrir producto
+                      <a className="font-medium text-semantic-blue hover:underline" href={productUrl} target="_blank" rel="noreferrer">
+                        Open product
                       </a>
                     ) : (
                       "-"
@@ -131,7 +153,7 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
       <Card>
         <CardHeader>
           <div className="font-medium">SKU Price Drivers</div>
-          <div className="mt-1 text-sm text-muted-foreground">Comparacion por cadena para validar gap, indice y accion sugerida.</div>
+          <div className="mt-1 text-sm text-muted-foreground">Chain comparison to validate gap, index and suggested action.</div>
         </CardHeader>
         <CardContent>
           <SkuPriceDriversGrid drivers={payload.drivers} />
@@ -141,7 +163,7 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
       <Card>
         <CardHeader>
           <div className="font-medium">Store Evidence</div>
-          <div className="mt-1 text-sm text-muted-foreground">Evidencia por tienda con precio observado, promo y URL verificable.</div>
+          <div className="mt-1 text-sm text-muted-foreground">Store-level evidence with observed price, promotion and verifiable URL.</div>
         </CardHeader>
         <CardContent>
           <StoreEvidenceGrid evidence={payload.evidence} />

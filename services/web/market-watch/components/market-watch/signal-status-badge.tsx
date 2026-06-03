@@ -2,10 +2,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const statusClasses: Record<string, string> = {
-  new: "border-primary bg-primary text-primary-foreground",
-  active: "border-accent bg-accent text-accent-foreground",
-  repeated: "border-accent text-accent-foreground",
-  resolved: "border-muted bg-muted text-muted-foreground"
+  new: "bg-surface-2 text-foreground",
+  active: "bg-[#d1fae5] text-[#065f46]",
+  repeated: "bg-[#fef3c7] text-[#92400e]",
+  resolved: "bg-surface-2 text-ink-secondary"
 };
 
 export function SignalStatusBadge({ status }: { status?: string | null }) {

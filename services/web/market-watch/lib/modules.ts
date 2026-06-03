@@ -1,15 +1,15 @@
 export const moduleEndpointByPath: Record<string, string> = {
   "/analytics/dashboards": "/analytics/dashboards",
-  "/analytics/reportes": "/analytics/reports",
-  "/operacion/campanas": "/operations/campaigns",
-  "/operacion/catalogos": "/operations/catalogs",
-  "/operacion/productos-monitoreados": "/operations/monitored-products",
-  "/operacion/competidores": "/operations/competitors",
-  "/operacion/corridas": "/operations/runs",
-  "/configuracion/clientes": "/settings/clients",
-  "/configuracion/usuarios": "/settings/users",
-  "/configuracion/roles": "/settings/roles",
-  "/configuracion/integraciones": "/settings/integrations"
+  "/analytics/reports": "/analytics/reports",
+  "/operations/campaigns": "/operations/campaigns",
+  "/operations/catalogs": "/operations/catalogs",
+  "/operations/monitored-products": "/operations/monitored-products",
+  "/operations/competitors": "/operations/competitors",
+  "/operations/runs": "/operations/runs",
+  "/settings/clients": "/settings/clients",
+  "/settings/users": "/settings/users",
+  "/settings/roles": "/settings/roles",
+  "/settings/integrations": "/settings/integrations"
 };
 
 export const roleOptions = [

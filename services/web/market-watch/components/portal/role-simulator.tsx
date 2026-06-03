@@ -24,14 +24,14 @@ export function RoleSimulator({
               type="submit"
               variant={active ? "default" : "outline"}
               className="h-8 px-2 text-xs"
-              title={`Simular ${option.label}`}
+              title={`Simulate ${option.label}`}
             >
               {option.label}
             </Button>
           </form>
         );
       })}
-      {isSimulated ? <Badge>simulado</Badge> : null}
+      {isSimulated ? <Badge>simulated</Badge> : null}
     </div>
   );
 }

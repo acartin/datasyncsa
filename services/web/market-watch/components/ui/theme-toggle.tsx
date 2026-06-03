@@ -40,8 +40,8 @@ export function ThemeToggle() {
 
   return (
     <Button
-      aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-      title={theme === "dark" ? "Tema claro" : "Tema oscuro"}
+      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      title={theme === "dark" ? "Light theme" : "Dark theme"}
       type="button"
       variant="outline"
       onClick={toggleTheme}

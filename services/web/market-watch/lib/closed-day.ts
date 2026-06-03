@@ -29,7 +29,7 @@ export function costaRicaYesterdayInputValue() {
 }
 
 export function normalizeClosedDateKey(value: string | undefined) {
-  if (!value) return costaRicaYesterdayDateKey();
+  if (!value) return undefined;
   const compact = value.replaceAll("-", "").trim();
-  return /^\d{8}$/.test(compact) ? compact : costaRicaYesterdayDateKey();
+  return /^\d{8}$/.test(compact) ? compact : undefined;
 }

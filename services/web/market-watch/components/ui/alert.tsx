@@ -11,10 +11,10 @@ const icons = {
 };
 
 const styles = {
-  info: "border-primary/30 bg-primary/10 text-foreground",
-  success: "border-secondary bg-secondary text-secondary-foreground",
-  warning: "border-accent/40 bg-accent/15 text-foreground",
-  error: "border-destructive/30 bg-muted text-foreground"
+  info: "border-border-2 bg-card text-foreground [&_svg]:text-semantic-blue",
+  success: "border-border-2 bg-card text-foreground [&_svg]:text-semantic-green",
+  warning: "border-border-2 bg-card text-foreground [&_svg]:text-semantic-amber",
+  error: "border-border-2 bg-card text-foreground [&_svg]:text-semantic-red"
 };
 
 export function Alert({

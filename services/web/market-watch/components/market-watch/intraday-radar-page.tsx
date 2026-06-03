@@ -24,7 +24,7 @@ function pageHref(filters: IntradayRadarSearchParams, offset: number, limit: num
 function selectedCampaign(payload: IntradayRadarPayload, values: IntradayRadarSearchParams) {
   if (values.campaign_id) {
     const selected = splitValues(values.campaign_id);
-    if (selected.length > 1) return `${selected.length} campañas`;
+    if (selected.length > 1) return `${selected.length} campaigns`;
     return payload.filters.campaigns.find((campaign) => campaign.id === selected[0])?.label ?? selected[0];
   }
   return payload.items[0]?.campaign ?? "All campaigns";
@@ -49,21 +49,23 @@ function currentViewState(filters: IntradayRadarSearchParams): DataViewState {
       brand: splitValues(filters.brand),
       chain: splitValues(filters.chain),
       product_key: splitValues(filters.product_key),
-      event_area: splitValues(filters.event_area),
-      severity: splitValues(filters.severity),
     },
-    dates: filters.date_key ? { date_key: { mode: "single", value: filters.date_key } } : undefined,
+    dates: filters.date_key
+      ? { date_key: { mode: "single", value: filters.date_key } }
+      : filters.date_key_preset
+        ? { date_key: { mode: "relative", preset: filters.date_key_preset } }
+        : filters.date_key_from || filters.date_key_to
+          ? { date_key: { mode: "range", from: filters.date_key_from, to: filters.date_key_to } }
+          : undefined,
   };
 }
 
 function toolbarFilters(payload: IntradayRadarPayload): DataViewFilterConfig[] {
   return [
-    { key: "campaign_id", label: "Campaña", type: "multiselect", options: payload.filters.campaigns, searchable: true },
-    { key: "product_key", label: "Producto", type: "product", options: payload.filters.products, searchable: true },
-    { key: "brand", label: "Marca", type: "multiselect", options: payload.filters.brands, searchable: true },
-    { key: "chain", label: "Cadena", type: "multiselect", options: payload.filters.chains, searchable: true },
-    { key: "event_area", label: "Área", type: "multiselect", options: payload.filters.event_areas },
-    { key: "severity", label: "Severidad", type: "multiselect", options: payload.filters.severities },
+    { key: "campaign_id", label: "Campaign", type: "multiselect", options: payload.filters.campaigns, searchable: true },
+    { key: "product_key", label: "Product", type: "product", options: payload.filters.products, searchable: true },
+    { key: "brand", label: "Brand", type: "multiselect", options: payload.filters.brands, searchable: true },
+    { key: "chain", label: "Chain", type: "multiselect", options: payload.filters.chains, searchable: true },
   ];
 }
 
@@ -81,47 +83,47 @@ export function IntradayRadarPage({
   const viewState = currentViewState(filters);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="focus-hidden flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge>{selectedCampaign(payload, filters)}</Badge>
-            <Badge>Día cerrado {displayDateKey(payload.kpis.selected_date_key ?? payload.kpis.latest_date_key)}</Badge>
+            <Badge>Closed day {displayDateKey(payload.kpis.selected_date_key ?? payload.kpis.latest_date_key)}</Badge>
             {payload.kpis.prior_closed_date_key ? <Badge>Base DoD {displayDateKey(payload.kpis.prior_closed_date_key)}</Badge> : null}
-            {payload.kpis.latest_capture ? <Badge>Última captura {payload.kpis.latest_capture}</Badge> : null}
+            {payload.kpis.latest_capture ? <Badge>Latest capture {payload.kpis.latest_capture}</Badge> : null}
           </div>
-          <h1 className="text-2xl font-semibold">Radar de precios y ofertas</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Cambios día contra día del último día cerrado contra el día anterior, agregados por producto y cadena.
+          <h1 className="text-[22px] font-light leading-tight tracking-[-0.01em]">Price and promotion radar</h1>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-ink-muted">
+            Day-over-day changes for the latest closed day compared with the previous day, grouped by product and chain.
           </p>
         </div>
       </div>
 
       <div className="focus-hidden grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={Activity} value={payload.kpis.total_events ?? 0} label="Eventos" />
-        <KpiCard icon={Bell} value={payload.kpis.price_events ?? 0} label="Cambios de precio" />
-        <KpiCard icon={Percent} value={payload.kpis.promo_events ?? 0} label="Cambios de oferta" />
-        <KpiCard icon={AlertTriangle} value={payload.kpis.high_severity_events ?? 0} label="Alta severidad" />
+        <KpiCard icon={Activity} value={payload.kpis.total_events ?? 0} label="Events" variant="blue" />
+        <KpiCard icon={Bell} value={payload.kpis.price_events ?? 0} label="Price changes" variant="amber" />
+        <KpiCard icon={Percent} value={payload.kpis.promo_events ?? 0} label="Promotion changes" variant="green" />
+        <KpiCard icon={AlertTriangle} value={payload.kpis.high_severity_events ?? 0} label="High severity" variant="red" />
       </div>
 
       <div className="focus-hidden">
         <DataViewToolbar
           basePath="/pricing/intraday-radar"
           viewKey={viewKey}
-          title="Movimientos día contra día"
+          title="Day-over-day movements"
           currentState={viewState}
           views={tableViews}
           filters={toolbarFilters(payload)}
-          dateFilters={[{ key: "date_key", label: "Día cerrado", max: costaRicaYesterdayInputValue() }]}
+          dateFilters={[{ key: "date_key", label: "Closed day", max: costaRicaYesterdayInputValue() }]}
         />
       </div>
 
       <Card className="focus-grid-card">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
-            <div className="font-medium">Movimientos día contra día</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              Comparan precio normal, precio promocional y estado de oferta entre dos días cerrados consecutivos.
+            <div className="text-[13px] font-medium">Day-over-day movements</div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              Compares regular price, promotional price and promotion status across consecutive closed days.
             </div>
           </div>
           <FocusModeToggle />
@@ -130,7 +132,7 @@ export function IntradayRadarPage({
           <IntradayRadarGrid events={payload.items} />
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
             <div>
-              {payload.items.length ? payload.offset + 1 : 0}-{Math.min(payload.offset + payload.items.length, payload.kpis.total_events)} de{" "}
+              {payload.items.length ? payload.offset + 1 : 0}-{Math.min(payload.offset + payload.items.length, payload.kpis.total_events)} of{" "}
               {payload.kpis.total_events}
             </div>
             <div className="flex gap-2">

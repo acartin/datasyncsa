@@ -37,9 +37,14 @@ Transition events are computed by `generate_day_over_day_transition_events()`
 inside the same batch. They are persisted directly to `mkt_market_event` and
 do not generate executive signals by default.
 
+Event presentation is configured centrally in `public.mkt_dim_market_event_type`.
+Add or change labels, metric labels, semantic icon names, and renderer tokens
+there instead of hardcoding event-specific presentation in API or frontend code.
+
 ## Tables
 
 - `public.mkt_market_event`: neutral reusable market events (executive + transition).
+- `public.mkt_dim_market_event_type`: central event semantics and presentation configuration.
 - `public.mkt_client_signal`: perspective-specific signal packaging, lifecycle
   state, and notification readiness.
 - `public.mkt_signal_delivery`: future audit log for email/PDF/other delivery

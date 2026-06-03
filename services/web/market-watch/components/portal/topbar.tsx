@@ -27,8 +27,8 @@ export function Topbar({
           variant="ghost"
           className="h-9 w-9 px-0"
           onClick={onToggleSidebar}
-          aria-label={sidebarCollapsed ? "Expandir menu" : "Colapsar menu"}
-          title={sidebarCollapsed ? "Expandir menu" : "Colapsar menu"}
+          aria-label={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
+          title={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
         >
           {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
@@ -54,7 +54,7 @@ export function Topbar({
         </Button>
         <ThemeToggle />
         <form action="/api/auth/logout" method="post">
-          <Button type="submit" variant="ghost" className="h-9 w-9 px-0" aria-label="Cerrar sesion" title="Cerrar sesion">
+          <Button type="submit" variant="ghost" className="h-9 w-9 px-0" aria-label="Sign out" title="Sign out">
             <LogOut className="h-4 w-4" />
           </Button>
         </form>

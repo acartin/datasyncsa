@@ -1,14 +1,4 @@
-import { notFound } from "next/navigation";
-import { AppShell } from "@/components/portal/app-shell";
-import { IntradayProductPage } from "@/components/market-watch/intraday-product-page";
-import { getIntradayProductDetail, getMenu } from "@/lib/api";
-import { normalizeClosedDateKey } from "@/lib/closed-day";
-
-const currentPath = "/pricing/intraday-radar";
-
-function single(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+import { redirect } from "next/navigation";
 
 export default async function IntradayProductRoute({
   params,
@@ -18,20 +8,11 @@ export default async function IntradayProductRoute({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ productKey }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const [menu, payload] = await Promise.all([
-    getMenu(),
-    getIntradayProductDetail(productKey, {
-      campaign_id: single(resolvedSearchParams?.campaign_id),
-      date_key: normalizeClosedDateKey(single(resolvedSearchParams?.date_key)),
-      chain: single(resolvedSearchParams?.chain)
-    })
-  ]);
-  const allowed = menu.sections.some((section) => section.items.some((item) => item.href === currentPath));
-  if (!allowed) notFound();
-
-  return (
-    <AppShell menu={menu} currentPath={currentPath}>
-      <IntradayProductPage payload={payload} />
-    </AppShell>
-  );
+  const nextParams = new URLSearchParams();
+  Object.entries(resolvedSearchParams ?? {}).forEach(([key, value]) => {
+    const normalized = Array.isArray(value) ? value[0] : value;
+    if (normalized) nextParams.set(key, normalized);
+  });
+  if (!nextParams.has("source")) nextParams.set("source", "radar");
+  redirect(`/pricing/products/${encodeURIComponent(productKey)}?${nextParams.toString()}`);
 }

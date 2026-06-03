@@ -33,12 +33,12 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
       resource: "users",
       titleField: "username",
       fields: [
-        { label: "Usuario", name: "username", editable: false },
+        { label: "Username", name: "username", editable: false },
         { label: "Email", name: "email", type: "email", editable: false },
-        { label: "Nombre visible", name: "display_name" },
-        { label: "Password temporal", name: "password", type: "password", minLength: 8, required: false, editOnly: true },
+        { label: "Display name", name: "display_name" },
+        { label: "Temporary password", name: "password", type: "password", minLength: 8, required: false, editOnly: true },
         {
-          label: "Rol",
+          label: "Role",
           name: "role_ids",
           control: "checkbox-group",
           options: [
@@ -48,9 +48,9 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
             { value: "client-viewer", label: "client-viewer" }
           ]
         },
-        { label: "Cliente", name: "client_id", sourceName: "default_client_id", control: "select", optionsSource: "client_options" },
+        { label: "Client", name: "client_id", sourceName: "default_client_id", control: "select", optionsSource: "client_options" },
         {
-          label: "Estado",
+          label: "Status",
           name: "status",
           options: [
             { value: "active", label: "active" },
@@ -67,11 +67,11 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
       resource: "clients",
       titleField: "name",
       fields: [
-        { label: "Clave", name: "client_key", editable: false },
-        { label: "Nombre", name: "name" },
-        { label: "Mercado", name: "market" },
+        { label: "Key", name: "client_key", editable: false },
+        { label: "Name", name: "name" },
+        { label: "Market", name: "market" },
         {
-          label: "Modo",
+          label: "Mode",
           name: "mode",
           options: [
             { value: "customer", label: "customer" },
@@ -80,7 +80,7 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
           ]
         },
         {
-          label: "Estado",
+          label: "Status",
           name: "status",
           options: [
             { value: "active", label: "active" },
@@ -97,7 +97,7 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
       titleField: "id",
       fields: [
         { label: "ID", name: "id", editable: false },
-        { label: "Etiqueta", name: "label" },
+        { label: "Label", name: "label" },
         {
           label: "Scope",
           name: "scope",
@@ -106,8 +106,8 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
             { value: "system", label: "system" }
           ]
         },
-        { label: "Descripcion", name: "description", required: false },
-        { label: "Permisos asociados", name: "permissions", editable: false }
+        { label: "Description", name: "description", required: false },
+        { label: "Assigned permissions", name: "permissions", editable: false }
       ]
     };
   }
@@ -118,8 +118,8 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
       titleField: "name",
       fields: [
         { label: "ID", name: "id" },
-        { label: "Nombre", name: "name" },
-        { label: "Estado", name: "status" }
+        { label: "Name", name: "name" },
+        { label: "Status", name: "status" }
       ]
     };
   }
@@ -186,7 +186,7 @@ function Field({
           minLength={field.minLength}
           defaultValue={value}
           readOnly={fieldReadOnly}
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring read-only:bg-muted"
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring read-only:bg-surface-2"
         />
       )}
     </label>
@@ -206,7 +206,7 @@ export function RowActions({
   const config = configForPayload(payload);
   if (!config) return null;
 
-  const title = String(record[config.titleField] ?? record.id ?? "registro");
+  const title = String(record[config.titleField] ?? record.id ?? "record");
   const canDelete = config.resource === "users" || config.resource === "clients";
   const canUpdate = config.resource === "users" || config.resource === "clients" || config.resource === "roles";
   const rowId = String(record.id ?? "");
@@ -217,32 +217,32 @@ export function RowActions({
     ? (record.assigned_permissions as Record<string, unknown>[])
     : [];
   const userColumns: DataGridColumn<Record<string, unknown>>[] = [
-    { id: "username", header: "Usuario" },
+    { id: "username", header: "Username" },
     { id: "email", header: "Email" },
-    { id: "display_name", header: "Nombre" },
-    { id: "status", header: "Estado" }
+    { id: "display_name", header: "Name" },
+    { id: "status", header: "Status" }
   ];
   const permissionColumns: DataGridColumn<Record<string, unknown>>[] = [
-    { id: "id", header: "Permiso" },
-    { id: "label", header: "Etiqueta" },
-    { id: "description", header: "Descripcion" }
+    { id: "id", header: "Permission" },
+    { id: "label", header: "Label" },
+    { id: "description", header: "Description" }
   ];
 
   return (
     <>
       <div className="flex justify-end gap-1">
-        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Ver" onClick={() => setMode("view")}>
+        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="View" onClick={() => setMode("view")}>
           <Eye className="h-4 w-4" />
         </Button>
-        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Editar" onClick={() => setMode("edit")}>
+        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Edit" onClick={() => setMode("edit")}>
           <Pencil className="h-4 w-4" />
         </Button>
         {config.resource === "roles" ? (
           <>
-            <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Usuarios del rol" onClick={() => setUsersOpen(true)}>
+            <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Role users" onClick={() => setUsersOpen(true)}>
               <Users className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Permisos del rol" onClick={() => setPermissionsOpen(true)}>
+            <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Role permissions" onClick={() => setPermissionsOpen(true)}>
               <KeyRound className="h-4 w-4" />
             </Button>
           </>
@@ -251,12 +251,12 @@ export function RowActions({
           <form action={`/api/settings/${config.resource}/${rowId}`} method="post">
             <input type="hidden" name="_method" value="patch" />
             <input type="hidden" name="status" value="inactive" />
-            <Button type="submit" variant="ghost" className="h-8 w-8 px-0" title="Desactivar">
+            <Button type="submit" variant="ghost" className="h-8 w-8 px-0" title="Deactivate">
               <Trash2 className="h-4 w-4" />
             </Button>
           </form>
         ) : (
-          <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="No disponible" disabled>
+          <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Not available" disabled>
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
@@ -264,8 +264,8 @@ export function RowActions({
 
       <Modal
         open={mode !== null}
-        title={`${mode === "edit" ? "Editar" : "Ver"} ${title}`}
-        description={mode === "edit" ? undefined : "Detalle del registro seleccionado."}
+        title={`${mode === "edit" ? "Edit" : "View"} ${title}`}
+        description={mode === "edit" ? undefined : "Selected record detail."}
         onClose={() => setMode(null)}
       >
         <form action={mode === "edit" && canUpdate && config.resource ? `/api/settings/${config.resource}/${rowId}` : undefined} method="post" className="space-y-5">
@@ -276,40 +276,40 @@ export function RowActions({
           </div>
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={() => setMode(null)}>
-              Cancelar
+              Cancel
             </Button>
-            {mode === "edit" ? <Button type="submit" disabled={!canUpdate}>Actualizar</Button> : null}
+            {mode === "edit" ? <Button type="submit" disabled={!canUpdate}>Update</Button> : null}
           </div>
         </form>
       </Modal>
 
       <Modal
         open={usersOpen}
-        title={`Usuarios de ${title}`}
-        description="Usuarios que tienen este rol asignado."
+        title={`Users for ${title}`}
+        description="Users assigned to this role."
         onClose={() => setUsersOpen(false)}
         className="max-w-3xl"
       >
         <DataGrid
           columns={userColumns}
           records={assignedUsers}
-          emptyTitle="Sin usuarios asignados"
-          emptyDescription="Este rol aun no tiene usuarios asignados."
+          emptyTitle="No assigned users"
+          emptyDescription="This role does not have assigned users yet."
         />
       </Modal>
 
       <Modal
         open={permissionsOpen}
-        title={`Permisos de ${title}`}
-        description="Permisos asociados a este rol."
+        title={`Permissions for ${title}`}
+        description="Permissions assigned to this role."
         onClose={() => setPermissionsOpen(false)}
         className="max-w-4xl"
       >
         <DataGrid
           columns={permissionColumns}
           records={assignedPermissions}
-          emptyTitle="Sin permisos asignados"
-          emptyDescription="Este rol aun no tiene permisos asociados."
+          emptyTitle="No assigned permissions"
+          emptyDescription="This role does not have assigned permissions yet."
         />
       </Modal>
     </>

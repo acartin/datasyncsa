@@ -28,17 +28,17 @@ type CrudConfig = {
 function configForPayload(payload: ModulePayload): CrudConfig | null {
   if (payload.module.id === "settings.users") {
     return {
-      title: "Nuevo usuario",
-      createLabel: "Crear usuario",
+      title: "New user",
+      createLabel: "Create user",
       action: "/api/settings/users",
-      description: "Alta controlada por API. El password se almacena hasheado.",
+      description: "API-controlled creation. The password is stored hashed.",
       fields: [
-        { label: "Usuario", name: "username" },
+        { label: "Username", name: "username" },
         { label: "Email", name: "email", type: "email" },
-        { label: "Nombre visible", name: "display_name" },
-        { label: "Password temporal", name: "password", type: "password", minLength: 8 },
+        { label: "Display name", name: "display_name" },
+        { label: "Temporary password", name: "password", type: "password", minLength: 8 },
         {
-          label: "Rol",
+          label: "Role",
           name: "role_ids",
           multiple: true,
           options: [
@@ -48,20 +48,20 @@ function configForPayload(payload: ModulePayload): CrudConfig | null {
             { value: "client-viewer", label: "client-viewer" }
           ]
         },
-        { label: "Cliente ID", name: "client_id", defaultValue: payload.context.client_id }
+        { label: "Client ID", name: "client_id", defaultValue: payload.context.client_id }
       ]
     };
   }
 
   if (payload.module.id === "settings.roles") {
     return {
-      title: "Nuevo rol",
-      createLabel: "Crear rol",
+      title: "New role",
+      createLabel: "Create role",
       action: "/api/settings/roles",
-      description: "Define un rol de negocio. Los permisos granulares se administraran en el siguiente paso.",
+      description: "Define a business role. Granular permissions will be managed in the next step.",
       fields: [
         { label: "ID", name: "id" },
-        { label: "Etiqueta", name: "label" },
+        { label: "Label", name: "label" },
         {
           label: "Scope",
           name: "scope",
@@ -70,23 +70,23 @@ function configForPayload(payload: ModulePayload): CrudConfig | null {
             { value: "system", label: "system" }
           ]
         },
-        { label: "Descripcion", name: "description", required: false }
+        { label: "Description", name: "description", required: false }
       ]
     };
   }
 
   if (payload.module.id === "settings.clients") {
     return {
-      title: "Nuevo cliente",
-      createLabel: "Crear cliente",
+      title: "New client",
+      createLabel: "Create client",
       action: "/api/settings/clients",
-      description: "Crea un tenant disponible para asignacion de usuarios.",
+      description: "Create a tenant available for user assignment.",
       fields: [
-        { label: "Clave", name: "client_key" },
-        { label: "Nombre", name: "name" },
-        { label: "Mercado", name: "market", defaultValue: "CR" },
+        { label: "Key", name: "client_key" },
+        { label: "Name", name: "name" },
+        { label: "Market", name: "market", defaultValue: "CR" },
         {
-          label: "Modo",
+          label: "Mode",
           name: "mode",
           options: [
             { value: "customer", label: "customer" },
@@ -144,19 +144,19 @@ export function CrudToolbar({ payload }: { payload: ModulePayload }) {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              placeholder="Buscar"
+              placeholder="Search"
               className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <Button type="button" variant="outline">
             <Filter className="h-4 w-4" />
-            Filtros
+            Filters
           </Button>
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" disabled>
             <Save className="h-4 w-4" />
-            Guardar
+            Save
           </Button>
           <Button type="button" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -174,9 +174,9 @@ export function CrudToolbar({ payload }: { payload: ModulePayload }) {
           </div>
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
+              Cancel
             </Button>
-            <Button type="submit">Salvar</Button>
+            <Button type="submit">Save</Button>
           </div>
         </form>
       </Modal>

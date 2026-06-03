@@ -1,7 +1,7 @@
 export type DataViewDateFilter =
   | { mode: "single"; value?: string }
   | { mode: "range"; from?: string; to?: string }
-  | { mode: "relative"; preset: "today" | "last_day" | "last_week" | "last_month" };
+  | { mode: "relative"; preset: "today" | "last_day" | "last_week" | "last_month" | "last_quarter" };
 
 export type DataViewState = {
   search?: string;

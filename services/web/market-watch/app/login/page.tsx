@@ -23,12 +23,12 @@ export default async function LoginPage({
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted">
-              <LockKeyhole className="h-5 w-5 text-primary" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-surface-2">
+              <LockKeyhole className="h-5 w-5 text-semantic-blue" />
             </div>
             <div>
-              <div className="font-semibold">Market Watch</div>
-              <div className="text-sm text-muted-foreground">Iniciar sesion</div>
+              <div className="font-medium">Market Watch</div>
+              <div className="text-sm text-muted-foreground">Sign in</div>
             </div>
           </div>
         </CardHeader>
@@ -36,7 +36,7 @@ export default async function LoginPage({
           <form action="/api/auth/login" method="post" className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="username" className="text-sm font-medium">
-                Usuario
+                Username
               </label>
               <input
                 id="username"
@@ -48,7 +48,7 @@ export default async function LoginPage({
             </div>
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                Contrasena
+                Password
               </label>
               <input
                 id="password"
@@ -60,12 +60,12 @@ export default async function LoginPage({
               />
             </div>
             {hasError ? (
-              <div className="rounded-md border bg-muted px-3 py-2 text-sm text-foreground">
-                Usuario o contrasena invalida.
+              <div className="rounded-md border bg-surface-2 px-3 py-2 text-sm text-foreground">
+                Invalid username or password.
               </div>
             ) : null}
             <Button type="submit" className="w-full">
-              Entrar
+              Sign in
             </Button>
           </form>
         </CardContent>

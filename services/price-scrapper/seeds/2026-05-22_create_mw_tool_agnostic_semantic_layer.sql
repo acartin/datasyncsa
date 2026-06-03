@@ -16,7 +16,7 @@ drop view if exists public.mw_product_location_presence;
 drop view if exists public.mw_fact_analytic_listing_snapshot;
 
 drop view if exists public.mw_bi_executive_signal_feed;
-drop view if exists public.mw_bi_price_events;
+drop view if exists public.mw_bi_radar_event_feed;
 drop view if exists public.mw_bi_sku_store_price_evidence;
 drop view if exists public.mw_bi_sku_price_drivers;
 drop view if exists public.mw_bi_brand_chain_price_index;
@@ -847,12 +847,14 @@ select
   o.image_url
 from public.mw_signal_sku_store_observation as o;
 
-create or replace view public.mw_bi_price_events as
+create or replace view public.mw_bi_radar_event_feed as
 select
+  md5(concat_ws(':', 'radar', e.date_key, e.client_id, e.campaign_id, e.chain_label, e.event_type, e.gtin_norm)) as event_id,
   e.business_date,
   e.week_start_date as week_start,
   e.month_start_date as month_start,
   e.date_key,
+  null::int as previous_date_key,
   e.client_id,
   e.campaign_id,
   e.client_name as client,
@@ -860,21 +862,35 @@ select
   e.brand_name as brand,
   e.product_name as product,
   e.gtin_norm as gtin,
+  null::text as product_key,
+  null::numeric as content_quantity,
+  null::text as content_unit,
   e.chain_label as chain,
   'price'::text as event_area,
   e.event_type as event_type,
   e.severity,
+  e.business_date::text as captured_at_cr,
+  null::text as previous_captured_at_cr,
   round(e.previous_avg_price_amount, 2) as previous_value,
   round(e.current_avg_price_amount, 2) as current_value,
   round(e.price_change_amount, 2) as change_amount,
-  round(e.price_change_pct * 100, 2) as change_pct
+  round(e.price_change_pct * 100, 2) as change_pct,
+  null::numeric as promo_share_pct,
+  null::numeric(5,2) as discount_pct,
+  null::int as observed_locations,
+  null::int as visible_locations,
+  null::int as available_locations,
+  null::text as product_url,
+  null::text as image_url
 from public.mw_signal_price_change_daily as e
 union all
 select
+  md5(concat_ws(':', 'radar', p.date_key, p.client_id, p.campaign_id, p.chain_label, p.event_type, p.gtin_norm)) as event_id,
   p.business_date,
   p.week_start_date as week_start,
   p.month_start_date as month_start,
   p.date_key,
+  null::int as previous_date_key,
   p.client_id,
   p.campaign_id,
   p.client_name as client,
@@ -882,14 +898,26 @@ select
   p.brand_name as brand,
   p.product_name as product,
   p.gtin_norm as gtin,
+  null::text as product_key,
+  null::numeric as content_quantity,
+  null::text as content_unit,
   p.chain_label as chain,
   'promotion'::text as event_area,
   p.event_type,
   p.severity,
+  p.business_date::text as captured_at_cr,
+  null::text as previous_captured_at_cr,
   round(p.previous_promo_share * 100, 2) as previous_value,
   round(p.promo_share * 100, 2) as current_value,
   null::numeric as change_amount,
-  round((p.promo_share - coalesce(p.previous_promo_share, 0)) * 100, 2) as change_pct
+  round((p.promo_share - coalesce(p.previous_promo_share, 0)) * 100, 2) as change_pct,
+  round(p.promo_share * 100, 2) as promo_share_pct,
+  null::numeric(5,2) as discount_pct,
+  null::int as observed_locations,
+  null::int as visible_locations,
+  null::int as available_locations,
+  null::text as product_url,
+  null::text as image_url
 from public.mw_signal_promo_daily as p;
 
 create or replace view public.mw_bi_executive_signal_feed as

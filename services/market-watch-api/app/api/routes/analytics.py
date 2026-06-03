@@ -13,11 +13,11 @@ def dashboards(context: ClientContext = Depends(require_client_context)) -> dict
         context=context,
         module_id="analytics.dashboards",
         title="Dashboards",
-        description="Catalogo de dashboards Superset asignados al cliente o rol.",
+        description="Superset dashboard catalog assigned to the client or role.",
         records=dashboard_records(),
         actions=[
-            {"id": "open-superset", "label": "Abrir Superset", "enabled": True},
-            {"id": "request-dashboard", "label": "Solicitar dashboard", "enabled": False},
+            {"id": "open-superset", "label": "Open Superset", "enabled": True},
+            {"id": "request-dashboard", "label": "Request dashboard", "enabled": False},
         ],
     )
 
@@ -27,10 +27,10 @@ def reports(context: ClientContext = Depends(require_client_context)) -> dict[st
     return module_payload(
         context=context,
         module_id="analytics.reports",
-        title="Reportes",
-        description="Reportes programados y entregas futuras desde Superset.",
+        title="Reports",
+        description="Scheduled reports and future deliveries from Superset.",
         records=report_records(),
         actions=[
-            {"id": "schedule-report", "label": "Programar reporte", "enabled": False},
+            {"id": "schedule-report", "label": "Schedule report", "enabled": False},
         ],
     )

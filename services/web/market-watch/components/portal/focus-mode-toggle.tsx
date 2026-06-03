@@ -13,8 +13,8 @@ export function FocusModeToggle() {
       variant="outline"
       className="h-9 w-9 px-0"
       onClick={() => setFocusMode(!focusMode)}
-      aria-label={focusMode ? "Restaurar vista" : "Maximizar grid"}
-      title={focusMode ? "Restaurar vista" : "Maximizar grid"}
+      aria-label={focusMode ? "Restore view" : "Maximize grid"}
+      title={focusMode ? "Restore view" : "Maximize grid"}
     >
       {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
     </Button>

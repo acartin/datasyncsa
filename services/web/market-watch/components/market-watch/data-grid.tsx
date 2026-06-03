@@ -16,9 +16,13 @@ export type DataGridColumn<TRecord> = {
 };
 
 function renderValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "Si" : "No";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   if (value === null || value === undefined) return "-";
   return String(value);
+}
+
+function isNumericValue(value: unknown) {
+  return typeof value === "number";
 }
 
 function compareValues(left: unknown, right: unknown) {
@@ -31,13 +35,13 @@ function compareValues(left: unknown, right: unknown) {
   const rightDate = typeof right === "string" ? Date.parse(right) : NaN;
   if (!Number.isNaN(leftDate) && !Number.isNaN(rightDate)) return leftDate - rightDate;
 
-  return String(left).localeCompare(String(right), "es", { numeric: true, sensitivity: "base" });
+  return String(left).localeCompare(String(right), "en", { numeric: true, sensitivity: "base" });
 }
 
 export function DataGrid<TRecord extends Record<string, unknown>>({
   columns,
   records,
-  emptyTitle = "Sin registros",
+  emptyTitle = "No records",
   emptyDescription,
   className
 }: {
@@ -69,14 +73,14 @@ export function DataGrid<TRecord extends Record<string, unknown>>({
     <div className={cn("overflow-auto", className)}>
       <table className="w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-card">
-          <tr className="border-b text-left text-muted-foreground">
+          <tr className="border-b text-left text-[10px] font-normal uppercase tracking-[0.07em] text-ink-muted">
             {columns.map((column) => {
               const sortable = column.sortable !== false && column.header !== "";
               const active = sort?.id === column.id;
               const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
 
               return (
-                <th key={column.id} className={cn("whitespace-nowrap px-3 py-2 font-medium", column.headerClassName, column.className)}>
+                <th key={column.id} className={cn("whitespace-nowrap px-3 py-2 font-normal", column.headerClassName, column.className)}>
                   {sortable ? (
                     <button
                       type="button"
@@ -105,9 +109,16 @@ export function DataGrid<TRecord extends Record<string, unknown>>({
         </thead>
         <tbody>
           {sortedRecords.map((record, index) => (
-            <tr key={index} className="border-b last:border-0 hover:bg-muted/50">
+            <tr key={index} className="border-b last:border-0 hover:bg-surface-2">
               {columns.map((column) => (
-                <td key={column.id} className={cn("px-3 py-2 align-middle", column.className)}>
+                <td
+                  key={column.id}
+                  className={cn(
+                    "px-3 py-2 align-middle",
+                    isNumericValue(record[column.id]) && "text-right font-mono",
+                    column.className
+                  )}
+                >
                   {column.cell ? column.cell(record) : renderValue(record[column.id])}
                 </td>
               ))}

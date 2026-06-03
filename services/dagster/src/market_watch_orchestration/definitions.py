@@ -408,23 +408,27 @@ def generate_retail_signals(context: OpExecutionContext) -> dict[str, object]:
         "commands/generate_daily_signals.py",
         f"--campaign-id={campaign_id}",
         f"--business-date={business_date}",
-        "--skip-llm" if skip_llm else "",
     ]
-    command = [part for part in command if part]
+    if skip_llm:
+        command.append("--skip-llm")
+
+    env = os.environ.copy()
+    env.setdefault("RETAIL_SIGNAL_DB_MODE", "direct")
 
     result = subprocess.run(
         command,
         cwd=str(signal_root),
         text=True,
         capture_output=True,
-        env=os.environ.copy(),
+        env=env,
     )
     if result.stdout:
         context.log.info(result.stdout.strip())
     if result.stderr:
         context.log.warning(result.stderr.strip())
     if result.returncode != 0:
-        raise RuntimeError(f"generate_retail_signals failed: {result.stderr}")
+        error_output = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"generate_retail_signals failed: {error_output}")
 
     return {
         "campaign_id": campaign_id,

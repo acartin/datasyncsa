@@ -6,7 +6,7 @@ export default function NotFound() {
     <main className="flex min-h-screen items-center justify-center bg-background p-8">
       <div className="max-w-md text-center">
         <div className="text-sm font-medium text-muted-foreground">404</div>
-        <h1 className="mt-2 text-2xl font-semibold">Modulo no disponible</h1>
+        <h1 className="mt-2 text-2xl font-light">Modulo no disponible</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           La ruta no existe o tu usuario no tiene permiso para verla.
         </p>

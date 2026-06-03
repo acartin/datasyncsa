@@ -27,7 +27,7 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
         ...dataGridColumns,
         {
           id: "actions",
-          header: "Acciones",
+          header: "Actions",
           headerClassName: "text-right",
           className: "w-32 text-right",
           cell: (record: Record<string, unknown>) => <RowActions payload={payload} record={record} />
@@ -43,7 +43,7 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
             <Badge>{payload.module.status}</Badge>
             <Badge>role: {payload.context.role}</Badge>
           </div>
-          <h1 className="text-2xl font-semibold">{payload.module.title}</h1>
+          <h1 className="text-2xl font-light">{payload.module.title}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
             {payload.module.description}
           </p>
@@ -58,7 +58,7 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
       </div>
 
       {feedback ? (
-        <Alert variant={feedback.type} title={feedback.type === "error" ? "No se pudo guardar" : "Operacion completada"}>
+        <Alert variant={feedback.type} title={feedback.type === "error" ? "Could not save" : "Operation completed"}>
           {feedback.message}
         </Alert>
       ) : null}
@@ -67,25 +67,25 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
 
       {!isSettingsModule ? (
         <div className="grid gap-4 md:grid-cols-3">
-          <KpiCard icon={Database} value={payload.records.length} label="Registros placeholder" />
-          <KpiCard icon={Settings2} value={payload.actions.length} label="Acciones configuradas" />
+          <KpiCard icon={Database} value={payload.records.length} label="Placeholder records" />
+          <KpiCard icon={Settings2} value={payload.actions.length} label="Configured actions" />
           <KpiCard icon={ArrowUpRight} value="API" label={payload.module.id} />
         </div>
       ) : null}
 
       <Card>
         <CardHeader>
-          <div className="font-medium">Datos iniciales</div>
+          <div className="font-medium">Initial data</div>
           <div className="mt-1 text-sm text-muted-foreground">
-            Contrato placeholder listo para conectar con datos reales.
+            Placeholder contract ready to connect to real data.
           </div>
         </CardHeader>
         <CardContent>
           <DataGrid
             columns={gridColumns}
             records={payload.records}
-            emptyTitle="Sin registros para este modulo"
-            emptyDescription="El contrato esta listo para conectar datos reales desde la API."
+            emptyTitle="No records for this module"
+            emptyDescription="The contract is ready to connect real data from the API."
           />
         </CardContent>
       </Card>

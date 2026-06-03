@@ -43,7 +43,7 @@ Datasets para Superset, Metabase o portal:
 - `mw_bi_brand_chain_price_index`
 - `mw_bi_sku_price_drivers`
 - `mw_bi_sku_store_price_evidence`
-- `mw_bi_price_events`
+- `mw_bi_radar_event_feed`
 - `mw_bi_executive_signal_feed`
 
 Estas vistas pueden tener nombres mas amigables y columnas pensadas para

@@ -21,7 +21,7 @@ export function Tabs({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex rounded-md border bg-card p-1", className)} role="tablist">
+    <div className={cn("inline-flex gap-4", className)} role="tablist">
       {items.map((item) => {
         const active = item.id === value;
         return (
@@ -33,9 +33,9 @@ export function Tabs({
             disabled={item.disabled}
             onClick={() => onValueChange(item.id)}
             className={cn(
-              "min-h-8 rounded-sm px-3 text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50",
-              active && "bg-primary text-primary-foreground",
-              !active && "hover:bg-muted hover:text-foreground"
+              "min-h-8 border-b border-transparent px-0 text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50",
+              active && "border-primary text-foreground",
+              !active && "hover:text-foreground"
             )}
           >
             {item.label}

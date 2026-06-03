@@ -88,6 +88,8 @@ def executive_signals(
 def intraday_radar(
     campaign_id: Annotated[int | None, Query(ge=1)] = None,
     date_key: Annotated[int | None, Query(ge=19000101, le=29991231)] = None,
+    date_key_from: Annotated[int | None, Query(ge=19000101, le=29991231)] = None,
+    date_key_to: Annotated[int | None, Query(ge=19000101, le=29991231)] = None,
     brand: Annotated[str | None, Query(max_length=160)] = None,
     chain: Annotated[str | None, Query(max_length=160)] = None,
     product_key: Annotated[str | None, Query(max_length=2000)] = None,
@@ -103,6 +105,8 @@ def intraday_radar(
         client_id=context.client_id,
         campaign_id=campaign_id,
         date_key=date_key,
+        date_key_from=date_key_from,
+        date_key_to=date_key_to,
         brand=brand,
         chain=chain,
         product_key=product_key,
@@ -120,6 +124,7 @@ def intraday_product_detail(
     campaign_id: Annotated[int | None, Query(ge=1)] = None,
     date_key: Annotated[int | None, Query(ge=19000101, le=29991231)] = None,
     chain: Annotated[str | None, Query(max_length=160)] = None,
+    history_days: Annotated[int, Query(ge=7, le=365)] = 30,
     context: ClientContext = Depends(require_client_context),
     repository: MarketRepository = Depends(get_repository),
 ) -> dict[str, object]:
@@ -129,6 +134,7 @@ def intraday_product_detail(
         campaign_id=campaign_id,
         date_key=date_key,
         chain=chain,
+        history_days=history_days,
     )
 
 

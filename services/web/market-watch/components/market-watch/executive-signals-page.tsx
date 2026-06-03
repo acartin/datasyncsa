@@ -48,9 +48,9 @@ export function ExecutiveSignalsPage({
             <Badge>{selectedRange(payload, filters)}</Badge>
             {payload.kpis.latest_business_date ? <Badge>Updated {payload.kpis.latest_business_date}</Badge> : null}
           </div>
-          <h1 className="text-2xl font-semibold">Executive Signals</h1>
+          <h1 className="text-2xl font-light">Executive Signals</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Senales comerciales priorizadas para decidir que revisar primero y navegar directo a precio, cadena y evidencia.
+            Prioritized commercial signals to decide what to review first and navigate directly to price, chain and evidence.
           </p>
         </div>
       </div>
@@ -65,9 +65,9 @@ export function ExecutiveSignalsPage({
       <Card className="focus-grid-card">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
-            <div className="font-medium">Senales priorizadas</div>
+            <div className="font-medium">Prioritized signals</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              Ordenadas por fecha, impacto y severidad para validar primero los casos de mayor presion comercial.
+              Sorted by date, impact and severity so the highest commercial pressure cases can be validated first.
             </div>
           </div>
           <FocusModeToggle />
@@ -76,7 +76,7 @@ export function ExecutiveSignalsPage({
           <SignalGrid signals={payload.items} />
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
             <div>
-              {payload.offset + 1}-{Math.min(payload.offset + payload.items.length, payload.kpis.total_signals)} de {payload.kpis.total_signals}
+              {payload.offset + 1}-{Math.min(payload.offset + payload.items.length, payload.kpis.total_signals)} of {payload.kpis.total_signals}
             </div>
             <div className="flex gap-2">
               <Button asChild variant="outline" disabled={payload.offset <= 0}>

@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-05-28T19:28:48Z`
+- Generated UTC: `2026-06-02T22:30:38Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-28`
-- Git commit: `7bea645`
+- Git branch: `HETZNER-LOCAL-2026-Mayo-31`
+- Git commit: `27aced8`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -28,15 +28,15 @@
 ## 3. SERVICIOS DOCKER ACTUALES
 
 ```text
-redis
 postgres
 admin-console-api
+admin-console-web
 market-watch-api
-dagster-webserver
+dagster-daemon
 market-watch-web
 portainer
-admin-console-web
-dagster-daemon
+redis
+dagster-webserver
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO
@@ -53,6 +53,7 @@ services/price-scrapper/seeds
 services/price-scrapper/web
 services/price-scrapper/web_backend
 services/dagster
+services/dagster/docs
 services/dagster/src
 services/dagster/src/market_watch_orchestration
 services/dagster/src/market_watch_orchestration/price_scrapper
@@ -69,11 +70,14 @@ services/web/market-watch/app/[group]
 services/web/market-watch/app/[group]/[module]
 services/web/market-watch/app/api
 services/web/market-watch/app/api/auth
+services/web/market-watch/app/api/filters
 services/web/market-watch/app/api/settings
+services/web/market-watch/app/api/table-views
 services/web/market-watch/app/login
 services/web/market-watch/app/pricing
 services/web/market-watch/app/pricing/executive-signals
 services/web/market-watch/app/pricing/intraday-radar
+services/web/market-watch/app/pricing/products
 services/web/market-watch/app/pricing/signals
 services/web/market-watch/components
 services/web/market-watch/components/market-watch
@@ -112,6 +116,7 @@ services/price-scrapper/docs/tables/mkt_dim_client.md
 services/price-scrapper/docs/tables/mkt_dim_date.md
 services/price-scrapper/docs/tables/mkt_dim_listing.md
 services/price-scrapper/docs/tables/mkt_dim_location.md
+services/price-scrapper/docs/tables/mkt_dim_market_event_type.md
 services/price-scrapper/docs/tables/mkt_dim_product.md
 services/price-scrapper/docs/tables/mkt_fact_listing_snapshot.md
 services/price-scrapper/docs/tables/mkt_run.md
@@ -149,7 +154,7 @@ services/price-scrapper/seeds/2026-05-08_seed_campaign_sardimar_atun_competencia
 services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.sql
 services/price-scrapper/seeds/2026-05-26_create_auth_security_baseline.sql
 services/price-scrapper/seeds/2026-05-27_create_mkt_campaign_client_access.sql
-services/price-scrapper/seeds/2026-05-27_create_mw_exp_intraday_radar.sql
+services/price-scrapper/seeds/2026-05-31_create_mkt_dim_market_event_type.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -161,6 +166,7 @@ services/price-scrapper/web_backend/catalog_db.py
 services/dagster/Dockerfile
 services/dagster/README.md
 services/dagster/dagster.yaml
+services/dagster/docs/OPERATIONS.md
 services/dagster/requirements.txt
 services/dagster/src/market_watch_orchestration/__init__.py
 services/dagster/src/market_watch_orchestration/definitions.py
@@ -191,8 +197,10 @@ services/web/market-watch/app/layout.tsx
 services/web/market-watch/app/login/page.tsx
 services/web/market-watch/app/not-found.tsx
 services/web/market-watch/app/page.tsx
+services/web/market-watch/components/market-watch/chain-tag.tsx
 services/web/market-watch/components/market-watch/crud-toolbar.tsx
 services/web/market-watch/components/market-watch/data-grid.tsx
+services/web/market-watch/components/market-watch/data-view-toolbar.tsx
 services/web/market-watch/components/market-watch/executive-signals-page.tsx
 services/web/market-watch/components/market-watch/filter-bar.tsx
 services/web/market-watch/components/market-watch/intraday-product-grids.tsx
@@ -230,6 +238,8 @@ services/web/market-watch/components/ui/tabs.tsx
 services/web/market-watch/components/ui/theme-toggle.tsx
 services/web/market-watch/lib/api.ts
 services/web/market-watch/lib/closed-day.ts
+services/web/market-watch/lib/data-views.ts
+services/web/market-watch/lib/event-presentation.ts
 services/web/market-watch/lib/feedback.ts
 services/web/market-watch/lib/modules.ts
 services/web/market-watch/lib/pricing-types.ts

@@ -108,8 +108,27 @@ export type IntradayRadarEvent = Record<string, unknown> & {
   event_area: string;
   event_type: string;
   severity: string;
+  presentation?: {
+    display_label: string;
+    short_label: string;
+    description?: string;
+    metric_labels: {
+      previous: string;
+      current: string;
+      change: string;
+    };
+    value_format: string;
+    change_format: string;
+    direction_semantics: string;
+    header_variant: string;
+    icon_name: string;
+    accent_token: string;
+    chart_annotation_label?: string;
+    config?: Record<string, unknown>;
+  } | null;
   business_date: string;
   date_key: number;
+  previous_date_key?: number | null;
   campaign_id: number;
   campaign: string;
   chain: string;
@@ -223,6 +242,7 @@ export type IntradayProductDailyPoint = Record<string, unknown> & {
 
 export type IntradayProductPricePoint = Record<string, unknown> & {
   date_key: number;
+  previous_date_key?: number | null;
   business_date: string;
   chain: string;
   store?: string | null;
@@ -247,6 +267,10 @@ export type IntradayProductDetailPayload = {
 export type IntradayRadarSearchParams = {
   campaign_id?: string;
   date_key?: string;
+  date_key_from?: string;
+  date_key_to?: string;
+  date_key_preset?: "today" | "last_day" | "last_week" | "last_month" | "last_quarter";
+  history_days?: string;
   brand?: string;
   chain?: string;
   product_key?: string;

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
+import { ChainTag } from "@/components/market-watch/chain-tag";
 import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
 import { SignalSeverityBadge } from "@/components/market-watch/signal-severity-badge";
 import { SignalStatusBadge } from "@/components/market-watch/signal-status-badge";
@@ -22,7 +23,7 @@ const columns: DataGridColumn<ExecutiveSignal>[] = [
   },
   { id: "signal_type", header: "Type", className: "whitespace-nowrap" },
   { id: "brand", header: "Brand", className: "whitespace-nowrap" },
-  { id: "chain", header: "Chain", className: "whitespace-nowrap" },
+  { id: "chain", header: "Chain", className: "whitespace-nowrap", cell: (record) => <ChainTag chain={record.chain} /> },
   { id: "product_display", header: "Product", className: "min-w-52" },
   { id: "headline", header: "Headline", className: "min-w-72" },
   {
@@ -36,7 +37,7 @@ const columns: DataGridColumn<ExecutiveSignal>[] = [
     header: "Impact",
     className: "text-right",
     headerClassName: "text-right",
-    cell: (record) => formatScore(record.impact_score),
+    cell: (record) => <span className="font-mono">{formatScore(record.impact_score)}</span>,
     sortValue: (record) => record.impact_score
   },
   {
@@ -61,8 +62,8 @@ export function SignalGrid({ signals }: { signals: ExecutiveSignal[] }) {
       columns={columns}
       records={signals}
       className="max-h-[58vh] focus-grid-scroll"
-      emptyTitle="No hay senales para los filtros actuales"
-      emptyDescription="Ajusta campana, fechas o busqueda para encontrar senales comerciales."
+      emptyTitle="No signals for the current filters"
+      emptyDescription="Adjust campaign, dates or search to find commercial signals."
     />
   );
 }

@@ -70,7 +70,7 @@ export async function getIntradayRadar(params: IntradayRadarSearchParams): Promi
 
 export async function getIntradayProductDetail(
   productKey: string,
-  params: Pick<IntradayRadarSearchParams, "campaign_id" | "date_key" | "chain">
+  params: Pick<IntradayRadarSearchParams, "campaign_id" | "date_key" | "chain" | "history_days">
 ): Promise<IntradayProductDetailPayload> {
   return getJson<IntradayProductDetailPayload>(
     `/datasets/intraday-radar/products/${encodeURIComponent(productKey)}${queryString(params)}`

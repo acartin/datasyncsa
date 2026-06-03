@@ -53,18 +53,9 @@ de producto.
 | `mw_bi_brand_chain_price_index` | BI | marca/cadena/dia/cliente autorizado | Superset/API futuro | active | Contexto de posicionamiento. |
 | `mw_bi_sku_price_drivers` | BI | SKU/cadena/dia/cliente autorizado | Portal/API | active | Drivers y comparacion contra mejor precio observado. |
 | `mw_bi_sku_store_price_evidence` | BI | SKU/tienda/captura/cliente autorizado | Portal/API | active | Evidencia de precio, promo y URL. |
-| `mw_bi_price_events` | BI | evento precio/promo diario | Superset/API futuro | active | Eventos diarios consolidados. |
+| `mw_bi_radar_event_feed` | BI | evento de radar/cliente/dia | Portal/API | active | Feed unico de eventos para Price and Promotion Radar. |
 | `mw_bi_executive_signal_feed` | BI | senal/cliente/dia | Portal/API | active | Feed ejecutivo desde `mkt_client_signal`. |
 | `mw_fact_comparative_listing_snapshot` | legado/fact | listing/captura | transicion | candidate | Existe en BD; no debe ser fuente primaria para producto nuevo. |
-
-## Experimentos Intradia
-
-| Dataset | Capa | Grano | Consumidor | Estado | Revision |
-|---|---|---|---|---|---|
-| `mw_exp_intraday_sku_chain_capture` | exp | SKU/cadena/run | Portal/API experimental | experimental | 2026-06-27 |
-| `mw_exp_intraday_price_movement` | exp | cambio de precio SKU/cadena/run | Portal/API experimental | experimental | 2026-06-27 |
-| `mw_exp_intraday_promo_movement` | exp | cambio de promo SKU/cadena/run | Portal/API experimental | experimental | 2026-06-27 |
-| `mw_exp_intraday_radar_events` | exp | evento intradia unificado | Portal/API experimental | experimental | 2026-06-27 |
 
 ## Promocion de Experimentos
 

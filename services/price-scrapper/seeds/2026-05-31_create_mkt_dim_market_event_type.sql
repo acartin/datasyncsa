@@ -1,30 +1,4 @@
-create table if not exists public.mkt_market_event (
-  market_event_id bigserial primary key,
-  event_key text not null unique,
-  event_fingerprint_key text not null,
-  event_type text not null,
-  event_level text not null default 'raw_signal',
-  business_date date not null,
-  date_key integer not null,
-  client_id bigint,
-  campaign_id bigint,
-  campaign_name text,
-  category text,
-  chain text,
-  affected_brands jsonb not null default '[]'::jsonb,
-  beneficiary_brands jsonb not null default '[]'::jsonb,
-  disadvantaged_brands jsonb not null default '[]'::jsonb,
-  neutral_entities jsonb not null default '[]'::jsonb,
-  severity text not null,
-  impact_score numeric(8,2) not null default 0,
-  confidence_score numeric(8,2) not null default 0,
-  metrics_json jsonb not null default '{}'::jsonb,
-  evidence_json jsonb not null default '{}'::jsonb,
-  source_view text,
-  engine_version text not null,
-  generated_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+begin;
 
 create table if not exists public.mkt_dim_market_event_type (
   event_type text primary key,
@@ -132,158 +106,61 @@ set event_area = excluded.event_area,
     presentation_config = excluded.presentation_config,
     updated_at = now();
 
-alter table public.mkt_market_event
-  add column if not exists event_fingerprint_key text;
+create or replace view public.mw_bi_radar_event_feed as
+select
+  e.event_key as event_id,
+  et.event_area,
+  e.event_type,
+  e.severity,
+  e.business_date,
+  date_trunc('week', e.business_date)::date as week_start,
+  date_trunc('month', e.business_date)::date as month_start,
+  e.date_key,
+  (e.metrics_json->>'previous_date_key')::int as previous_date_key,
+  cca.client_id,
+  e.campaign_id,
+  ac.name as client,
+  e.campaign_name as campaign,
+  e.chain,
+  e.evidence_json->>'brand' as brand,
+  e.evidence_json->>'product' as product,
+  e.evidence_json->>'gtin' as gtin,
+  e.evidence_json->>'product_key' as product_key,
+  null::numeric as content_quantity,
+  null::text as content_unit,
+  e.business_date::text as captured_at_cr,
+  null::text as previous_captured_at_cr,
+  (e.metrics_json->>'previous_value')::numeric(12,2) as previous_value,
+  (e.metrics_json->>'current_value')::numeric(12,2) as current_value,
+  (e.metrics_json->>'change_abs')::numeric(12,2) as change_amount,
+  (e.metrics_json->>'change_pct')::numeric(12,2) as change_pct,
+  case when et.event_area = 'promotion'
+    then (e.metrics_json->>'promo_share_current')::numeric(5,2)
+    else null::numeric
+  end as promo_share_pct,
+  null::numeric(5,2) as discount_pct,
+  null::int as observed_locations,
+  null::int as visible_locations,
+  null::int as available_locations,
+  e.evidence_json->>'product_url' as product_url,
+  null::text as image_url
+from public.mkt_market_event as e
+join public.mkt_dim_market_event_type as et
+  on et.event_type = e.event_type
+ and et.is_active
+ and et.appears_in_intraday_radar
+join public.mkt_campaign_client_access as cca
+  on cca.campaign_id = e.campaign_id
+ and cca.is_active
+ and (cca.valid_from is null or e.business_date >= cca.valid_from)
+ and (cca.valid_to is null or e.business_date <= cca.valid_to)
+join public.auth_clients as ac
+  on ac.id = cca.client_id
+ and ac.status = 'active'
+where e.client_id is null
+   or e.client_id = cca.client_id;
 
-update public.mkt_market_event
-set event_fingerprint_key = event_key
-where event_fingerprint_key is null;
+comment on view public.mw_bi_radar_event_feed is
+  'Market Watch radar event feed. Grain: one client-visible market event per product, chain, campaign and date.';
 
-alter table public.mkt_market_event
-  alter column event_fingerprint_key set not null;
-
-create index if not exists idx_mkt_market_event_date
-  on public.mkt_market_event (date_key, campaign_id, event_type);
-
-create index if not exists idx_mkt_market_event_fingerprint_date
-  on public.mkt_market_event (event_fingerprint_key, date_key desc);
-
-create index if not exists idx_mkt_market_event_metrics
-  on public.mkt_market_event using gin (metrics_json);
-
-create table if not exists public.mkt_client_signal (
-  client_signal_id bigserial primary key,
-  signal_key text not null unique,
-  fingerprint_key text not null,
-  market_event_id bigint not null references public.mkt_market_event(market_event_id),
-  previous_client_signal_id bigint,
-  event_key text not null,
-  signal_type text not null,
-  signal_level text not null default 'client_signal',
-  lifecycle_status text not null default 'new',
-  business_date date not null,
-  date_key integer not null,
-  perspective_client_id bigint,
-  campaign_id bigint,
-  campaign_name text,
-  category text,
-  perspective_brand text,
-  counterparty_brand text,
-  chain text,
-  effect text not null,
-  audience text not null default 'brand_manager',
-  severity text not null,
-  impact_score numeric(8,2) not null default 0,
-  confidence_score numeric(8,2) not null default 0,
-  headline text,
-  summary text,
-  business_reading text,
-  recommended_action text,
-  tone text,
-  metrics_json jsonb not null default '{}'::jsonb,
-  evidence_json jsonb not null default '{}'::jsonb,
-  narrative_json jsonb not null default '{}'::jsonb,
-  delta_metrics_json jsonb not null default '{}'::jsonb,
-  navigation_json jsonb not null default '{}'::jsonb,
-  llm_provider text,
-  llm_model text,
-  llm_prompt_version text,
-  first_detected_at timestamptz not null default now(),
-  previous_detected_at timestamptz,
-  last_detected_at timestamptz not null default now(),
-  repeat_count integer not null default 1,
-  notification_status text not null default 'not_scheduled',
-  notification_reason text,
-  last_notified_at timestamptz,
-  last_notification_channel text,
-  last_delivery_id text,
-  engine_version text not null,
-  generated_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint fk_mkt_client_signal_previous
-    foreign key (previous_client_signal_id)
-    references public.mkt_client_signal(client_signal_id)
-    on delete set null
-);
-
-alter table public.mkt_client_signal
-  add column if not exists fingerprint_key text,
-  add column if not exists previous_client_signal_id bigint,
-  add column if not exists lifecycle_status text not null default 'new',
-  add column if not exists delta_metrics_json jsonb not null default '{}'::jsonb,
-  add column if not exists navigation_json jsonb not null default '{}'::jsonb,
-  add column if not exists first_detected_at timestamptz not null default now(),
-  add column if not exists previous_detected_at timestamptz,
-  add column if not exists last_detected_at timestamptz not null default now(),
-  add column if not exists repeat_count integer not null default 1,
-  add column if not exists notification_status text not null default 'not_scheduled',
-  add column if not exists notification_reason text,
-  add column if not exists last_notified_at timestamptz,
-  add column if not exists last_notification_channel text,
-  add column if not exists last_delivery_id text;
-
-update public.mkt_client_signal
-set
-  fingerprint_key = coalesce(fingerprint_key, signal_key),
-  first_detected_at = coalesce(first_detected_at, generated_at, now()),
-  last_detected_at = coalesce(last_detected_at, generated_at, now())
-where fingerprint_key is null
-   or first_detected_at is null
-   or last_detected_at is null;
-
-alter table public.mkt_client_signal
-  alter column fingerprint_key set not null,
-  alter column first_detected_at set not null,
-  alter column last_detected_at set not null;
-
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'fk_mkt_client_signal_previous'
-  ) then
-    alter table public.mkt_client_signal
-      add constraint fk_mkt_client_signal_previous
-      foreign key (previous_client_signal_id)
-      references public.mkt_client_signal(client_signal_id);
-  end if;
-end $$;
-
-create index if not exists idx_mkt_client_signal_date
-  on public.mkt_client_signal (date_key, campaign_id, perspective_brand, signal_type);
-
-create index if not exists idx_mkt_client_signal_fingerprint_date
-  on public.mkt_client_signal (fingerprint_key, date_key desc);
-
-create index if not exists idx_mkt_client_signal_event
-  on public.mkt_client_signal (market_event_id);
-
-create index if not exists idx_mkt_client_signal_notification
-  on public.mkt_client_signal (notification_status, date_key, campaign_id);
-
-create index if not exists idx_mkt_client_signal_evidence
-  on public.mkt_client_signal using gin (evidence_json);
-
-create table if not exists public.mkt_signal_delivery (
-  signal_delivery_id bigserial primary key,
-  client_signal_id bigint not null references public.mkt_client_signal(client_signal_id),
-  signal_key text not null,
-  delivery_channel text not null,
-  delivery_format text,
-  delivery_status text not null default 'pending',
-  delivery_target text,
-  delivery_ref text,
-  scheduled_at timestamptz,
-  sent_at timestamptz,
-  error_message text,
-  metadata_json jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists idx_mkt_signal_delivery_signal
-  on public.mkt_signal_delivery (client_signal_id, delivery_channel, delivery_status);
-
-create index if not exists idx_mkt_signal_delivery_status
-  on public.mkt_signal_delivery (delivery_status, scheduled_at);
+commit;

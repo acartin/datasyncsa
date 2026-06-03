@@ -413,6 +413,8 @@ class MarketRepository:
         client_id: str,
         campaign_id: int | None,
         date_key: int | None,
+        date_key_from: int | None,
+        date_key_to: int | None,
         brand: str | None,
         chain: str | None,
         product_key: str | None,
@@ -426,6 +428,8 @@ class MarketRepository:
             "client_id": client_id,
             "campaign_id": campaign_id,
             "date_key": date_key,
+            "date_key_from": date_key_from,
+            "date_key_to": date_key_to,
             "brands": [value for value in (brand or "").split(",") if value],
             "chains": [value for value in (chain or "").split(",") if value],
             "product_keys": [value for value in (product_key or "").split(",") if value],
@@ -445,74 +449,95 @@ class MarketRepository:
                           select coalesce(
                             %(date_key)s::int,
                             (
-                              select max(date_key)
-                              from public.mkt_market_event e
-                              join public.mkt_campaign_client_access cca
-                                on cca.campaign_id = e.campaign_id and cca.is_active
-                              where cca.client_id::text = %(client_id)s
+                              select max(e.date_key)
+                              from public.mw_bi_radar_event_feed e
+                              where e.client_id::text = %(client_id)s
                                 and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
-                                and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+                                and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
                             )
                           ) as selected_date_key
                         ),
                         enriched as (
                           select
-                            md5(concat_ws(':', 'dod', e.date_key, e.client_id, e.campaign_id, e.chain, e.event_type, coalesce(e.evidence_json->>'product_key', ''))) as event_id,
-                            case
-                              when e.event_type in ('promo_started','promo_ended') then 'promotion'
-                              else 'price'
-                            end as event_area,
+                            e.event_id,
+                            e.event_area,
                             e.event_type,
                             e.severity,
+                            jsonb_build_object(
+                              'display_label', et.display_label,
+                              'short_label', et.short_label,
+                              'description', et.description,
+                              'metric_labels', jsonb_build_object(
+                                'previous', et.metric_previous_label,
+                                'current', et.metric_current_label,
+                                'change', et.metric_change_label
+                              ),
+                              'value_format', et.value_format,
+                              'change_format', et.change_format,
+                              'direction_semantics', et.direction_semantics,
+                              'header_variant', et.header_variant,
+                              'icon_name', et.icon_name,
+                              'accent_token', et.accent_token,
+                              'chart_annotation_label', et.chart_annotation_label,
+                              'config', et.presentation_config
+                            ) as presentation,
                             e.business_date::text as business_date,
                             e.date_key,
+                            e.previous_date_key,
                             e.campaign_id,
-                            coalesce(e.campaign_name, '') as campaign,
+                            coalesce(e.campaign, '') as campaign,
                             e.chain,
-                            e.evidence_json->>'brand' as brand,
-                            e.evidence_json->>'product' as product,
-                            e.evidence_json->>'gtin' as gtin,
-                            e.evidence_json->>'product_key' as product_key,
-                            e.business_date::text as captured_at_cr,
-                            null::text as previous_captured_at_cr,
-                            (e.metrics_json->>'previous_value')::numeric(12,2) as previous_value,
-                            (e.metrics_json->>'current_value')::numeric(12,2) as current_value,
-                            (e.metrics_json->>'change_abs')::numeric(12,2) as change_amount,
-                            (e.metrics_json->>'change_pct')::numeric(12,2) as change_pct,
-                            case when e.event_type in ('promo_started','promo_ended')
-                              then (e.metrics_json->>'promo_share_current')::numeric(5,2)
-                              else null
-                            end as promo_share_pct,
-                            null::numeric(5,2) as discount_pct,
-                            null::int as observed_locations,
-                            null::int as visible_locations,
-                            null::int as available_locations,
-                            e.evidence_json->>'product_url' as product_url
-                          from public.mkt_market_event e
+                            e.brand,
+                            e.product,
+                            e.gtin,
+                            e.product_key,
+                            e.captured_at_cr,
+                            e.previous_captured_at_cr,
+                            e.previous_value,
+                            e.current_value,
+                            e.change_amount,
+                            e.change_pct,
+                            e.promo_share_pct,
+                            e.discount_pct,
+                            e.observed_locations,
+                            e.visible_locations,
+                            e.available_locations,
+                            e.product_url
+                          from public.mw_bi_radar_event_feed e
                           cross join selected_date sd
-                          join public.mkt_campaign_client_access cca
-                            on cca.campaign_id = e.campaign_id and cca.is_active
-                          where cca.client_id::text = %(client_id)s
-                            and e.date_key = sd.selected_date_key
-                            and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
-                            and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
-                            and (%(brands)s::text[] = '{}'::text[] or e.evidence_json->>'brand' = any(%(brands)s::text[]))
-                            and (%(chains)s::text[] = '{}'::text[] or e.chain = any(%(chains)s::text[]))
-                            and (%(product_keys)s::text[] = '{}'::text[] or e.evidence_json->>'product_key' = any(%(product_keys)s::text[]))
+                          join public.mkt_dim_market_event_type et
+                            on et.event_type = e.event_type
+                           and et.is_active
+                          where e.client_id::text = %(client_id)s
                             and (
-                              %(event_areas)s::text[] = '{}'::text[]
-                              or case
-                                when e.event_type in ('promo_started','promo_ended') then 'promotion'
-                                else 'price'
-                              end = any(%(event_areas)s::text[])
+                              (%(date_key)s::int is not null and e.date_key = sd.selected_date_key)
+                              or (
+                                %(date_key)s::int is null
+                                and %(date_key_from)s::int is null
+                                and %(date_key_to)s::int is null
+                                and e.date_key = sd.selected_date_key
+                              )
+                              or (
+                                %(date_key)s::int is null
+                                and (%(date_key_from)s::int is not null or %(date_key_to)s::int is not null)
+                                and (%(date_key_from)s::int is null or e.date_key >= %(date_key_from)s::int)
+                                and (%(date_key_to)s::int is null or e.date_key <= %(date_key_to)s::int)
+                              )
                             )
+                            and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
+                            and (%(brands)s::text[] = '{}'::text[] or e.brand = any(%(brands)s::text[]))
+                            and (%(chains)s::text[] = '{}'::text[] or e.chain = any(%(chains)s::text[]))
+                            and (%(product_keys)s::text[] = '{}'::text[] or e.product_key = any(%(product_keys)s::text[]))
+                            and (%(event_areas)s::text[] = '{}'::text[] or e.event_area = any(%(event_areas)s::text[]))
                             and (%(severities)s::text[] = '{}'::text[] or e.severity = any(%(severities)s::text[]))
                             and (
                               %(query)s::text is null
-                              or e.evidence_json->>'product' ilike %(query)s
-                              or e.evidence_json->>'brand' ilike %(query)s
+                              or e.product ilike %(query)s
+                              or e.brand ilike %(query)s
                               or e.chain ilike %(query)s
                               or e.event_type ilike %(query)s
+                              or et.display_label ilike %(query)s
+                              or et.short_label ilike %(query)s
                             )
                         )
                         select
@@ -523,6 +548,7 @@ class MarketRepository:
                           count(*) filter (where lower(coalesce(severity, '')) = 'high') over()::int as total_high_severity_events
                         from enriched
                         order by
+                          date_key desc,
                           case lower(coalesce(severity, ''))
                             when 'high' then 1
                             when 'medium' then 2
@@ -540,15 +566,19 @@ class MarketRepository:
                     cursor.execute(
                         """
                         select
-                          max(e.date_key) as selected_date_key,
-                          null::int as prior_closed_date_key,
+                          coalesce(
+                            %(date_key)s::int,
+                            %(date_key_to)s::int,
+                            max(e.date_key)
+                          ) as selected_date_key,
+                          max(e.previous_date_key) filter (where e.date_key = coalesce(%(date_key)s::int, %(date_key_to)s::int, e.date_key)) as prior_closed_date_key,
                           to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int as current_cr_date_key
-                        from public.mkt_market_event e
-                        join public.mkt_campaign_client_access cca
-                          on cca.campaign_id = e.campaign_id and cca.is_active
-                        where cca.client_id::text = %(client_id)s
+                        from public.mw_bi_radar_event_feed e
+                        where e.client_id::text = %(client_id)s
                           and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
-                          and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease');
+                          and (%(date_key_from)s::int is null or e.date_key >= %(date_key_from)s::int)
+                          and (%(date_key_to)s::int is null or e.date_key <= %(date_key_to)s::int)
+                          and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s);
                         """,
                         params,
                     )
@@ -772,6 +802,7 @@ null::numeric(5,2) as discount_pct,
         campaign_id: int | None,
         date_key: int | None,
         chain: str | None,
+        history_days: int = 30,
     ) -> dict[str, object]:
         params: dict[str, Any] = {
             "client_id": client_id,
@@ -779,6 +810,7 @@ null::numeric(5,2) as discount_pct,
             "campaign_id": campaign_id,
             "date_key": date_key,
             "chain": chain or None,
+            "history_days": max(7, min(history_days, 365)),
         }
 
         try:
@@ -857,7 +889,11 @@ null::numeric(5,2) as discount_pct,
                         return {"client_id": client_id, "product": None, "chain_snapshot": [], "daily_history": [], "history": [], "price_history": [], "events": []}
                     product_row = self._json_ready(product)
 
-                    detail_params = {**params, "date_key": product_row.get("date_key"), "chain": product_row.get("chain") or chain}
+                    detail_params = {
+                        **params,
+                        "date_key": product_row.get("date_key"),
+                    }
+                    all_chain_params = {**detail_params, "chain": None}
 
                     cursor.execute(
                         """
@@ -894,7 +930,7 @@ null::numeric(5,2) as discount_pct,
                         group by o.chain_label
                         order by average_price nulls last, chain;
                         """,
-                        detail_params,
+                        all_chain_params,
                     )
                     chain_snapshot = [self._json_ready(row) for row in cursor.fetchall()]
 
@@ -918,7 +954,7 @@ null::numeric(5,2) as discount_pct,
                           and date_key <= %(date_key)s
                         order by date_key, chain;
                         """,
-                        detail_params,
+                        all_chain_params,
                     )
                     daily_history = [self._json_ready(row) for row in cursor.fetchall()]
 
@@ -943,30 +979,43 @@ null::numeric(5,2) as discount_pct,
                           and (%(chain)s::text is null or chain = %(chain)s)
                         order by chain, captured_at_cr;
                         """,
-                        detail_params,
+                        all_chain_params,
                     )
                     history = [self._json_ready(row) for row in cursor.fetchall()]
 
                     cursor.execute(
                         """
-                        with scoped as (
+                        with daily as (
                           select
                             o.date_key,
                             o.business_date,
                             o.chain_label as chain,
                             max(o.captured_at_cr) as captured_at_cr,
-                            round(
-                              avg(coalesce(o.spot_price_amount, o.effective_price_amount))
-                              filter (where coalesce(o.spot_price_amount, o.effective_price_amount) is not null),
-                              2
-                            ) as effective_price_amount,
-                            round(avg(o.reference_price_amount) filter (where o.reference_price_amount is not null), 2) as reference_price_amount,
-                            round(avg(o.spot_price_amount) filter (where o.spot_price_amount is not null), 2) as promo_price_amount,
+                            round(avg(coalesce(o.spot_price_amount, o.effective_price_amount)) filter (
+                              where o.is_available
+                                and coalesce(o.spot_price_amount, o.effective_price_amount) is not null
+                            ), 2) as effective_price_amount,
+                            round(avg(o.reference_price_amount) filter (
+                              where o.is_available
+                                and o.reference_price_amount is not null
+                            ), 2) as reference_price_amount,
+                            round(avg(o.spot_price_amount) filter (
+                              where o.is_available
+                                and o.spot_price_amount is not null
+                            ), 2) as promo_price_amount,
                             bool_or(o.is_available and o.spot_price_amount is not null) as promo_detected,
                             case
                               when (avg(o.reference_price_amount) filter (where o.is_available)) > 0
                                 and (avg(o.spot_price_amount) filter (where o.is_available and o.spot_price_amount is not null)) is not null
-                              then round((((avg(o.reference_price_amount) filter (where o.is_available)) - (avg(o.spot_price_amount) filter (where o.is_available and o.spot_price_amount is not null))) / (avg(o.reference_price_amount) filter (where o.is_available))) * 100, 2)
+                              then round(
+                                (
+                                  (
+                                    avg(o.reference_price_amount) filter (where o.is_available)
+                                  ) - (
+                                    avg(o.spot_price_amount) filter (where o.is_available and o.spot_price_amount is not null)
+                                  )
+                                ) / (avg(o.reference_price_amount) filter (where o.is_available))
+                              * 100, 2)
                             end as discount_pct
                           from public.mw_core_sku_store_observation as o
                           join public.mkt_campaign_client_access as cca
@@ -981,75 +1030,132 @@ null::numeric(5,2) as discount_pct,
                             and (o.client_id is null or o.client_id = cca.client_id)
                             and o.product_key::text = %(product_key)s
                             and o.date_key <= %(date_key)s
-                            and o.effective_price_amount is not null
+                            and o.is_available
                             and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
                             and (%(chain)s::text is null or o.chain_label = %(chain)s)
                           group by
                             o.date_key,
                             o.business_date,
                             o.chain_label
-                        )
-                        select *
-                        from (
-                          select *
-                          from scoped
+                        ),
+                        limited_dates as (
+                          select distinct date_key
+                          from daily
                           order by date_key desc
-                          limit 30
-                        ) latest
-                        order by date_key;
+                          limit %(history_days)s
+                        ),
+                        sequenced as (
+                          select
+                            d.*,
+                            lag(d.date_key) over (
+                              partition by d.chain
+                              order by d.date_key
+                            ) as previous_date_key
+                          from daily as d
+                          where d.date_key in (select date_key from limited_dates)
+                        )
+                        select
+                          date_key,
+                          business_date,
+                          chain,
+                          captured_at_cr,
+                          effective_price_amount,
+                          reference_price_amount,
+                          promo_price_amount,
+                          promo_detected,
+                          discount_pct,
+                          previous_date_key
+                        from sequenced
+                        order by date_key, chain;
                         """,
-                        detail_params,
+                        all_chain_params,
                     )
                     price_history = [self._json_ready(row) for row in cursor.fetchall()]
                     events = []
 
                     cursor.execute(
                         """
+                        with visible_dates as (
+                          select distinct o.date_key
+                          from public.mw_core_sku_store_observation as o
+                          join public.mkt_campaign_client_access as cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          where cca.client_id::text = %(client_id)s
+                            and (o.client_id is null or o.client_id = cca.client_id)
+                            and o.product_key::text = %(product_key)s
+                            and o.date_key <= %(date_key)s
+                            and o.is_available
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                          order by o.date_key desc
+                          limit %(history_days)s
+                        )
                         select
+                            e.event_id,
                             e.event_type,
                             e.severity,
+                            e.event_area,
+                            jsonb_build_object(
+                              'display_label', et.display_label,
+                              'short_label', et.short_label,
+                              'description', et.description,
+                              'metric_labels', jsonb_build_object(
+                                'previous', et.metric_previous_label,
+                                'current', et.metric_current_label,
+                                'change', et.metric_change_label
+                              ),
+                              'value_format', et.value_format,
+                              'change_format', et.change_format,
+                              'direction_semantics', et.direction_semantics,
+                              'header_variant', et.header_variant,
+                              'icon_name', et.icon_name,
+                              'accent_token', et.accent_token,
+                              'chart_annotation_label', et.chart_annotation_label,
+                              'config', et.presentation_config
+                            ) as presentation,
                             e.business_date::text as business_date,
                             e.date_key,
+                            e.previous_date_key,
                             e.campaign_id,
-                            coalesce(e.campaign_name, '') as campaign,
+                            coalesce(e.campaign, '') as campaign,
                             e.chain,
-                            e.evidence_json->>'brand' as brand,
-                            e.evidence_json->>'product' as product,
-                            e.evidence_json->>'gtin' as gtin,
-                            e.evidence_json->>'product_key' as product_key,
-                            (e.metrics_json->>'previous_value')::numeric(12,2) as previous_value,
-                            (e.metrics_json->>'current_value')::numeric(12,2) as current_value,
-                            (e.metrics_json->>'change_abs')::numeric(12,2) as change_amount,
-                            (e.metrics_json->>'change_pct')::numeric(12,2) as change_pct,
-                            case when e.event_type in ('promo_started','promo_ended')
-                                then (e.metrics_json->>'promo_share_current')::numeric(5,2)
-                                else null
-                            end as promo_share_pct,
-                            null::numeric(5,2) as discount_pct,
-                            e.evidence_json->>'product_url' as product_url,
-                            case
-                                when e.event_type in ('promo_started','promo_ended') then 'promotion'
-                                else 'price'
-                            end as event_area
-                        from public.mkt_market_event e
-                        join public.mkt_campaign_client_access cca
-                            on cca.campaign_id = e.campaign_id and cca.is_active
-                        where cca.client_id::text = %(client_id)s
-                            and e.evidence_json->>'product_key' = %(product_key)s
-                            and e.event_type in ('promo_started','promo_ended','regular_price_increase','regular_price_decrease','promo_price_increase','promo_price_decrease')
+                            e.brand,
+                            e.product,
+                            e.gtin,
+                            e.product_key,
+                            e.previous_value,
+                            e.current_value,
+                            e.change_amount,
+                            e.change_pct,
+                            e.promo_share_pct,
+                            e.discount_pct,
+                            e.product_url
+                        from public.mw_bi_radar_event_feed e
+                        join public.mkt_dim_market_event_type et
+                            on et.event_type = e.event_type
+                           and et.is_active
+                        where e.client_id::text = %(client_id)s
+                            and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
+                            and (%(date_key)s::int is null or e.date_key <= %(date_key)s)
+                            and e.product_key::text = %(product_key)s
+                            and (
+                              e.date_key in (select date_key from visible_dates)
+                              or e.previous_date_key in (select date_key from visible_dates)
+                            )
                         order by e.date_key desc
                         """,
-                        detail_params,
+                        all_chain_params,
                     )
                     events = [self._json_ready(row) for row in cursor.fetchall()]
                     for event in events:
-                        event["event_id"] = f"dod:{event.get('date_key')}:{event.get('product_key')}:{event.get('chain')}:{event.get('event_type')}"
+                        event["event_id"] = event.get("event_id") or f"dod:{event.get('date_key')}:{event.get('product_key')}:{event.get('chain')}:{event.get('event_type')}"
                         event["captured_at_cr"] = event.get("business_date")
                         event["previous_captured_at_cr"] = None
                         event["observed_locations"] = None
                         event["visible_locations"] = None
                         event["available_locations"] = None
-                        event["previous_date_key"] = None
 
         except errors.UndefinedTable:
             return {"client_id": client_id, "product": None, "chain_snapshot": [], "daily_history": [], "history": [], "price_history": [], "events": []}

@@ -36,6 +36,13 @@ Reglas:
 - Todo dato debe venir de `services/market-watch-api` o de mocks locales explicitamente marcados como temporales.
 - El frontend no debe ejecutar ETL, scraping, queries pesadas ni logica de multitenancy autoritativa.
 
+Idioma obligatorio:
+
+- Market Watch / Operations Portal is an English-language product.
+- All user-facing UI copy must be written in English: screens, menus, labels, buttons, placeholders, empty states, validation messages, helper text, tooltips, ARIA labels and user instructions.
+- Do not introduce Spanish UI text in `services/web/market-watch` unless the user explicitly requests a localized variant.
+- Domain values received from data sources, such as chain names or product names, must remain as provided by the data source.
+
 ## 3. Componentes Existentes a Preservar
 
 Estos componentes forman parte del estandar actual y no se deben borrar, reemplazar o duplicar sin una justificacion tecnica clara:
