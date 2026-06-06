@@ -49,7 +49,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-products-per-chain", type=int, default=None, help="Limita productos por cadena.")
     parser.add_argument("--sleep-min", type=float, default=1.25, help="Sleep mínimo entre requests.")
     parser.add_argument("--sleep-max", type=float, default=3.00, help="Sleep máximo entre requests.")
-    parser.add_argument("--client-id", type=int, default=None, help="Sobrescribe client_id de la campaña.")
     parser.add_argument(
         "--business-date",
         default=None,
@@ -81,7 +80,6 @@ def main(argv: list[str] | None = None) -> None:
         max_products_per_chain=args.max_products_per_chain,
         sleep_min=args.sleep_min,
         sleep_max=args.sleep_max,
-        client_id_override=args.client_id,
         business_date_key=business_date_key,
         spread_until_cr=parse_spread_until_cr(args.spread_until_cr),
         only_pending=args.only_pending,

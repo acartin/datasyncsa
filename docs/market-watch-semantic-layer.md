@@ -57,15 +57,14 @@ son la base visible para Superset, Metabase o el portal.
 La visibilidad cliente de campanas se resuelve con
 `public.mkt_campaign_client_access`.
 
-Una campana puede ser visible para uno o varios clientes. Las vistas `mw_bi_*`
-deben exponer filas por `client_id` autorizado desde esa tabla puente, no asumir
-que `mkt_dim_campaign.client_id` o `mkt_client_signal.perspective_client_id`
-siempre estaran poblados.
+Una campana puede ser visible para uno o varios clientes. Las vistas semanticas
+deben exponer filas por `client_id` autorizado desde esa tabla puente. No existe
+cliente propietario en `mkt_dim_campaign` ni en `mkt_run`.
 
 Regla:
 
 - `market-watch-api` filtra siempre por el `client_id` de sesion.
-- Las vistas `mw_bi_*` deben poblar `client_id` mediante
+- Las vistas `mw_core_*`, `mw_signal_*` y `mw_bi_*` deben poblar `client_id` mediante
   `mkt_campaign_client_access`.
 - Si una senal ya trae `perspective_client_id`, debe coincidir con el cliente
   autorizado por la campana.

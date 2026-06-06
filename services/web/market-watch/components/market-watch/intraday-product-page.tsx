@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowDownRight,
@@ -12,13 +11,15 @@ import {
   Minus,
 } from "lucide-react";
 import { ChainTag } from "@/components/market-watch/chain-tag";
-import { IntradayProductChainGrid, IntradayProductEventsGrid } from "@/components/market-watch/intraday-product-grids";
+import { IntradayProductChainGrid, IntradayProductEventsGrid, IntradayProductStoreEvidenceGrid } from "@/components/market-watch/intraday-product-grids";
 import { ProductNormalPromoPriceCharts } from "@/components/market-watch/product-history-chart";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs } from "@/components/ui/tabs";
 import { changeIndicator, changeToneClass, showHeaderMetrics } from "@/lib/event-presentation";
+import { friendlyApiError } from "@/lib/feedback";
 import { IntradayProductDetailPayload, IntradayRadarEvent } from "@/lib/pricing-types";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,12 @@ function compactDate(value: unknown) {
   const text = String(value ?? "");
   if (!/^\d{8}$/.test(text)) return text || "-";
   return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+}
+
+function formatDateKeyLabel(value: number) {
+  const text = String(value);
+  if (!/^\d{8}$/.test(text)) return text;
+  return `${text.slice(6, 8)}-${text.slice(4, 6)}-${text.slice(0, 4)}`;
 }
 
 function formatDDMMYYYY(value: unknown) {
@@ -64,14 +71,18 @@ type ProductIntelligenceContext = {
   chain?: string;
   historyDays?: string;
   source?: string;
+  routeBase?: string;
+  viewMode?: "event" | "product";
 };
 
 const analysisTabs = [
-  { id: "summary", label: "Overview" },
-  { id: "position", label: "Market Position" },
+  { id: "summary", label: "Event Overview" },
+  { id: "evidence", label: "Store Evidence" },
+  { id: "chains", label: "Product Across Chains" },
 ];
 
 type PriceMode = "regular" | "promo" | "both";
+type EvidenceFilter = "all" | "available" | "promo" | "unavailable";
 
 const periodOptions = [
   { label: "7 days", days: "7" },
@@ -92,6 +103,7 @@ function chainOptions(payload: IntradayProductDetailPayload, preferredChain?: st
 }
 
 function selectedEvent(payload: IntradayProductDetailPayload, context: ProductIntelligenceContext) {
+  if (context.viewMode === "product" && !context.dateKey && !context.chain) return null;
   const dateKey = context.dateKey ? Number(context.dateKey) : undefined;
   return (
     payload.events.find((event) => (!dateKey || event.date_key === dateKey) && (!context.chain || event.chain === context.chain)) ??
@@ -104,6 +116,34 @@ function selectedEvent(payload: IntradayProductDetailPayload, context: ProductIn
 function eventTitle(event: IntradayRadarEvent | null) {
   if (!event) return "PRODUCT INTELLIGENCE";
   return event.presentation?.display_label ?? event.event_type.replaceAll("_", " ").toUpperCase();
+}
+
+function isStoreAveragePriceEvent(event: IntradayRadarEvent | null) {
+  return event?.event_type === "regular_price_increase" || event?.event_type === "regular_price_decrease";
+}
+
+function metricLabelsForEvent(event: IntradayRadarEvent | null) {
+  if (isStoreAveragePriceEvent(event)) {
+    return {
+      previous: "Previous avg",
+      current: "Current avg",
+      change: event?.presentation?.metric_labels?.change ?? "Change",
+    };
+  }
+
+  return event?.presentation?.metric_labels ?? {
+    previous: "Previous",
+    current: "Current",
+    change: "Change",
+  };
+}
+
+function metricContextForEvent(event: IntradayRadarEvent | null, storeCount: number) {
+  if (!isStoreAveragePriceEvent(event)) return null;
+  const eventStoreCount = event?.available_locations ?? event?.visible_locations ?? event?.observed_locations ?? null;
+  const count = typeof eventStoreCount === "number" && eventStoreCount > 0 ? eventStoreCount : storeCount;
+  if (count <= 1) return null;
+  return `Average across ${count} stores`;
 }
 
 function valueForEvent(event: IntradayRadarEvent | null, value: number | null) {
@@ -144,6 +184,23 @@ function headerProductUrl(payload: IntradayProductDetailPayload, event: Intraday
   return matchingChain?.product_url ?? payload.product?.product_url ?? null;
 }
 
+function productRouteBase(context: ProductIntelligenceContext) {
+  return context.routeBase ?? "/pricing/products";
+}
+
+function backNavigation(source: ProductIntelligenceSource) {
+  if (source === "signals") {
+    return {
+      href: "/pricing/executive-signals",
+      label: "Executive signals",
+    };
+  }
+  return {
+    href: "/pricing/intraday-radar",
+    label: "Price radar",
+  };
+}
+
 function periodHref(productKey: string, params: ProductIntelligenceContext, days: string) {
   const search = new URLSearchParams();
   if (params.campaignId) search.set("campaign_id", params.campaignId);
@@ -151,7 +208,14 @@ function periodHref(productKey: string, params: ProductIntelligenceContext, days
   if (params.chain) search.set("chain", params.chain);
   if (params.source) search.set("source", params.source);
   search.set("history_days", days);
-  return `/pricing/products/${encodeURIComponent(productKey)}?${search.toString()}`;
+  return `${productRouteBase(params)}/${encodeURIComponent(productKey)}?${search.toString()}`;
+}
+
+function evidenceFilterLabel(filter: EvidenceFilter) {
+  if (filter === "available") return "Available";
+  if (filter === "promo") return "With promo";
+  if (filter === "unavailable") return "Unavailable";
+  return "All stores";
 }
 
 export function IntradayProductPage({
@@ -161,16 +225,33 @@ export function IntradayProductPage({
   payload: IntradayProductDetailPayload;
   context?: ProductIntelligenceContext;
 }) {
-  const product = payload.product;
+  const [currentPayload, setCurrentPayload] = useState(payload);
+  const [activeHistoryDays, setActiveHistoryDays] = useState(context.historyDays ?? "30");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
+  const product = currentPayload.product;
   const source = sourceFromValue(context.source);
-  const router = useRouter();
+  const navigation = backNavigation(source);
+
+  useEffect(() => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setCurrentPayload(payload);
+    setActiveHistoryDays(context.historyDays ?? "30");
+    setHistoryError(null);
+    setIsHistoryLoading(false);
+  }, [payload, context.historyDays]);
+
+  useEffect(() => () => requestRef.current?.abort(), []);
+
   if (!product) {
     return (
       <div className="space-y-4">
         <Button asChild variant="outline">
-          <Link href="/pricing/intraday-radar">
+          <Link href={navigation.href}>
             <ArrowLeft className="h-4 w-4" />
-            Price & Promotions Radar
+            {navigation.label}
           </Link>
         </Button>
         <Card>
@@ -184,40 +265,34 @@ export function IntradayProductPage({
 
   const productKey = product.product_key;
 
-  const chains = chainOptions(payload, context.chain ?? product.chain ?? undefined);
+  const chains = chainOptions(currentPayload, context.chain ?? product.chain ?? undefined);
   const initialSelectedChains = context.chain && chains.includes(context.chain) ? [context.chain] : chains;
-  const initialHistoryDays = context.historyDays ?? "30";
-  const [activeHistoryDays, setActiveHistoryDays] = useState(initialHistoryDays);
+  const chainSelectionKey = initialSelectedChains.join("|");
   const [selectedChains, setSelectedChains] = useState<string[]>(initialSelectedChains);
   const [priceMode, setPriceMode] = useState<PriceMode>("both");
   const [activeTab, setActiveTab] = useState("summary");
+  const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>("all");
+
+  useEffect(() => {
+    setSelectedChains(initialSelectedChains);
+  }, [productKey, context.chain, chainSelectionKey]);
+
   const displayedChains = selectedChains;
-  const event = selectedEvent(payload, context);
-  const metricLabels = event?.presentation?.metric_labels ?? {
-    previous: "Previous",
-    current: "Current",
-    change: "Change",
-  };
-  const productUrl = headerProductUrl(payload, event);
+  const event = selectedEvent(currentPayload, context);
+  const productUrl = headerProductUrl(currentPayload, event);
   const visibleDateKeys = new Set(
-    payload.price_history
+    currentPayload.price_history
       .filter((point) => displayedChains.includes(point.chain))
       .map((point) => Number(point.date_key))
       .filter((value) => Number.isFinite(value))
   );
   const rangeLabel = (() => {
-    const dk = product?.date_key;
-    if (!dk) return null;
-    const s = String(dk);
-    const to = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
-    const from = new Date(to);
-    from.setDate(from.getDate() - Number(activeHistoryDays) + 1);
-    const fmt = (d: Date) =>
-      `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
-    return `from ${fmt(from)} to ${fmt(to)}`;
+    const sortedDateKeys = Array.from(visibleDateKeys).sort((left, right) => left - right);
+    if (!sortedDateKeys.length) return null;
+    return `from ${formatDateKeyLabel(sortedDateKeys[0])} to ${formatDateKeyLabel(sortedDateKeys[sortedDateKeys.length - 1])}`;
   })();
 
-  const filteredEvents = payload.events.filter((record) => {
+  const filteredEvents = currentPayload.events.filter((record) => {
     const inChain = displayedChains.includes(record.chain);
     if (!inChain) return false;
     if (!visibleDateKeys.size) return true;
@@ -225,6 +300,27 @@ export function IntradayProductPage({
     const previousDateKey = Number(record.previous_date_key);
     return visibleDateKeys.has(ownDateKey) || (Number.isFinite(previousDateKey) && visibleDateKeys.has(previousDateKey));
   });
+  const productEvents = currentPayload.events.filter((record) => {
+    if (!visibleDateKeys.size) return true;
+    const ownDateKey = Number(record.date_key);
+    const previousDateKey = Number(record.previous_date_key);
+    return visibleDateKeys.has(ownDateKey) || (Number.isFinite(previousDateKey) && visibleDateKeys.has(previousDateKey));
+  });
+  const storeEvidence = currentPayload.store_evidence ?? [];
+  const metricLabels = metricLabelsForEvent(event);
+  const metricContext = metricContextForEvent(event, storeEvidence.length);
+  const filteredStoreEvidence = storeEvidence.filter((record) => {
+    if (evidenceFilter === "available") return record.is_available === true;
+    if (evidenceFilter === "promo") return record.promo_detected === true || typeof record.spot_price_amount === "number";
+    if (evidenceFilter === "unavailable") return record.is_available === false;
+    return true;
+  });
+  const storeCounts = {
+    total: storeEvidence.length,
+    listed: storeEvidence.filter((record) => record.is_listed).length,
+    available: storeEvidence.filter((record) => record.is_available).length,
+    promo: storeEvidence.filter((record) => record.promo_detected || typeof record.spot_price_amount === "number").length,
+  };
 
   function toggleChain(chain: string) {
     setSelectedChains((current) => {
@@ -234,21 +330,52 @@ export function IntradayProductPage({
     });
   }
 
-  function changePeriod(days: string) {
+  async function changePeriod(days: string) {
     if (days === activeHistoryDays) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const previousDays = activeHistoryDays;
     setActiveHistoryDays(days);
-    startTransition(() => {
-      router.replace(periodHref(productKey, context, days), { scroll: false });
-    });
+    setHistoryError(null);
+    setIsHistoryLoading(true);
+
+    try {
+      const response = await fetch(`/api/pricing/products/${encodeURIComponent(productKey)}?${new URLSearchParams({
+        ...(context.campaignId ? { campaign_id: context.campaignId } : {}),
+        ...(context.dateKey ? { date_key: context.dateKey } : {}),
+        ...(context.chain ? { chain: context.chain } : {}),
+        history_days: days,
+      }).toString()}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const nextPayload = await response.json().catch(() => undefined);
+      if (!response.ok) {
+        throw new Error(friendlyApiError(nextPayload));
+      }
+      if (requestRef.current !== controller) return;
+      setCurrentPayload(nextPayload as IntradayProductDetailPayload);
+      window.history.replaceState(null, "", periodHref(productKey, context, days));
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setActiveHistoryDays(previousDays);
+      setHistoryError(error instanceof Error ? error.message : "The period could not be updated.");
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setIsHistoryLoading(false);
+      }
+    }
   }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <Button asChild variant="outline" className="h-8">
-          <Link href={source === "radar" ? "/pricing/intraday-radar" : "/pricing/executive-signals"}>
+          <Link href={navigation.href}>
             <ArrowLeft className="h-4 w-4" />
-            {source === "radar" ? "Price radar" : "Pricing"}
+            {navigation.label}
           </Link>
         </Button>
         <span className="text-border-2">/</span>
@@ -307,6 +434,11 @@ export function IntradayProductPage({
                   <span>{changeForEvent(event)}</span>
                 </div>
               </div>
+              {metricContext ? (
+                <div className="border-t border-border px-4 py-2 text-[11px] text-ink-muted sm:col-span-3">
+                  {metricContext}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </CardContent>
@@ -340,15 +472,24 @@ export function IntradayProductPage({
                   type="button"
                   variant="chip"
                   data-active={activeHistoryDays === option.days}
+                  disabled={isHistoryLoading && activeHistoryDays === option.days}
                   onClick={() => changePeriod(option.days)}
                 >
                   {option.label}
                 </Button>
               ))}
+              {isHistoryLoading ? (
+                <span className="text-[10px] text-ink-muted">Updating…</span>
+              ) : null}
               {rangeLabel && (
                 <span className="text-[10px] text-ink-muted">{rangeLabel}</span>
               )}
             </div>
+            {historyError ? (
+              <Alert variant="error" title="Could not update period" className="mt-3">
+                {historyError}
+              </Alert>
+            ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="mr-1 w-12 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Chains</div>
               <Button
@@ -366,7 +507,7 @@ export function IntradayProductPage({
             </div>
           </CardHeader>
           <CardContent>
-            <ProductNormalPromoPriceCharts history={payload.price_history} selectedChains={displayedChains} priceMode={priceMode} />
+            <ProductNormalPromoPriceCharts history={currentPayload.price_history} selectedChains={displayedChains} priceMode={priceMode} />
           </CardContent>
         </Card>
 
@@ -381,18 +522,77 @@ export function IntradayProductPage({
         </Card>
       </section> : null}
 
-      {activeTab === "position" ? <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <GitCompare className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-medium">Market Position</h2>
+      {activeTab === "evidence" ? <section className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Stores</div>
+            <div className="mt-1 font-mono text-xl">{storeCounts.total}</div>
+          </div>
+          <div className="rounded-lg border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Listed</div>
+            <div className="mt-1 font-mono text-xl">{storeCounts.listed}</div>
+          </div>
+          <div className="rounded-lg border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Available</div>
+            <div className="mt-1 font-mono text-xl">{storeCounts.available}</div>
+          </div>
+          <div className="rounded-lg border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">With promo</div>
+            <div className="mt-1 font-mono text-xl">{storeCounts.promo}</div>
+          </div>
         </div>
         <Card>
           <CardHeader>
-            <div className="font-medium">Chain-level price position</div>
-            <div className="mt-1 text-sm text-muted-foreground">Latest available capture by chain for this product.</div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-[13px] font-medium">Store-level evidence</div>
+                <div className="mt-1 text-[11px] text-ink-muted">Current closed-day captures for the event product and chain.</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["all", "available", "promo", "unavailable"] as EvidenceFilter[]).map((filter) => (
+                  <Button key={filter} variant="chip" data-active={evidenceFilter === filter} onClick={() => setEvidenceFilter(filter)}>
+                    {evidenceFilterLabel(filter)}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <IntradayProductChainGrid records={payload.chain_snapshot} />
+            <IntradayProductStoreEvidenceGrid
+              records={filteredStoreEvidence}
+              navigationContext={{
+                productKey: product.product_key,
+                campaignId: context.campaignId,
+                dateKey: context.dateKey,
+                chain: event?.chain ?? product.chain ?? undefined,
+                historyDays: context.historyDays ?? "30",
+              }}
+            />
+          </CardContent>
+        </Card>
+      </section> : null}
+
+      {activeTab === "chains" ? <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <GitCompare className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-medium">Product Across Chains</h2>
+        </div>
+        <Card>
+          <CardHeader>
+            <div className="text-[13px] font-medium">Current chain snapshot</div>
+            <div className="mt-1 text-[11px] text-ink-muted">Latest closed-day price, promo and availability by chain for this product.</div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <IntradayProductChainGrid records={currentPayload.chain_snapshot} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <div className="text-[13px] font-medium">Events across chains</div>
+            <div className="mt-1 text-[11px] text-ink-muted">Related price and promotion movements for this product across the selected period.</div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <IntradayProductEventsGrid records={productEvents} />
           </CardContent>
         </Card>
       </section> : null}

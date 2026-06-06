@@ -24,7 +24,6 @@ python3 services/price-scrapper/commands/extract_catalog_to_stage.py \
 - mantiene los sleeps y retries conservadores del engine actual
 - registra una fila de `run` con estado `succeeded` o `failed`
 - marca `run_kind` como `comparative` o `analytic`
-- puede asociar la corrida a un `client_id`
 - puede asociar la corrida a un `campaign_id`
 - guarda metadata completa en `raw_metadata`
 
@@ -50,5 +49,6 @@ Recomendado:
 
 ## Notas
 - `mkt_run` ya no es stage; es la bitácora persistente del pipeline.
+- `mkt_run` no guarda `client_id`; el tenant se resuelve por `mkt_campaign_client_access` a partir de `campaign_id`.
 - `debug_output_dir` solo se llena si corres el job con `--write-debug-files`.
 - La web comparativa y las transforms de catálogo usan por defecto `run_kind = comparative`.

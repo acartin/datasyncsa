@@ -4,6 +4,7 @@ import {
   ExecutiveSignalSearchParams,
   ExecutiveSignalsPayload,
   IntradayProductDetailPayload,
+  IntradayProductStoreDetailPayload,
   IntradayRadarPayload,
   IntradayRadarSearchParams,
   SignalDetailPayload
@@ -74,6 +75,16 @@ export async function getIntradayProductDetail(
 ): Promise<IntradayProductDetailPayload> {
   return getJson<IntradayProductDetailPayload>(
     `/datasets/intraday-radar/products/${encodeURIComponent(productKey)}${queryString(params)}`
+  );
+}
+
+export async function getIntradayProductStoreDetail(
+  productKey: string,
+  locationKey: string,
+  params: Pick<IntradayRadarSearchParams, "campaign_id" | "date_key" | "chain" | "history_days">
+): Promise<IntradayProductStoreDetailPayload> {
+  return getJson<IntradayProductStoreDetailPayload>(
+    `/datasets/intraday-radar/products/${encodeURIComponent(productKey)}/stores/${encodeURIComponent(locationKey)}${queryString(params)}`
   );
 }
 

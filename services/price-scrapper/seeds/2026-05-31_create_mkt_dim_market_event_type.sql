@@ -106,6 +106,8 @@ set event_area = excluded.event_area,
     presentation_config = excluded.presentation_config,
     updated_at = now();
 
+drop view if exists public.mw_bi_radar_event_feed;
+
 create or replace view public.mw_bi_radar_event_feed as
 select
   e.event_key as event_id,
@@ -139,9 +141,9 @@ select
     else null::numeric
   end as promo_share_pct,
   null::numeric(5,2) as discount_pct,
-  null::int as observed_locations,
-  null::int as visible_locations,
-  null::int as available_locations,
+  coalesce((e.metrics_json->>'observed_locations')::int, c.monitored_locations_count::int) as observed_locations,
+  coalesce((e.metrics_json->>'visible_locations')::int, c.visible_locations_count::int) as visible_locations,
+  coalesce((e.metrics_json->>'available_locations')::int, c.available_locations_count::int) as available_locations,
   e.evidence_json->>'product_url' as product_url,
   null::text as image_url
 from public.mkt_market_event as e
@@ -157,6 +159,15 @@ join public.mkt_campaign_client_access as cca
 join public.auth_clients as ac
   on ac.id = cca.client_id
  and ac.status = 'active'
+left join public.mw_core_sku_chain_day as c
+  on c.date_key = e.date_key
+ and c.campaign_id = e.campaign_id
+ and c.client_id = cca.client_id
+ and c.chain_label = e.chain
+ and (
+   c.product_key::text = e.evidence_json->>'product_key'
+   or (e.evidence_json->>'product_key' is null and c.gtin_norm = e.evidence_json->>'gtin')
+ )
 where e.client_id is null
    or e.client_id = cca.client_id;
 

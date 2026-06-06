@@ -73,8 +73,7 @@ join public.mkt_campaign_client_access as cca
 join public.auth_clients as ac
   on ac.id = cca.client_id
  and ac.status = 'active'
-where b.client_id is null
-   or b.client_id = cca.client_id;
+where b.client_id = cca.client_id;
 
 create or replace view public.mw_bi_sku_price_drivers as
 select
@@ -122,8 +121,7 @@ join public.mkt_campaign_client_access as cca
 join public.auth_clients as ac
   on ac.id = cca.client_id
  and ac.status = 'active'
-where s.client_id is null
-   or s.client_id = cca.client_id;
+where s.client_id = cca.client_id;
 
 create or replace view public.mw_bi_sku_store_price_evidence as
 select
@@ -164,8 +162,7 @@ join public.mkt_campaign_client_access as cca
 join public.auth_clients as ac
   on ac.id = cca.client_id
  and ac.status = 'active'
-where o.client_id is null
-   or o.client_id = cca.client_id;
+where o.client_id = cca.client_id;
 
 create or replace view public.mw_bi_executive_signal_feed as
 select

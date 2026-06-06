@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-06-02T22:30:38Z`
+- Generated UTC: `2026-06-03T18:23:45Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Mayo-31`
-- Git commit: `27aced8`
+- Git branch: `HETZNER-LOCAL-2026-Junio-03`
+- Git commit: `5dfa172`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -28,15 +28,15 @@
 ## 3. SERVICIOS DOCKER ACTUALES
 
 ```text
+redis
 postgres
 admin-console-api
 admin-console-web
 market-watch-api
-dagster-daemon
+dagster-webserver
 market-watch-web
 portainer
-redis
-dagster-webserver
+dagster-daemon
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO

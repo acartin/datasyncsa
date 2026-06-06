@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Minus } from "lucide-react";
 import { ChainTag } from "@/components/market-watch/chain-tag";
 import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
 import { Button } from "@/components/ui/button";
 import { changeIndicator, changeToneClass, formatEventValue, showChangeValue } from "@/lib/event-presentation";
-import { IntradayProductChainSnapshot, IntradayRadarEvent } from "@/lib/pricing-types";
+import { IntradayProductChainSnapshot, IntradayProductStoreEvidence, IntradayRadarEvent } from "@/lib/pricing-types";
 
 function compactDateKey(value: unknown) {
   const text = String(value ?? "");
@@ -21,6 +22,11 @@ function percent(value: unknown) {
 function currency(value: unknown) {
   if (typeof value !== "number") return "-";
   return new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(value);
+}
+
+function status(value: unknown, activeLabel: string, inactiveLabel: string) {
+  if (typeof value !== "boolean") return "-";
+  return value ? activeLabel : inactiveLabel;
 }
 
 function ChangeIndicatorIcon({ record }: { record: IntradayRadarEvent }) {
@@ -145,6 +151,84 @@ const eventColumns: DataGridColumn<IntradayRadarEvent>[] = [
   }
 ];
 
+const storeColumns: DataGridColumn<IntradayProductStoreEvidence>[] = [
+  { id: "chain", header: "Chain", className: "whitespace-nowrap", cell: (record) => <ChainTag chain={record.chain} /> },
+  { id: "location_name", header: "Store", className: "min-w-56" },
+  {
+    id: "location",
+    header: "Location",
+    className: "min-w-56",
+    cell: (record) => [record.province, record.canton, record.district].filter(Boolean).join(" / ") || "-"
+  },
+  { id: "captured_at_cr", header: "Last capture", className: "whitespace-nowrap" },
+  {
+    id: "is_listed",
+    header: "Listed",
+    cell: (record) => status(record.is_listed, "Yes", "No")
+  },
+  {
+    id: "is_available",
+    header: "Available",
+    cell: (record) => status(record.is_available, "Yes", "No")
+  },
+  {
+    id: "reference_price_amount",
+    header: "Regular",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{currency(record.reference_price_amount)}</span>,
+    sortValue: (record) => record.reference_price_amount
+  },
+  {
+    id: "spot_price_amount",
+    header: "Promo",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{currency(record.spot_price_amount)}</span>,
+    sortValue: (record) => record.spot_price_amount
+  },
+  {
+    id: "effective_price_amount",
+    header: "Effective",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{currency(record.effective_price_amount)}</span>,
+    sortValue: (record) => record.effective_price_amount
+  },
+  {
+    id: "discount_pct",
+    header: "Discount",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{percent(record.discount_pct)}</span>,
+    sortValue: (record) => record.discount_pct
+  },
+  {
+    id: "product_url",
+    header: "Live",
+    sortable: false,
+    className: "text-right",
+    cell: (record) => {
+      const href = typeof record.product_url === "string" && record.product_url ? record.product_url : null;
+
+      return href ? (
+        <Button
+          asChild
+          variant="ghost"
+          className="h-8 w-8 px-0"
+          title="Open live chain site. Price may differ by the store selected in your browser."
+        >
+          <a href={href} target="_blank" rel="noreferrer">
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </Button>
+      ) : (
+        "-"
+      );
+    }
+  }
+];
+
 export function IntradayProductChainGrid({ records }: { records: IntradayProductChainSnapshot[] }) {
   return (
     <DataGrid
@@ -152,6 +236,62 @@ export function IntradayProductChainGrid({ records }: { records: IntradayProduct
       records={records}
       emptyTitle="No chain prices"
       emptyDescription="No consolidated chain captures are available for this product."
+    />
+  );
+}
+
+function storeDetailHref(record: IntradayProductStoreEvidence, context?: StoreEvidenceNavigationContext) {
+  if (!context?.productKey || !record.location_key) return null;
+  const search = new URLSearchParams();
+  if (context.campaignId) search.set("campaign_id", context.campaignId);
+  if (context.dateKey) search.set("date_key", context.dateKey);
+  if (context.chain ?? record.chain) search.set("chain", context.chain ?? record.chain);
+  if (context.historyDays) search.set("history_days", context.historyDays);
+  search.set("source", "store-evidence");
+  return `/pricing/intraday-radar/products/${encodeURIComponent(context.productKey)}/stores/${encodeURIComponent(String(record.location_key))}?${search.toString()}`;
+}
+
+type StoreEvidenceNavigationContext = {
+  productKey?: string | null;
+  campaignId?: string;
+  dateKey?: string;
+  chain?: string;
+  historyDays?: string;
+};
+
+export function IntradayProductStoreEvidenceGrid({
+  records,
+  navigationContext,
+}: {
+  records: IntradayProductStoreEvidence[];
+  navigationContext?: StoreEvidenceNavigationContext;
+}) {
+  const columns = storeColumns.map((column) => {
+    if (column.id !== "location_name") return column;
+    return {
+      ...column,
+      cell: (record: IntradayProductStoreEvidence) => {
+        const href = storeDetailHref(record, navigationContext);
+        const label = record.location_name ?? "-";
+        if (!href) return label;
+        return (
+          <Link
+            href={href}
+            className="inline-flex items-center whitespace-nowrap rounded-[6px] border border-border-2 bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-foreground hover:bg-surface-2"
+          >
+            {label}
+          </Link>
+        );
+      }
+    };
+  });
+
+  return (
+    <DataGrid
+      columns={columns}
+      records={records}
+      emptyTitle="No store evidence"
+      emptyDescription="No store-level captures are available for this product and chain."
     />
   );
 }

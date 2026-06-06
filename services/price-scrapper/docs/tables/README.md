@@ -4,9 +4,9 @@ Documentación breve por tabla:
 
 - [mkt_dim_date](./mkt_dim_date.md)
 - [mkt_dim_chain](./mkt_dim_chain.md)
-- [mkt_dim_client](./mkt_dim_client.md)
 - [mkt_dim_campaign](./mkt_dim_campaign.md)
 - [mkt_dim_market_event_type](./mkt_dim_market_event_type.md)
+- [mkt_campaign_client_access](./mkt_campaign_client_access.md)
 - [mkt_campaign_product](./mkt_campaign_product.md)
 - [mkt_campaign_location](./mkt_campaign_location.md)
 - [mkt_run](./mkt_run.md)

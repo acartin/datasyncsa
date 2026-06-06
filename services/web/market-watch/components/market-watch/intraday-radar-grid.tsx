@@ -21,6 +21,20 @@ function ChangeIndicatorIcon({ record }: { record: IntradayRadarEvent }) {
   return null;
 }
 
+function radarProductDetailHref(record: IntradayRadarEvent) {
+  return `/pricing/intraday-radar/products/${record.product_key}?campaign_id=${record.campaign_id}&date_key=${record.date_key}&chain=${encodeURIComponent(record.chain)}&source=radar`;
+}
+
+function genericProductHref(record: IntradayRadarEvent) {
+  const search = new URLSearchParams({
+    source: "radar",
+  });
+  if (record.campaign_id) search.set("campaign_id", String(record.campaign_id));
+  if (record.chain) search.set("chain", record.chain);
+  if (record.date_key) search.set("date_key", String(record.date_key));
+  return `/pricing/products/${record.product_key}?${search.toString()}`;
+}
+
 const columns: DataGridColumn<IntradayRadarEvent>[] = [
   { id: "business_date", header: "Date", className: "whitespace-nowrap" },
   { id: "event_area", header: "Area", className: "whitespace-nowrap" },
@@ -31,7 +45,19 @@ const columns: DataGridColumn<IntradayRadarEvent>[] = [
     cell: (record) => record.presentation?.short_label ?? record.event_type
   },
   { id: "brand", header: "Brand", className: "whitespace-nowrap" },
-  { id: "chain", header: "Chain", className: "whitespace-nowrap", cell: (record) => <ChainTag chain={record.chain} /> },
+  {
+    id: "chain",
+    header: "Chain",
+    className: "whitespace-nowrap",
+    cell: (record) =>
+      record.product_key ? (
+        <Link href={radarProductDetailHref(record)} className="inline-flex rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <ChainTag chain={record.chain} className="cursor-pointer transition-opacity hover:opacity-85" />
+        </Link>
+      ) : (
+        <ChainTag chain={record.chain} />
+      )
+  },
   {
     id: "product",
     header: "Product",
@@ -40,7 +66,7 @@ const columns: DataGridColumn<IntradayRadarEvent>[] = [
       record.product_key ? (
         <Link
           className="font-medium text-semantic-blue hover:underline"
-          href={`/pricing/products/${record.product_key}?campaign_id=${record.campaign_id}&date_key=${record.date_key}&chain=${encodeURIComponent(record.chain)}&source=radar`}
+          href={genericProductHref(record)}
         >
           {record.product}
         </Link>

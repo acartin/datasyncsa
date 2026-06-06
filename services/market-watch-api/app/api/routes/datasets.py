@@ -54,7 +54,7 @@ def price_matrix(
 
 @router.get("/executive-signals")
 def executive_signals(
-    campaign_id: Annotated[int | None, Query(ge=1)] = None,
+    campaign_id: Annotated[str | None, Query(max_length=200)] = None,
     date_from: Annotated[str | None, Query(max_length=10)] = None,
     date_to: Annotated[str | None, Query(max_length=10)] = None,
     brand: Annotated[str | None, Query(max_length=160)] = None,
@@ -131,6 +131,28 @@ def intraday_product_detail(
     return repository.fetch_intraday_product_detail(
         client_id=context.client_id,
         product_key=product_key,
+        campaign_id=campaign_id,
+        date_key=date_key,
+        chain=chain,
+        history_days=history_days,
+    )
+
+
+@router.get("/intraday-radar/products/{product_key}/stores/{location_key}")
+def intraday_product_store_detail(
+    product_key: str,
+    location_key: int,
+    campaign_id: Annotated[int | None, Query(ge=1)] = None,
+    date_key: Annotated[int | None, Query(ge=19000101, le=29991231)] = None,
+    chain: Annotated[str | None, Query(max_length=160)] = None,
+    history_days: Annotated[int, Query(ge=7, le=365)] = 30,
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_repository),
+) -> dict[str, object]:
+    return repository.fetch_intraday_product_store_detail(
+        client_id=context.client_id,
+        product_key=product_key,
+        location_key=location_key,
         campaign_id=campaign_id,
         date_key=date_key,
         chain=chain,

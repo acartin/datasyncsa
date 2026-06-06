@@ -70,7 +70,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-products-per-chain", type=int, default=None, help="Limita productos por cadena.")
     parser.add_argument("--sleep-min", type=float, default=1.25, help="Sleep mínimo entre requests.")
     parser.add_argument("--sleep-max", type=float, default=3.00, help="Sleep máximo entre requests.")
-    parser.add_argument("--client-id", type=int, default=None, help="Sobrescribe client_id de la campaña.")
     parser.add_argument(
         "--business-date",
         default=None,
@@ -158,7 +157,6 @@ def extract_campaign_analytic_to_stage(
     max_products_per_chain: int | None,
     sleep_min: float,
     sleep_max: float,
-    client_id_override: int | None,
     business_date_key: int,
     spread_until_cr: datetime | None = None,
     only_pending: bool = False,
@@ -173,7 +171,6 @@ def extract_campaign_analytic_to_stage(
         only_pending=only_pending,
     )
     targets = fetch_campaign_listing_targets(env, campaign_id, chain_ids=chain_ids)
-    effective_client_id = client_id_override if client_id_override is not None else campaign.client_id
 
     locations_by_chain: dict[str, list] = defaultdict(list)
     for row in locations:
@@ -361,7 +358,6 @@ def extract_campaign_analytic_to_stage(
                 metadata=metadata,
                 records=records,
                 run_kind="analytic",
-                client_id=effective_client_id,
                 business_date_key=business_date_key,
                 location_key=unit.location_key,
                 campaign_id=campaign_id,
@@ -381,7 +377,6 @@ def extract_campaign_analytic_to_stage(
                 started_at=scraper.started_at,
                 error_message=str(exc),
                 run_kind="analytic",
-                client_id=effective_client_id,
                 business_date_key=business_date_key,
                 location_key=unit.location_key,
                 campaign_id=campaign_id,
@@ -415,7 +410,6 @@ def main(argv: list[str] | None = None) -> None:
         max_products_per_chain=args.max_products_per_chain,
         sleep_min=args.sleep_min,
         sleep_max=args.sleep_max,
-        client_id_override=args.client_id,
         business_date_key=business_date_key,
         spread_until_cr=spread_until_cr,
         only_pending=args.only_pending,

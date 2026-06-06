@@ -112,7 +112,7 @@ El segundo caso ya implica una tienda fisica implicita del engine, como
 Las corridas quedan etiquetadas con:
 
 - `run_kind = comparative | analytic`
-- `client_id` opcional
+- `campaign_id` cuando pertenecen a una campaña/canasta analítica
 
 Por defecto, los comandos actuales usan `comparative`.
 

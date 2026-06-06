@@ -1,27 +1,29 @@
 from fastapi import APIRouter, Depends
 
+from app.core.db import get_connection
 from app.core.security import ClientContext, require_client_context
 from app.domain.placeholders import module_payload
+from app.repositories.market_repository import MarketRepository
 
 
 router = APIRouter()
 
 
+def get_market_repository() -> MarketRepository:
+    return MarketRepository(get_connection)
+
+
 @router.get("/campaigns")
-def campaigns(context: ClientContext = Depends(require_client_context)) -> dict[str, object]:
+def campaigns(
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
     return module_payload(
         context=context,
         module_id="operations.campaigns",
         title="Campaigns",
-        description="Operational configuration for campaigns and target chains.",
-        records=[
-            {
-                "id": "campaign-1",
-                "name": "Sardimar atun competencia CR",
-                "status": "active",
-                "schedule": "daily",
-            }
-        ],
+        description="Campaigns authorized for the active tenant, including products, locations and client access.",
+        records=repository.list_campaigns_for_client(client_id=context.client_id),
         actions=[
             {"id": "create-campaign", "label": "Create campaign", "enabled": context.role != "client-viewer"},
         ],

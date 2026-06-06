@@ -14,7 +14,6 @@ from etl.postgres_cli import run_psql
 @dataclass(frozen=True)
 class CampaignRow:
     id: int
-    client_id: int | None
     name: str
     slug: str
     frequency_type: str
@@ -94,7 +93,6 @@ def load_campaign_row(env: dict[str, str], campaign_id: int) -> CampaignRow:
 copy (
   select
     id,
-    client_id::text,
     name,
     slug,
     frequency_type,
@@ -111,7 +109,6 @@ copy (
     row = rows[0]
     return CampaignRow(
         id=int(row["id"]),
-        client_id=int(row["client_id"]) if row["client_id"] else None,
         name=row["name"].strip(),
         slug=row["slug"].strip(),
         frequency_type=row["frequency_type"].strip(),

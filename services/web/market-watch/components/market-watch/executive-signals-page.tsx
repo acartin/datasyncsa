@@ -3,16 +3,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FocusModeToggle } from "@/components/portal/focus-mode-toggle";
-import { SignalFiltersForm } from "@/components/market-watch/signal-filters-form";
+import { DataViewToolbar, DataViewFilterConfig } from "@/components/market-watch/data-view-toolbar";
 import { SignalGrid } from "@/components/market-watch/signal-grid";
 import { SignalKpiCards } from "@/components/market-watch/signal-kpi-cards";
 import { ExecutiveSignalSearchParams, ExecutiveSignalsPayload } from "@/lib/pricing-types";
+import { DataViewState, SavedTableView } from "@/lib/data-views";
 
 function selectedCampaign(payload: ExecutiveSignalsPayload, values: ExecutiveSignalSearchParams) {
   if (values.campaign_id) {
-    return payload.filters.campaigns.find((campaign) => campaign.id === values.campaign_id)?.label ?? values.campaign_id;
+    const selected = splitValues(values.campaign_id);
+    if (selected.length > 1) return `${selected.length} campaigns`;
+    return payload.filters.campaigns.find((campaign) => campaign.id === selected[0])?.label ?? selected[0];
   }
   return payload.items[0]?.campaign ?? "All campaigns";
+}
+
+function splitValues(value?: string) {
+  return value ? value.split(",").filter(Boolean) : [];
 }
 
 function selectedRange(payload: ExecutiveSignalsPayload, values: ExecutiveSignalSearchParams) {
@@ -32,13 +39,53 @@ function pageHref(filters: ExecutiveSignalSearchParams, offset: number, limit: n
   return `/pricing/executive-signals?${params.toString()}`;
 }
 
+function currentViewState(filters: ExecutiveSignalSearchParams): DataViewState {
+  return {
+    search: filters.q,
+    filters: {
+      campaign_id: splitValues(filters.campaign_id),
+      brand: splitValues(filters.brand),
+      chain: splitValues(filters.chain),
+      signal_type: splitValues(filters.signal_type),
+      severity: splitValues(filters.severity),
+      signal_status: splitValues(filters.signal_status),
+    },
+    dates: filters.date_from || filters.date_to
+      ? {
+          date: {
+            mode: "range",
+            from: filters.date_from,
+            to: filters.date_to,
+          },
+        }
+      : undefined,
+  };
+}
+
+function toolbarFilters(payload: ExecutiveSignalsPayload): DataViewFilterConfig[] {
+  return [
+    { key: "campaign_id", label: "Campaign", type: "multiselect", options: payload.filters.campaigns, searchable: true },
+    { key: "brand", label: "Brand", type: "multiselect", options: payload.filters.brands, searchable: true },
+    { key: "chain", label: "Chain", type: "multiselect", options: payload.filters.chains, searchable: true },
+    { key: "signal_type", label: "Signal type", type: "multiselect", options: payload.filters.signal_types, searchable: true },
+    { key: "severity", label: "Severity", type: "multiselect", options: payload.filters.severities, searchable: true },
+    { key: "signal_status", label: "Status", type: "multiselect", options: payload.filters.statuses, searchable: true },
+  ];
+}
+
 export function ExecutiveSignalsPage({
   payload,
-  filters
+  filters,
+  tableViews,
+  viewKey,
 }: {
   payload: ExecutiveSignalsPayload;
   filters: ExecutiveSignalSearchParams;
+  tableViews: SavedTableView[];
+  viewKey: string;
 }) {
+  const viewState = currentViewState(filters);
+
   return (
     <div className="space-y-6">
       <div className="focus-hidden flex flex-col justify-between gap-4 md:flex-row md:items-start">
@@ -59,7 +106,15 @@ export function ExecutiveSignalsPage({
         <SignalKpiCards kpis={payload.kpis} />
       </div>
       <div className="focus-hidden">
-        <SignalFiltersForm filters={payload.filters} values={filters} />
+        <DataViewToolbar
+          basePath="/pricing/executive-signals"
+          viewKey={viewKey}
+          title="Prioritized signals"
+          currentState={viewState}
+          views={tableViews}
+          filters={toolbarFilters(payload)}
+          dateFilters={[{ key: "date", label: "Business date" }]}
+        />
       </div>
 
       <Card className="focus-grid-card">

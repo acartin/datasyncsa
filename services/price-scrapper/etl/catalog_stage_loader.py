@@ -43,7 +43,6 @@ def build_stage_run_row(
     metadata: dict[str, Any],
     debug_output_dir: Path | None,
     run_kind: str,
-    client_id: int | None,
     business_date_key: int,
     location_key: int | None = None,
     campaign_id: int | None = None,
@@ -51,7 +50,6 @@ def build_stage_run_row(
     return {
         "chain_id": chain_id,
         "run_kind": run_kind,
-        "client_id": client_id,
         "business_date_key": business_date_key,
         "location_key": location_key,
         "campaign_id": campaign_id,
@@ -79,7 +77,6 @@ def build_failed_stage_run_row(
     started_at: str,
     error_message: str,
     run_kind: str,
-    client_id: int | None,
     business_date_key: int,
     location_key: int | None = None,
     campaign_id: int | None = None,
@@ -90,7 +87,6 @@ def build_failed_stage_run_row(
     return {
         "chain_id": chain_id,
         "run_kind": run_kind,
-        "client_id": client_id,
         "business_date_key": business_date_key,
         "location_key": location_key,
         "campaign_id": campaign_id,
@@ -175,7 +171,6 @@ def load_successful_catalog_stage_run(
     metadata: dict[str, Any],
     records: list[dict[str, Any]],
     run_kind: str = "comparative",
-    client_id: int | None = None,
     business_date_key: int | None = None,
     location_key: int | None = None,
     campaign_id: int | None = None,
@@ -192,7 +187,6 @@ def load_successful_catalog_stage_run(
         metadata=metadata,
         debug_output_dir=debug_output_dir,
         run_kind=run_kind,
-        client_id=client_id,
         business_date_key=effective_business_date_key,
         location_key=location_key,
         campaign_id=campaign_id,
@@ -205,7 +199,6 @@ def load_successful_catalog_stage_run(
         fieldnames=[
             "chain_id",
             "run_kind",
-            "client_id",
             "business_date_key",
             "location_key",
             "campaign_id",
@@ -278,7 +271,6 @@ begin;
 create temp table tmp_mkt_run_load (
   chain_id text,
   run_kind text,
-  client_id bigint,
   business_date_key integer,
   location_key bigint,
   campaign_id bigint,
@@ -300,7 +292,6 @@ create temp table tmp_mkt_run_load (
 copy tmp_mkt_run_load (
   chain_id,
   run_kind,
-  client_id,
   business_date_key,
   location_key,
   campaign_id,
@@ -401,7 +392,6 @@ with inserted_run as (
     chain_key,
     location_key,
     run_kind,
-    client_id,
     business_date_key,
     campaign_id,
     source_engine,
@@ -422,7 +412,6 @@ with inserted_run as (
     c.chain_key,
     t.location_key,
     t.run_kind,
-    t.client_id,
     t.business_date_key,
     t.campaign_id,
     t.source_engine,
@@ -578,7 +567,6 @@ def load_failed_catalog_stage_run(
     started_at: str,
     error_message: str,
     run_kind: str = "comparative",
-    client_id: int | None = None,
     business_date_key: int | None = None,
     location_key: int | None = None,
     campaign_id: int | None = None,
@@ -593,7 +581,6 @@ def load_failed_catalog_stage_run(
         started_at=started_at,
         error_message=error_message,
         run_kind=run_kind,
-        client_id=client_id,
         business_date_key=(
             int(business_date_key)
             if business_date_key is not None
@@ -611,7 +598,6 @@ def load_failed_catalog_stage_run(
         fieldnames=[
             "chain_id",
             "run_kind",
-            "client_id",
             "business_date_key",
             "location_key",
             "campaign_id",
@@ -639,7 +625,6 @@ begin;
 create temp table tmp_mkt_run_load (
   chain_id text,
   run_kind text,
-  client_id bigint,
   business_date_key integer,
   location_key bigint,
   campaign_id bigint,
@@ -661,7 +646,6 @@ create temp table tmp_mkt_run_load (
 copy tmp_mkt_run_load (
   chain_id,
   run_kind,
-  client_id,
   business_date_key,
   location_key,
   campaign_id,
@@ -687,7 +671,6 @@ with inserted_run as (
     chain_key,
     location_key,
     run_kind,
-    client_id,
     business_date_key,
     campaign_id,
     source_engine,
@@ -708,7 +691,6 @@ with inserted_run as (
     c.chain_key,
     t.location_key,
     t.run_kind,
-    t.client_id,
     t.business_date_key,
     t.campaign_id,
     t.source_engine,

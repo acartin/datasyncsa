@@ -57,12 +57,6 @@ def build_dispatcher_parser(*, required: bool) -> argparse.ArgumentParser:
         help="Tipo de corrida ETL a registrar en mkt_run.",
     )
     parser.add_argument(
-        "--client-id",
-        type=int,
-        default=None,
-        help="Cliente opcional asociado a la corrida.",
-    )
-    parser.add_argument(
         "--business-date",
         default=None,
         help="Fecha de negocio en formato YYYY-MM-DD. Por defecto usa hoy en Costa Rica.",
@@ -107,12 +101,6 @@ def build_parser_for_chain(chain_id: str, payload: dict[str, Any], env: dict[str
         help="Tipo de corrida ETL a registrar en mkt_run.",
     )
     parser.add_argument(
-        "--client-id",
-        type=int,
-        default=None,
-        help="Cliente opcional asociado a la corrida.",
-    )
-    parser.add_argument(
         "--business-date",
         default=None,
         help="Fecha de negocio en formato YYYY-MM-DD. Por defecto usa hoy en Costa Rica.",
@@ -128,7 +116,6 @@ def record_failed_run(
     started_at: str,
     debug_output_dir: Path | None,
     run_kind: str,
-    client_id: int | None,
     business_date_key: int,
     exc: Exception,
     extra_metadata: dict[str, Any] | None = None,
@@ -152,7 +139,6 @@ def record_failed_run(
             started_at=started_at,
             error_message=str(exc),
             run_kind=run_kind,
-            client_id=client_id,
             business_date_key=business_date_key,
             raw_metadata=raw_metadata,
             debug_output_dir=debug_output_dir,
@@ -212,7 +198,6 @@ def main(argv: list[str] | None = None) -> None:
             started_at=scraper.started_at,
             debug_output_dir=debug_output_dir,
             run_kind=args.run_kind,
-            client_id=args.client_id,
             business_date_key=business_date_key,
             exc=exc,
             extra_metadata={"write_debug_files": args.write_debug_files},
@@ -235,7 +220,6 @@ def main(argv: list[str] | None = None) -> None:
             metadata=metadata,
             records=records,
             run_kind=args.run_kind,
-            client_id=args.client_id,
             business_date_key=business_date_key,
             debug_output_dir=debug_output_dir,
         )
@@ -247,7 +231,6 @@ def main(argv: list[str] | None = None) -> None:
             started_at=scraper.started_at,
             debug_output_dir=debug_output_dir,
             run_kind=args.run_kind,
-            client_id=args.client_id,
             business_date_key=business_date_key,
             exc=exc,
             extra_metadata={

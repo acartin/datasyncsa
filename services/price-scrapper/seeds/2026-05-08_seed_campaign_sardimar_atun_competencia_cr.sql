@@ -2,7 +2,6 @@ begin;
 
 with upsert_campaign as (
   insert into public.mkt_dim_campaign (
-    client_id,
     name,
     slug,
     description,
@@ -11,7 +10,6 @@ with upsert_campaign as (
     is_active
   )
   values (
-    null,
     'Sardimar Atun Competencia CR',
     'sardimar-atun-competencia-cr',
     'Campana vitrina para monitorear Sardimar contra Calvo, Great Value, Suli y Tesoro del Mar en las cadenas disponibles.',

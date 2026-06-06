@@ -31,6 +31,10 @@ UNIT_CANONICALIZATION = {
     "ud": ("un", Decimal("1")),
     "uds": ("un", Decimal("1")),
 }
+MEASURE_SUFFIX_RE = re.compile(
+    r"\s*-\s*\d+(?:[.,]\d+)?\s*(g|gr|kg|ml|l|lt|lts|un|u|ud|uds)\b\s*$",
+    re.IGNORECASE,
+)
 REVIEW_REASON_INVALID_GTIN = "invalid_gtin"
 REVIEW_REASON_SAME_CHAIN_COLLISION = "same_chain_collision"
 
@@ -215,6 +219,15 @@ def consensus_measure(rows: list[StageProductRow]) -> tuple[str | None, str | No
     if "." in quantity_text:
         quantity_text = quantity_text.rstrip("0").rstrip(".")
     return (quantity_text, unit)
+
+
+def product_name_with_consensus_measure(product_name: str, quantity: str | None, unit: str | None) -> str:
+    if not quantity or not unit:
+        return product_name
+    suffix = f" - {quantity} {unit}"
+    if MEASURE_SUFFIX_RE.search(product_name):
+        return MEASURE_SUFFIX_RE.sub(suffix, product_name).strip()
+    return product_name
 
 
 def same_chain_collision(rows: list[StageProductRow]) -> bool:
@@ -430,6 +443,7 @@ def build_product_transform_result(
 
         preferred = preferred_row(grouped)
         content_quantity, content_unit = consensus_measure(grouped)
+        product_name = product_name_with_consensus_measure(preferred.product_name, content_quantity, content_unit)
         candidates.append(
             ProductCandidate(
                 preferred_stage_catalog_item_key=preferred.stage_catalog_item_key,
@@ -438,8 +452,8 @@ def build_product_transform_result(
                 gtin_type=preferred.gtin_type or "NON_STANDARD",
                 gtin_is_valid=True,
                 brand_name=preferred.brand_name,
-                product_name=preferred.product_name,
-                normalized_name=preferred.name_norm,
+                product_name=product_name,
+                normalized_name=normalize_text(product_name),
                 content_quantity=content_quantity,
                 content_unit=content_unit,
                 source_row_count=len(grouped),

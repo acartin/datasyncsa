@@ -15,21 +15,20 @@ drop view if exists public.mw_daily_price_metrics;
 drop view if exists public.mw_product_location_presence;
 drop view if exists public.mw_fact_analytic_listing_snapshot;
 
-drop view if exists public.mw_bi_executive_signal_feed;
-drop view if exists public.mw_bi_radar_event_feed;
-drop view if exists public.mw_bi_sku_store_price_evidence;
-drop view if exists public.mw_bi_sku_price_drivers;
-drop view if exists public.mw_bi_brand_chain_price_index;
-drop view if exists public.mw_signal_promo_daily;
-drop view if exists public.mw_signal_price_change_daily;
-drop view if exists public.mw_signal_sku_store_observation;
-drop view if exists public.mw_signal_sku_chain_daily;
-drop view if exists public.mw_signal_brand_chain_daily;
-drop view if exists public.mw_core_promo_daily;
-drop view if exists public.mw_core_price_change_day;
-drop view if exists public.mw_core_brand_chain_day;
-drop view if exists public.mw_core_sku_chain_day;
-drop view if exists public.mw_core_sku_store_observation;
+drop view if exists public.mw_bi_executive_signal_feed cascade;
+drop view if exists public.mw_bi_radar_event_feed cascade;
+drop view if exists public.mw_bi_sku_store_price_evidence cascade;
+drop view if exists public.mw_bi_sku_price_drivers cascade;
+drop view if exists public.mw_bi_brand_chain_price_index cascade;
+drop view if exists public.mw_signal_promo_daily cascade;
+drop view if exists public.mw_signal_price_change_daily cascade;
+drop view if exists public.mw_signal_sku_store_observation cascade;
+drop view if exists public.mw_signal_sku_chain_daily cascade;
+drop view if exists public.mw_signal_brand_chain_daily cascade;
+drop view if exists public.mw_core_promo_daily cascade;
+drop view if exists public.mw_core_price_change_day cascade;
+drop view if exists public.mw_core_brand_chain_day cascade;
+drop view if exists public.mw_core_sku_chain_day cascade;
 
 create or replace view public.mw_core_sku_store_observation as
 select
@@ -41,9 +40,9 @@ select
   f.run_key,
   r.run_kind,
   r.run_status,
-  coalesce(r.client_id, camp.client_id) as client_id,
-  client.name as client_name,
-  client.slug as client_slug,
+  cca.client_id,
+  ac.name as client_name,
+  ac.client_key as client_slug,
   r.campaign_id,
   camp.name as campaign_name,
   camp.slug as campaign_slug,
@@ -227,10 +226,32 @@ left join public.mkt_dim_location as loc
   on loc.location_key = f.location_key
 left join public.mkt_dim_campaign as camp
   on camp.id = r.campaign_id
-left join public.mkt_dim_client as client
-  on client.id = coalesce(r.client_id, camp.client_id)
+join public.mkt_campaign_client_access as cca
+  on cca.campaign_id = r.campaign_id
+ and cca.is_active
+ and (
+   cca.valid_from is null
+   or to_date(r.business_date_key::text, 'YYYYMMDD') >= cca.valid_from
+ )
+ and (
+   cca.valid_to is null
+   or to_date(r.business_date_key::text, 'YYYYMMDD') <= cca.valid_to
+ )
+join public.auth_clients as ac
+  on ac.id = cca.client_id
+ and ac.status = 'active'
 where r.run_kind = 'analytic'
   and r.run_status = 'succeeded';
+
+alter table if exists public.mkt_run
+  drop constraint if exists mkt_stage_catalog_run_client_id_fkey,
+  drop column if exists client_id;
+
+alter table if exists public.mkt_dim_campaign
+  drop constraint if exists mkt_dim_campaign_client_id_fkey,
+  drop column if exists client_id;
+
+drop table if exists public.mkt_dim_client;
 
 create or replace view public.mw_core_sku_chain_day as
 with store_day as (
@@ -571,6 +592,18 @@ with sequenced as (
       partition by s.client_id, s.campaign_id, s.chain_key, s.product_key
       order by s.date_key
     ) as previous_avg_price_per_unit_amount,
+    lag(s.monitored_locations_count) over (
+      partition by s.client_id, s.campaign_id, s.chain_key, s.product_key
+      order by s.date_key
+    ) as previous_monitored_locations_count,
+    lag(s.visible_locations_count) over (
+      partition by s.client_id, s.campaign_id, s.chain_key, s.product_key
+      order by s.date_key
+    ) as previous_visible_locations_count,
+    lag(s.available_locations_count) over (
+      partition by s.client_id, s.campaign_id, s.chain_key, s.product_key
+      order by s.date_key
+    ) as previous_available_locations_count,
     lag(s.date_key) over (
       partition by s.client_id, s.campaign_id, s.chain_key, s.product_key
       order by s.date_key
@@ -601,6 +634,12 @@ select
   q.product_name,
   q.content_quantity,
   q.content_unit,
+  q.monitored_locations_count,
+  q.visible_locations_count,
+  q.available_locations_count,
+  q.previous_monitored_locations_count,
+  q.previous_visible_locations_count,
+  q.previous_available_locations_count,
   q.previous_avg_price_amount,
   q.avg_price_amount as current_avg_price_amount,
   (q.avg_price_amount - q.previous_avg_price_amount) as price_change_amount,
@@ -877,9 +916,9 @@ select
   round(e.price_change_pct * 100, 2) as change_pct,
   null::numeric as promo_share_pct,
   null::numeric(5,2) as discount_pct,
-  null::int as observed_locations,
-  null::int as visible_locations,
-  null::int as available_locations,
+  e.monitored_locations_count::int as observed_locations,
+  e.visible_locations_count::int as visible_locations,
+  e.available_locations_count::int as available_locations,
   null::text as product_url,
   null::text as image_url
 from public.mw_signal_price_change_daily as e
@@ -926,7 +965,7 @@ select
   date_trunc('week', s.business_date)::date as week_start,
   date_trunc('month', s.business_date)::date as month_start,
   s.date_key,
-  s.perspective_client_id as client_id,
+  cca.client_id,
   s.campaign_id,
   s.campaign_name as campaign,
   s.perspective_brand as brand,
@@ -949,6 +988,16 @@ select
   s.delta_metrics_json,
   s.navigation_json,
   s.narrative_json
-from public.mkt_client_signal as s;
+from public.mkt_client_signal as s
+join public.mkt_campaign_client_access as cca
+  on cca.campaign_id = s.campaign_id
+ and cca.is_active
+ and (cca.valid_from is null or s.business_date >= cca.valid_from)
+ and (cca.valid_to is null or s.business_date <= cca.valid_to)
+join public.auth_clients as ac
+  on ac.id = cca.client_id
+ and ac.status = 'active'
+where s.perspective_client_id is null
+   or s.perspective_client_id = cca.client_id;
 
 commit;

@@ -1,13 +1,20 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from decimal import Decimal
+import re
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import psycopg
 from psycopg import errors
 
 
 ConnectionFactory = Callable[[], AbstractContextManager[psycopg.Connection]]
+
+_MEASURE_SUFFIX_RE = re.compile(
+    r"\s*-\s*\d+(?:[.,]\d+)?\s*(g|gr|kg|ml|l|lt|lts|un|u|ud|uds)\b\s*$",
+    re.IGNORECASE,
+)
 
 
 class MarketRepository:
@@ -22,10 +29,19 @@ class MarketRepository:
                     with scoped_runs as (
                       select r.run_key, r.chain_key, r.campaign_id
                       from public.mkt_run r
-                      left join public.mkt_dim_campaign c
-                        on c.id = r.campaign_id
+                      join public.mkt_campaign_client_access cca
+                        on cca.campaign_id = r.campaign_id
+                       and cca.is_active
+                       and cca.client_id::text = %(client_id)s
+                       and (
+                         cca.valid_from is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') >= cca.valid_from
+                       )
+                       and (
+                         cca.valid_to is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') <= cca.valid_to
+                       )
                       where r.run_status = 'succeeded'
-                        and (r.client_id::text = %(client_id)s or c.client_id::text = %(client_id)s)
                     )
                     select
                       count(distinct run_key)::int as run_count,
@@ -53,8 +69,19 @@ class MarketRepository:
                       on ch.chain_key = r.chain_key
                     left join public.mkt_dim_campaign c
                       on c.id = r.campaign_id
+                    join public.mkt_campaign_client_access cca
+                      on cca.campaign_id = r.campaign_id
+                     and cca.is_active
+                     and cca.client_id::text = %(client_id)s
+                     and (
+                       cca.valid_from is null
+                       or to_date(r.business_date_key::text, 'YYYYMMDD') >= cca.valid_from
+                     )
+                     and (
+                       cca.valid_to is null
+                       or to_date(r.business_date_key::text, 'YYYYMMDD') <= cca.valid_to
+                     )
                     where r.run_status = 'succeeded'
-                      and (r.client_id::text = %(client_id)s or c.client_id::text = %(client_id)s)
                     order by r.started_at desc, r.run_key desc
                     limit 10;
                     """,
@@ -100,10 +127,19 @@ class MarketRepository:
                       from public.mkt_fact_listing_snapshot f
                       join public.mkt_run r
                         on r.run_key = f.run_key
-                      left join public.mkt_dim_campaign c
-                        on c.id = r.campaign_id
+                      join public.mkt_campaign_client_access cca
+                        on cca.campaign_id = r.campaign_id
+                       and cca.is_active
+                       and cca.client_id::text = %(client_id)s
+                       and (
+                         cca.valid_from is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') >= cca.valid_from
+                       )
+                       and (
+                         cca.valid_to is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') <= cca.valid_to
+                       )
                       where r.run_status = 'succeeded'
-                        and (r.client_id::text = %(client_id)s or c.client_id::text = %(client_id)s)
                     )
                     select
                       p.product_key,
@@ -151,10 +187,19 @@ class MarketRepository:
                     with scoped_runs as (
                       select r.run_key
                       from public.mkt_run r
-                      left join public.mkt_dim_campaign c
-                        on c.id = r.campaign_id
+                      join public.mkt_campaign_client_access cca
+                        on cca.campaign_id = r.campaign_id
+                       and cca.is_active
+                       and cca.client_id::text = %(client_id)s
+                       and (
+                         cca.valid_from is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') >= cca.valid_from
+                       )
+                       and (
+                         cca.valid_to is null
+                         or to_date(r.business_date_key::text, 'YYYYMMDD') <= cca.valid_to
+                       )
                       where r.run_status = 'succeeded'
-                        and (r.client_id::text = %(client_id)s or c.client_id::text = %(client_id)s)
                         and (%(campaign_id)s::int is null or r.campaign_id = %(campaign_id)s)
                     ),
                     latest as (
@@ -199,11 +244,63 @@ class MarketRepository:
             "items": rows,
         }
 
+    def list_campaigns_for_client(self, *, client_id: str) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      c.id::text as id,
+                      c.name,
+                      c.slug,
+                      case
+                        when c.deleted_at is not null then 'deleted'
+                        when c.is_active then 'active'
+                        else 'inactive'
+                      end as status,
+                      c.frequency_type,
+                      c.frequency_note,
+                      current_access.access_role,
+                      current_access.is_default,
+                      count(distinct cp.product_key)::int as products,
+                      count(distinct cl.location_key)::int as locations,
+                      count(distinct all_access.client_id)::int as authorized_clients
+                    from public.mkt_dim_campaign c
+                    join public.mkt_campaign_client_access current_access
+                      on current_access.campaign_id = c.id
+                     and current_access.client_id::text = %(client_id)s
+                     and current_access.is_active
+                     and (current_access.valid_from is null or current_date >= current_access.valid_from)
+                     and (current_access.valid_to is null or current_date <= current_access.valid_to)
+                    left join public.mkt_campaign_product cp
+                      on cp.campaign_id = c.id
+                    left join public.mkt_campaign_location cl
+                      on cl.campaign_id = c.id
+                    left join public.mkt_campaign_client_access all_access
+                      on all_access.campaign_id = c.id
+                     and all_access.is_active
+                    where c.deleted_at is null
+                    group by
+                      c.id,
+                      c.name,
+                      c.slug,
+                      c.deleted_at,
+                      c.is_active,
+                      c.frequency_type,
+                      c.frequency_note,
+                      current_access.access_role,
+                      current_access.is_default
+                    order by c.name;
+                    """,
+                    {"client_id": client_id},
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
     def fetch_executive_signals(
         self,
         *,
         client_id: str,
-        campaign_id: int | None,
+        campaign_id: str | None,
         date_from: str | None,
         date_to: str | None,
         brand: str | None,
@@ -268,7 +365,7 @@ class MarketRepository:
                             ) as product_key
                           from public.mw_bi_executive_signal_feed
                           where client_id::text = %(client_id)s
-                            and (%(campaign_id)s::int is null or campaign_id = %(campaign_id)s)
+                            and (%(campaign_id)s::text is null or campaign_id::text = any(string_to_array(%(campaign_id)s::text, ',')))
                             and (%(date_from)s::date is null or business_date >= %(date_from)s::date)
                             and (%(date_to)s::date is null or business_date <= %(date_to)s::date)
                             and (
@@ -278,19 +375,19 @@ class MarketRepository:
                                 select max(latest.business_date)
                                 from public.mw_bi_executive_signal_feed latest
                                 where latest.client_id::text = %(client_id)s
-                                  and (%(campaign_id)s::int is null or latest.campaign_id = %(campaign_id)s)
-                                  and (%(brand)s::text is null or latest.brand = %(brand)s)
-                                  and (%(chain)s::text is null or latest.chain = %(chain)s)
-                                  and (%(signal_type)s::text is null or latest.signal_type = %(signal_type)s)
-                                  and (%(severity)s::text is null or latest.severity = %(severity)s)
-                                  and (%(signal_status)s::text is null or latest.signal_status = %(signal_status)s)
+                                  and (%(campaign_id)s::text is null or latest.campaign_id::text = any(string_to_array(%(campaign_id)s::text, ',')))
+                                  and (%(brand)s::text is null or latest.brand = any(string_to_array(%(brand)s::text, ',')))
+                                  and (%(chain)s::text is null or latest.chain = any(string_to_array(%(chain)s::text, ',')))
+                                  and (%(signal_type)s::text is null or latest.signal_type = any(string_to_array(%(signal_type)s::text, ',')))
+                                  and (%(severity)s::text is null or latest.severity = any(string_to_array(%(severity)s::text, ',')))
+                                  and (%(signal_status)s::text is null or latest.signal_status = any(string_to_array(%(signal_status)s::text, ',')))
                               )
                             )
-                            and (%(brand)s::text is null or brand = %(brand)s)
-                            and (%(chain)s::text is null or chain = %(chain)s)
-                            and (%(signal_type)s::text is null or signal_type = %(signal_type)s)
-                            and (%(severity)s::text is null or severity = %(severity)s)
-                            and (%(signal_status)s::text is null or signal_status = %(signal_status)s)
+                            and (%(brand)s::text is null or brand = any(string_to_array(%(brand)s::text, ',')))
+                            and (%(chain)s::text is null or chain = any(string_to_array(%(chain)s::text, ',')))
+                            and (%(signal_type)s::text is null or signal_type = any(string_to_array(%(signal_type)s::text, ',')))
+                            and (%(severity)s::text is null or severity = any(string_to_array(%(severity)s::text, ',')))
+                            and (%(signal_status)s::text is null or signal_status = any(string_to_array(%(signal_status)s::text, ',')))
                         ),
                         display_rows as (
                           select
@@ -357,7 +454,7 @@ class MarketRepository:
                             nullif(evidence_json ->> 'product', '') as evidence_product
                           from public.mw_bi_executive_signal_feed
                           where client_id::text = %(client_id)s
-                            and (%(campaign_id)s::int is null or campaign_id = %(campaign_id)s)
+                            and (%(campaign_id)s::text is null or campaign_id::text = any(string_to_array(%(campaign_id)s::text, ',')))
                             and (%(date_from)s::date is null or business_date >= %(date_from)s::date)
                             and (%(date_to)s::date is null or business_date <= %(date_to)s::date)
                             and (
@@ -367,19 +464,19 @@ class MarketRepository:
                                 select max(latest.business_date)
                                 from public.mw_bi_executive_signal_feed latest
                                 where latest.client_id::text = %(client_id)s
-                                  and (%(campaign_id)s::int is null or latest.campaign_id = %(campaign_id)s)
-                                  and (%(brand)s::text is null or latest.brand = %(brand)s)
-                                  and (%(chain)s::text is null or latest.chain = %(chain)s)
-                                  and (%(signal_type)s::text is null or latest.signal_type = %(signal_type)s)
-                                  and (%(severity)s::text is null or latest.severity = %(severity)s)
-                                  and (%(signal_status)s::text is null or latest.signal_status = %(signal_status)s)
+                                  and (%(campaign_id)s::text is null or latest.campaign_id::text = any(string_to_array(%(campaign_id)s::text, ',')))
+                                  and (%(brand)s::text is null or latest.brand = any(string_to_array(%(brand)s::text, ',')))
+                                  and (%(chain)s::text is null or latest.chain = any(string_to_array(%(chain)s::text, ',')))
+                                  and (%(signal_type)s::text is null or latest.signal_type = any(string_to_array(%(signal_type)s::text, ',')))
+                                  and (%(severity)s::text is null or latest.severity = any(string_to_array(%(severity)s::text, ',')))
+                                  and (%(signal_status)s::text is null or latest.signal_status = any(string_to_array(%(signal_status)s::text, ',')))
                               )
                             )
-                            and (%(brand)s::text is null or brand = %(brand)s)
-                            and (%(chain)s::text is null or chain = %(chain)s)
-                            and (%(signal_type)s::text is null or signal_type = %(signal_type)s)
-                            and (%(severity)s::text is null or severity = %(severity)s)
-                            and (%(signal_status)s::text is null or signal_status = %(signal_status)s)
+                            and (%(brand)s::text is null or brand = any(string_to_array(%(brand)s::text, ',')))
+                            and (%(chain)s::text is null or chain = any(string_to_array(%(chain)s::text, ',')))
+                            and (%(signal_type)s::text is null or signal_type = any(string_to_array(%(signal_type)s::text, ',')))
+                            and (%(severity)s::text is null or severity = any(string_to_array(%(severity)s::text, ',')))
+                            and (%(signal_status)s::text is null or signal_status = any(string_to_array(%(signal_status)s::text, ',')))
                         )
                         select
                           count(*)::int as total_signals,
@@ -489,6 +586,8 @@ class MarketRepository:
                             e.chain,
                             e.brand,
                             e.product,
+                            coalesce(dp.content_quantity, e.content_quantity) as content_quantity,
+                            coalesce(dp.content_unit, e.content_unit) as content_unit,
                             e.gtin,
                             e.product_key,
                             e.captured_at_cr,
@@ -508,6 +607,9 @@ class MarketRepository:
                           join public.mkt_dim_market_event_type et
                             on et.event_type = e.event_type
                            and et.is_active
+                          left join public.mkt_dim_product dp
+                            on dp.product_key::text = e.product_key
+                            or (e.product_key is null and dp.gtin_norm = e.gtin)
                           where e.client_id::text = %(client_id)s
                             and (
                               (%(date_key)s::int is not null and e.date_key = sd.selected_date_key)
@@ -561,7 +663,7 @@ class MarketRepository:
                         """,
                         params,
                     )
-                    rows = [self._json_ready(row) for row in cursor.fetchall()]
+                    rows = [self._normalize_product_display(self._json_ready(row)) for row in cursor.fetchall()]
 
                     cursor.execute(
                         """
@@ -819,24 +921,24 @@ null::numeric(5,2) as discount_pct,
                     cursor.execute(
                         """
                         with selected_scope as (
-                          select coalesce(
-                            %(date_key)s::int,
-                            (
-                              select max(o.date_key)
-                              from public.mw_core_sku_store_observation o
-                              join public.mkt_campaign_client_access cca
-                                on cca.campaign_id = o.campaign_id
-                               and cca.is_active
-                               and (cca.valid_from is null or o.business_date >= cca.valid_from)
-                               and (cca.valid_to is null or o.business_date <= cca.valid_to)
-                              where cca.client_id::text = %(client_id)s
-                                and (o.client_id is null or o.client_id = cca.client_id)
-                                and o.product_key::text = %(product_key)s
-                                and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
-                                and (%(chain)s::text is null or o.chain_label = %(chain)s)
-                                and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
-                            )
-                          ) as selected_date_key
+                          select
+                            coalesce(
+                              %(date_key)s::int,
+                              max(o.date_key)
+                            ) as selected_date_key,
+                            max(o.date_key) as latest_history_date_key
+                          from public.mw_core_sku_store_observation o
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          where cca.client_id::text = %(client_id)s
+                            and o.client_id = cca.client_id
+                            and o.product_key::text = %(product_key)s
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                            and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
                         ),
                         scoped as (
                           select
@@ -850,7 +952,7 @@ null::numeric(5,2) as discount_pct,
                            and (cca.valid_to is null or o.business_date <= cca.valid_to)
                           cross join selected_scope selected
                           where cca.client_id::text = %(client_id)s
-                            and (o.client_id is null or o.client_id = cca.client_id)
+                            and o.client_id = cca.client_id
                             and o.product_key::text = %(product_key)s
                             and o.date_key = selected.selected_date_key
                             and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
@@ -886,12 +988,53 @@ null::numeric(5,2) as discount_pct,
                     )
                     product = cursor.fetchone()
                     if not product:
-                        return {"client_id": client_id, "product": None, "chain_snapshot": [], "daily_history": [], "history": [], "price_history": [], "events": []}
+                        return {
+                            "client_id": client_id,
+                            "product": None,
+                            "chain_snapshot": [],
+                            "store_evidence": [],
+                            "daily_history": [],
+                            "history": [],
+                            "price_history": [],
+                            "events": [],
+                        }
                     product_row = self._json_ready(product)
+                    product_row = self._normalize_product_display(product_row)
+
+                    cursor.execute(
+                        """
+                        select
+                          selected_date_key,
+                          latest_history_date_key
+                        from (
+                          select
+                            coalesce(
+                              %(date_key)s::int,
+                              max(o.date_key)
+                            ) as selected_date_key,
+                            max(o.date_key) as latest_history_date_key
+                          from public.mw_core_sku_store_observation o
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          where cca.client_id::text = %(client_id)s
+                            and o.client_id = cca.client_id
+                            and o.product_key::text = %(product_key)s
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                            and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
+                        ) scope;
+                        """,
+                        params,
+                    )
+                    scope_row = self._json_ready(cursor.fetchone() or {})
 
                     detail_params = {
                         **params,
                         "date_key": product_row.get("date_key"),
+                        "history_date_key": scope_row.get("latest_history_date_key") or product_row.get("date_key"),
                     }
                     all_chain_params = {**detail_params, "chain": None}
 
@@ -922,7 +1065,7 @@ null::numeric(5,2) as discount_pct,
                          and (cca.valid_from is null or o.business_date >= cca.valid_from)
                          and (cca.valid_to is null or o.business_date <= cca.valid_to)
                         where cca.client_id::text = %(client_id)s
-                          and (o.client_id is null or o.client_id = cca.client_id)
+                          and o.client_id = cca.client_id
                           and o.product_key::text = %(product_key)s
                           and o.date_key = %(date_key)s
                           and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
@@ -933,6 +1076,55 @@ null::numeric(5,2) as discount_pct,
                         all_chain_params,
                     )
                     chain_snapshot = [self._json_ready(row) for row in cursor.fetchall()]
+
+                    cursor.execute(
+                        """
+                        select
+                          o.date_key,
+                          o.chain_label as chain,
+                          o.location_key,
+                          o.location_code,
+                          o.location_name,
+                          o.province,
+                          o.canton,
+                          o.district,
+                          o.sales_channel,
+                          o.region_id,
+                          o.captured_at_cr,
+                          o.is_listed,
+                          o.is_available,
+                          o.reference_price_amount,
+                          o.spot_price_amount,
+                          coalesce(o.spot_price_amount, o.effective_price_amount) as effective_price_amount,
+                          o.promo_detected,
+                          round(o.discount_pct * 100, 2) as discount_pct,
+                          o.available_quantity,
+                          o.product_url,
+                          o.source_engine
+                        from public.mw_core_sku_store_observation o
+                        join public.mkt_campaign_client_access cca
+                          on cca.campaign_id = o.campaign_id
+                         and cca.is_active
+                         and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                         and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                        where cca.client_id::text = %(client_id)s
+                          and o.client_id = cca.client_id
+                          and o.product_key::text = %(product_key)s
+                          and o.date_key = %(date_key)s
+                          and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                          and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                        order by
+                          o.chain_label,
+                          o.is_available desc nulls last,
+                          coalesce(o.spot_price_amount, o.effective_price_amount) nulls last,
+                          o.location_name nulls last,
+                          o.captured_at_cr desc
+                        limit 500;
+                        """,
+                        detail_params,
+                    )
+                    store_evidence = [self._json_ready(row) for row in cursor.fetchall()]
+                    store_evidence = [self._with_store_context_url(row) for row in store_evidence]
 
                     cursor.execute(
                         """
@@ -951,7 +1143,7 @@ null::numeric(5,2) as discount_pct,
                           and product_key::text = %(product_key)s
                           and (%(campaign_id)s::int is null or campaign_id = %(campaign_id)s)
                           and (%(chain)s::text is null or chain = %(chain)s)
-                          and date_key <= %(date_key)s
+                          and date_key <= %(history_date_key)s
                         order by date_key, chain;
                         """,
                         all_chain_params,
@@ -1027,9 +1219,9 @@ null::numeric(5,2) as discount_pct,
                             on ac.id = cca.client_id
                            and ac.status = 'active'
                           where cca.client_id::text = %(client_id)s
-                            and (o.client_id is null or o.client_id = cca.client_id)
+                            and o.client_id = cca.client_id
                             and o.product_key::text = %(product_key)s
-                            and o.date_key <= %(date_key)s
+                            and o.date_key <= %(history_date_key)s
                             and o.is_available
                             and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
                             and (%(chain)s::text is null or o.chain_label = %(chain)s)
@@ -1084,9 +1276,9 @@ null::numeric(5,2) as discount_pct,
                            and (cca.valid_from is null or o.business_date >= cca.valid_from)
                            and (cca.valid_to is null or o.business_date <= cca.valid_to)
                           where cca.client_id::text = %(client_id)s
-                            and (o.client_id is null or o.client_id = cca.client_id)
+                            and o.client_id = cca.client_id
                             and o.product_key::text = %(product_key)s
-                            and o.date_key <= %(date_key)s
+                            and o.date_key <= %(history_date_key)s
                             and o.is_available
                             and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
                           order by o.date_key desc
@@ -1123,6 +1315,8 @@ null::numeric(5,2) as discount_pct,
                             e.chain,
                             e.brand,
                             e.product,
+                            coalesce(dp.content_quantity, e.content_quantity) as content_quantity,
+                            coalesce(dp.content_unit, e.content_unit) as content_unit,
                             e.gtin,
                             e.product_key,
                             e.previous_value,
@@ -1131,43 +1325,343 @@ null::numeric(5,2) as discount_pct,
                             e.change_pct,
                             e.promo_share_pct,
                             e.discount_pct,
+                            e.observed_locations,
+                            e.visible_locations,
+                            e.available_locations,
                             e.product_url
                         from public.mw_bi_radar_event_feed e
                         join public.mkt_dim_market_event_type et
                             on et.event_type = e.event_type
                            and et.is_active
+                        left join public.mkt_dim_product dp
+                            on dp.product_key::text = e.product_key
+                            or (e.product_key is null and dp.gtin_norm = e.gtin)
                         where e.client_id::text = %(client_id)s
                             and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
-                            and (%(date_key)s::int is null or e.date_key <= %(date_key)s)
+                            and (%(history_date_key)s::int is null or e.date_key <= %(history_date_key)s)
                             and e.product_key::text = %(product_key)s
                             and (
-                              e.date_key in (select date_key from visible_dates)
+                              (%(date_key)s::int is not null and e.date_key = %(date_key)s)
+                              or e.date_key in (select date_key from visible_dates)
                               or e.previous_date_key in (select date_key from visible_dates)
                             )
                         order by e.date_key desc
                         """,
                         all_chain_params,
                     )
-                    events = [self._json_ready(row) for row in cursor.fetchall()]
+                    events = [self._normalize_product_display(self._json_ready(row), fallback=product_row) for row in cursor.fetchall()]
                     for event in events:
                         event["event_id"] = event.get("event_id") or f"dod:{event.get('date_key')}:{event.get('product_key')}:{event.get('chain')}:{event.get('event_type')}"
                         event["captured_at_cr"] = event.get("business_date")
                         event["previous_captured_at_cr"] = None
-                        event["observed_locations"] = None
-                        event["visible_locations"] = None
-                        event["available_locations"] = None
 
         except errors.UndefinedTable:
-            return {"client_id": client_id, "product": None, "chain_snapshot": [], "daily_history": [], "history": [], "price_history": [], "events": []}
+            return {
+                "client_id": client_id,
+                "product": None,
+                "chain_snapshot": [],
+                "store_evidence": [],
+                "daily_history": [],
+                "history": [],
+                "price_history": [],
+                "events": [],
+            }
 
         return {
             "client_id": client_id,
             "product": product_row,
             "chain_snapshot": chain_snapshot,
+            "store_evidence": store_evidence,
             "daily_history": daily_history,
             "history": history,
             "price_history": price_history,
             "events": events,
+        }
+
+    def fetch_intraday_product_store_detail(
+        self,
+        *,
+        client_id: str,
+        product_key: str,
+        location_key: int,
+        campaign_id: int | None,
+        date_key: int | None,
+        chain: str | None,
+        history_days: int = 30,
+    ) -> dict[str, object]:
+        params: dict[str, Any] = {
+            "client_id": client_id,
+            "product_key": product_key,
+            "location_key": location_key,
+            "campaign_id": campaign_id,
+            "date_key": date_key,
+            "chain": chain,
+            "history_days": max(7, min(history_days, 365)),
+        }
+
+        empty_payload: dict[str, object] = {
+            "client_id": client_id,
+            "product": None,
+            "selected_store": None,
+            "store_options": [],
+            "price_history": [],
+            "captures": [],
+        }
+
+        try:
+            with self._connection_factory() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        with selected_scope as (
+                          select
+                            coalesce(%(date_key)s::int, max(o.date_key)) as selected_date_key,
+                            max(o.date_key) as latest_history_date_key
+                          from public.mw_core_sku_store_observation o
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          where cca.client_id::text = %(client_id)s
+                            and o.client_id = cca.client_id
+                            and o.product_key::text = %(product_key)s
+                            and o.location_key = %(location_key)s
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                            and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
+                        ),
+                        latest_capture as (
+                          select distinct on (o.product_key, o.location_key)
+                            o.product_key,
+                            o.location_key,
+                            o.chain_label as chain,
+                            o.location_name,
+                            o.location_code,
+                            o.province,
+                            o.canton,
+                            o.district,
+                            o.sales_channel,
+                            o.region_id,
+                            o.campaign_id,
+                            c.name as campaign,
+                            o.date_key,
+                            o.business_date,
+                            o.captured_at_cr,
+                            o.reference_price_amount,
+                            o.spot_price_amount,
+                            coalesce(o.spot_price_amount, o.effective_price_amount) as effective_price_amount,
+                            o.promo_detected,
+                            round(o.discount_pct * 100, 2) as discount_pct,
+                            o.is_listed,
+                            o.is_available,
+                            o.product_url,
+                            o.image_url,
+                            o.source_engine
+                          from public.mw_core_sku_store_observation o
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          join selected_scope ss
+                            on o.date_key = ss.selected_date_key
+                          left join public.mkt_dim_campaign c
+                            on c.id = o.campaign_id
+                          where cca.client_id::text = %(client_id)s
+                            and o.client_id = cca.client_id
+                            and o.product_key::text = %(product_key)s
+                            and o.location_key = %(location_key)s
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                          order by o.product_key, o.location_key, o.captured_at_cr desc
+                        )
+                        select
+                          lc.product_key::text as product_key,
+                          p.gtin_norm as gtin,
+                          p.brand_name as brand,
+                          p.product_name as product,
+                          p.content_quantity,
+                          p.content_unit,
+                          lc.campaign_id,
+                          lc.campaign,
+                          lc.chain,
+                          lc.date_key,
+                          lc.captured_at_cr as latest_capture,
+                          lc.reference_price_amount as current_regular_price,
+                          lc.spot_price_amount as current_promo_price,
+                          lc.effective_price_amount as current_effective_price,
+                          lc.promo_detected,
+                          lc.discount_pct,
+                          lc.product_url,
+                          lc.image_url
+                        from latest_capture lc
+                        join public.mkt_dim_product p
+                          on p.product_key = lc.product_key;
+                        """,
+                        params,
+                    )
+                    product = cursor.fetchone()
+                    if not product:
+                        return empty_payload
+                    product_row = self._normalize_product_display(self._json_ready(product))
+
+                    cursor.execute(
+                        """
+                        select
+                          coalesce(%(date_key)s::int, max(o.date_key)) as selected_date_key,
+                          max(o.date_key) as latest_history_date_key
+                        from public.mw_core_sku_store_observation o
+                        join public.mkt_campaign_client_access cca
+                          on cca.campaign_id = o.campaign_id
+                         and cca.is_active
+                         and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                         and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                        where cca.client_id::text = %(client_id)s
+                          and o.client_id = cca.client_id
+                          and o.product_key::text = %(product_key)s
+                          and o.location_key = %(location_key)s
+                          and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                          and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                          and o.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int;
+                        """,
+                        params,
+                    )
+                    scope_row = self._json_ready(cursor.fetchone() or {})
+                    detail_params = {
+                        **params,
+                        "history_date_key": scope_row.get("latest_history_date_key") or product_row.get("date_key"),
+                    }
+
+                    cursor.execute(
+                        """
+                        select distinct on (o.location_key)
+                          o.location_key,
+                          o.chain_label as chain,
+                          o.location_name,
+                          o.location_code,
+                          o.province,
+                          o.canton,
+                          o.district,
+                          o.sales_channel,
+                          o.region_id
+                        from public.mw_core_sku_store_observation o
+                        join public.mkt_campaign_client_access cca
+                          on cca.campaign_id = o.campaign_id
+                         and cca.is_active
+                         and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                         and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                        where cca.client_id::text = %(client_id)s
+                          and o.client_id = cca.client_id
+                          and o.product_key::text = %(product_key)s
+                          and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                          and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                        order by o.location_key, o.date_key desc, o.captured_at_cr desc;
+                        """,
+                        params,
+                    )
+                    store_options = [self._json_ready(row) for row in cursor.fetchall()]
+                    selected_store = next(
+                        (row for row in store_options if int(row.get("location_key") or -1) == location_key),
+                        None,
+                    )
+
+                    cursor.execute(
+                        """
+                        with daily as (
+                          select distinct on (o.date_key)
+                            o.date_key,
+                            o.business_date,
+                            o.chain_label as chain,
+                            o.location_name as store,
+                            o.location_key,
+                            o.captured_at_cr,
+                            o.reference_price_amount,
+                            o.spot_price_amount as promo_price_amount,
+                            coalesce(o.spot_price_amount, o.effective_price_amount) as effective_price_amount,
+                            o.promo_detected,
+                            round(o.discount_pct * 100, 2) as discount_pct,
+                            o.is_listed,
+                            o.is_available,
+                            o.product_url,
+                            o.source_engine
+                          from public.mw_core_sku_store_observation o
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = o.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or o.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or o.business_date <= cca.valid_to)
+                          where cca.client_id::text = %(client_id)s
+                            and o.client_id = cca.client_id
+                            and o.product_key::text = %(product_key)s
+                            and o.location_key = %(location_key)s
+                            and o.date_key <= %(history_date_key)s
+                            and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
+                            and (%(chain)s::text is null or o.chain_label = %(chain)s)
+                          order by o.date_key, o.captured_at_cr desc
+                        ),
+                        limited as (
+                          select *
+                          from daily
+                          order by date_key desc
+                          limit %(history_days)s
+                        ),
+                        sequenced as (
+                          select
+                            l.*,
+                            lag(l.date_key) over (order by l.date_key) as previous_date_key
+                          from limited l
+                        )
+                        select
+                          date_key,
+                          previous_date_key,
+                          business_date,
+                          chain,
+                          store,
+                          location_key,
+                          captured_at_cr,
+                          effective_price_amount,
+                          reference_price_amount,
+                          promo_price_amount,
+                          promo_detected,
+                          discount_pct,
+                          is_listed,
+                          is_available,
+                          product_url,
+                          source_engine
+                        from sequenced
+                        order by date_key;
+                        """,
+                        detail_params,
+                    )
+                    captures = [self._with_store_context_url(self._json_ready(row)) for row in cursor.fetchall()]
+                    price_history = [
+                        {
+                            "date_key": row.get("date_key"),
+                            "previous_date_key": row.get("previous_date_key"),
+                            "business_date": row.get("business_date"),
+                            "chain": row.get("chain"),
+                            "store": row.get("store"),
+                            "captured_at_cr": row.get("captured_at_cr"),
+                            "effective_price_amount": row.get("effective_price_amount"),
+                            "reference_price_amount": row.get("reference_price_amount"),
+                            "promo_price_amount": row.get("promo_price_amount"),
+                            "promo_detected": row.get("promo_detected"),
+                            "discount_pct": row.get("discount_pct"),
+                        }
+                        for row in captures
+                    ]
+
+        except errors.UndefinedTable:
+            return empty_payload
+
+        return {
+            "client_id": client_id,
+            "product": product_row,
+            "selected_store": selected_store,
+            "store_options": store_options,
+            "price_history": price_history,
+            "captures": captures,
         }
 
     @staticmethod
@@ -1176,6 +1670,68 @@ null::numeric(5,2) as discount_pct,
             key: float(value) if isinstance(value, Decimal) else value.isoformat() if hasattr(value, "isoformat") else value
             for key, value in dict(row).items()
         }
+
+    @staticmethod
+    def _format_content_quantity(value: object) -> str | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        text = str(value).strip()
+        if not text:
+            return None
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+
+    @classmethod
+    def _normalize_product_display(cls, row: dict[str, Any], *, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+        product = row.get("product")
+        if not isinstance(product, str) or not product.strip():
+            return row
+
+        quantity = cls._format_content_quantity(row.get("content_quantity") or (fallback or {}).get("content_quantity"))
+        unit = row.get("content_unit") or (fallback or {}).get("content_unit")
+        if not quantity or not unit:
+            return row
+
+        suffix = f" - {quantity} {unit}"
+        if not _MEASURE_SUFFIX_RE.search(product):
+            return row
+
+        row["product"] = _MEASURE_SUFFIX_RE.sub(suffix, product).strip()
+        return row
+
+    @staticmethod
+    def _with_store_context_url(row: dict[str, Any]) -> dict[str, Any]:
+        product_url = row.get("product_url")
+        if not isinstance(product_url, str) or not product_url:
+            row["store_context_url"] = None
+            return row
+
+        if row.get("source_engine") != "vtex":
+            row["store_context_url"] = product_url
+            return row
+
+        query = dict(parse_qsl(urlsplit(product_url).query, keep_blank_values=True))
+        sales_channel = row.get("sales_channel")
+        region_id = row.get("region_id")
+        if sales_channel:
+            query["sc"] = str(sales_channel)
+        if region_id:
+            query["region-id"] = str(region_id)
+
+        split_url = urlsplit(product_url)
+        row["store_context_url"] = urlunsplit(
+            (
+                split_url.scheme,
+                split_url.netloc,
+                split_url.path,
+                urlencode(query),
+                split_url.fragment,
+            )
+        )
+        return row
 
     @staticmethod
     def _empty_executive_signals(*, client_id: str, limit: int, offset: int = 0) -> dict[str, object]:

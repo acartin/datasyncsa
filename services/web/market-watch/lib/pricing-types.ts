@@ -134,6 +134,8 @@ export type IntradayRadarEvent = Record<string, unknown> & {
   chain: string;
   brand: string;
   product: string;
+  content_quantity: number | null;
+  content_unit: string | null;
   gtin: string | null;
   product_key: string | null;
   captured_at_cr: string;
@@ -217,6 +219,63 @@ export type IntradayProductChainSnapshot = Record<string, unknown> & {
   image_url: string | null;
 };
 
+export type IntradayProductStoreEvidence = Record<string, unknown> & {
+  date_key: number;
+  chain: string;
+  location_key: number | null;
+  location_code: string | null;
+  location_name: string | null;
+  province: string | null;
+  canton: string | null;
+  district: string | null;
+  sales_channel: string | null;
+  region_id: string | null;
+  captured_at_cr: string;
+  is_listed: boolean | null;
+  is_available: boolean | null;
+  reference_price_amount: number | null;
+  spot_price_amount: number | null;
+  effective_price_amount: number | null;
+  promo_detected: boolean | null;
+  discount_pct: number | null;
+  available_quantity: number | null;
+  product_url: string | null;
+  store_context_url: string | null;
+};
+
+export type IntradayProductStoreOption = Record<string, unknown> & {
+  location_key: number;
+  chain: string;
+  location_name: string;
+  location_code: string | null;
+  province: string | null;
+  canton: string | null;
+  district: string | null;
+  sales_channel: string | null;
+  region_id: string | null;
+};
+
+export type IntradayProductStoreSummary = Record<string, unknown> & {
+  product_key: string;
+  gtin: string | null;
+  brand: string;
+  product: string;
+  content_quantity: number | null;
+  content_unit: string | null;
+  campaign_id: number;
+  campaign: string;
+  chain: string;
+  date_key: number;
+  latest_capture: string | null;
+  current_regular_price: number | null;
+  current_promo_price: number | null;
+  current_effective_price: number | null;
+  promo_detected: boolean | null;
+  discount_pct: number | null;
+  product_url: string | null;
+  image_url: string | null;
+};
+
 export type IntradayProductHistoryPoint = Record<string, unknown> & {
   date_key: number;
   chain: string;
@@ -254,14 +313,32 @@ export type IntradayProductPricePoint = Record<string, unknown> & {
   discount_pct: number | null;
 };
 
+export type IntradayProductStoreCapture = IntradayProductPricePoint & {
+  location_key: number;
+  is_listed: boolean | null;
+  is_available: boolean | null;
+  product_url: string | null;
+  store_context_url: string | null;
+};
+
 export type IntradayProductDetailPayload = {
   client_id: string;
   product: IntradayProductSummary | null;
   chain_snapshot: IntradayProductChainSnapshot[];
+  store_evidence: IntradayProductStoreEvidence[];
   daily_history: IntradayProductDailyPoint[];
   history: IntradayProductHistoryPoint[];
   price_history: IntradayProductPricePoint[];
   events: IntradayRadarEvent[];
+};
+
+export type IntradayProductStoreDetailPayload = {
+  client_id: string;
+  product: IntradayProductStoreSummary | null;
+  selected_store: IntradayProductStoreOption | null;
+  store_options: IntradayProductStoreOption[];
+  price_history: IntradayProductPricePoint[];
+  captures: IntradayProductStoreCapture[];
 };
 
 export type IntradayRadarSearchParams = {

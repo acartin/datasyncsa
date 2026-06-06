@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/portal/app-shell";
 import { ProductIntelligencePage } from "@/components/market-watch/intraday-product-page";
 import { getIntradayProductDetail, getMenu } from "@/lib/api";
-import { normalizeClosedDateKey } from "@/lib/closed-day";
 
 const currentPath = "/pricing/intraday-radar";
 
@@ -20,13 +19,18 @@ export default async function ProductIntelligenceRoute({
   const [{ productKey }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const filters = {
     campaign_id: single(resolvedSearchParams?.campaign_id),
-    date_key: normalizeClosedDateKey(single(resolvedSearchParams?.date_key)),
     chain: single(resolvedSearchParams?.chain),
+    date_key: single(resolvedSearchParams?.date_key),
     history_days: single(resolvedSearchParams?.history_days) ?? "30"
   };
   const [menu, payload] = await Promise.all([
     getMenu(),
-    getIntradayProductDetail(productKey, filters)
+    getIntradayProductDetail(productKey, {
+      campaign_id: filters.campaign_id,
+      chain: filters.chain,
+      date_key: filters.date_key,
+      history_days: filters.history_days,
+    })
   ]);
   const allowed = menu.sections.some((section) => section.items.some((item) => item.href === currentPath));
   if (!allowed) notFound();
@@ -41,6 +45,8 @@ export default async function ProductIntelligenceRoute({
           chain: filters.chain,
           historyDays: filters.history_days,
           source: single(resolvedSearchParams?.source),
+          routeBase: "/pricing/products",
+          viewMode: "product",
         }}
       />
     </AppShell>
