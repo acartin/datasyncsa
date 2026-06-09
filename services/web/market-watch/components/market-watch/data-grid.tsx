@@ -73,7 +73,7 @@ export function DataGrid<TRecord extends Record<string, unknown>>({
     <div className={cn("overflow-auto", className)}>
       <table className="w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-card">
-          <tr className="border-b text-left text-[10px] font-normal uppercase tracking-[0.07em] text-ink-muted">
+          <tr className="border-b text-left text-sm font-semibold tracking-normal text-ink-muted">
             {columns.map((column) => {
               const sortable = column.sortable !== false && column.header !== "";
               const active = sort?.id === column.id;

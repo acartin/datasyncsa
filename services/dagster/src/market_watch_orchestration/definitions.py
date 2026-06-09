@@ -363,6 +363,33 @@ def run_campaign_analytic_batch(context: OpExecutionContext) -> dict[str, object
     }
 
 
+@op(
+    required_resource_keys={"price_scrapper"},
+    config_schema={
+        "chain_id": Field(
+            str,
+            default_value="",
+            description="Optional chain_id. Leave empty to refresh every active VTEX chain.",
+        ),
+    },
+)
+def refresh_chain_root_categories(context: OpExecutionContext) -> dict[str, object]:
+    chain_id = str(context.op_config.get("chain_id") or "").strip() or None
+    result = context.resources.price_scrapper.run_update_chain_root_categories(chain_id=chain_id)
+    _log_process_result(context, "update_chain_root_categories", result)
+
+    context.add_output_metadata(
+        {
+            "chain_id": chain_id or "all_active_vtex",
+            "returncode": result.returncode,
+        }
+    )
+    return {
+        "chain_id": chain_id,
+        "returncode": result.returncode,
+    }
+
+
 @job
 def daily_active_campaigns_analytic_job() -> None:
     reset_marker = reset_daily_transform_stage()
@@ -386,6 +413,11 @@ def campaign_analytic_walmart_family_job() -> None:
 @job
 def campaign_analytic_megasuper_job() -> None:
     run_campaign_analytic_batch()
+
+
+@job
+def refresh_chain_root_categories_job() -> None:
+    refresh_chain_root_categories()
 
 
 @op(
@@ -496,6 +528,7 @@ defs = Definitions(
         daily_active_campaigns_analytic_job,
         campaign_analytic_walmart_family_job,
         campaign_analytic_megasuper_job,
+        refresh_chain_root_categories_job,
         daily_signal_generation_job,
     ],
     schedules=[

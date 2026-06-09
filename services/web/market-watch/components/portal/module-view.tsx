@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowUpRight, Database, Settings2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowUpRight, Database, Search, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,7 +14,11 @@ import { ModulePayload } from "@/lib/types";
 import { Feedback } from "@/lib/feedback";
 
 export function ModuleView({ payload, feedback }: { payload: ModulePayload; feedback?: Feedback | null }) {
+  const [catalogSearch, setCatalogSearch] = useState("");
   const hiddenColumns = new Set(["primary_role_id", "default_client_id", "client_options", "assigned_users", "assigned_permissions"]);
+  if (payload.module.id === "operations.catalog-sources") {
+    ["id", "chain_key", "chain_id", "category_url", "is_enabled"].forEach((column) => hiddenColumns.add(column));
+  }
   const columns = Array.from(new Set(payload.records.flatMap((record) => Object.keys(record))))
     .filter((column) => !hiddenColumns.has(column))
     .slice(0, 6);
@@ -21,8 +26,32 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
     id: column,
     header: column
   }));
-  const isSettingsModule = payload.module.id.startsWith("settings.");
-  const gridColumns = isSettingsModule
+  const catalogSearchTerm = catalogSearch
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const filteredRecords = useMemo(() => {
+    if (payload.module.id !== "operations.catalog-sources" || !catalogSearchTerm) {
+      return payload.records;
+    }
+
+    return payload.records.filter((record) =>
+      dataGridColumns.some((column) => {
+        const value = record[column.id];
+        if (value === null || value === undefined) return false;
+        return String(value)
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .includes(catalogSearchTerm);
+      })
+    );
+  }, [catalogSearchTerm, dataGridColumns, payload.module.id, payload.records]);
+  const isCrudModule = payload.module.id.startsWith("settings.")
+    || payload.module.id === "operations.campaigns"
+    || payload.module.id === "operations.catalog-sources";
+  const gridColumns = isCrudModule
     ? [
         ...dataGridColumns,
         {
@@ -63,9 +92,9 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
         </Alert>
       ) : null}
 
-      {isSettingsModule ? <CrudToolbar payload={payload} /> : null}
+      {isCrudModule ? <CrudToolbar payload={payload} /> : null}
 
-      {!isSettingsModule ? (
+      {!isCrudModule ? (
         <div className="grid gap-4 md:grid-cols-3">
           <KpiCard icon={Database} value={payload.records.length} label="Placeholder records" />
           <KpiCard icon={Settings2} value={payload.actions.length} label="Configured actions" />
@@ -75,17 +104,34 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
 
       <Card>
         <CardHeader>
-          <div className="font-medium">Initial data</div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            Placeholder contract ready to connect to real data.
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="font-medium">{isCrudModule ? "Records" : "Initial data"}</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {isCrudModule ? "Search, inspect and prepare changes using the shared CRUD surface." : "Placeholder contract ready to connect to real data."}
+              </div>
+            </div>
+            {payload.module.id === "operations.catalog-sources" ? (
+              <label className="relative w-full md:w-80">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={catalogSearch}
+                  onChange={(event) => setCatalogSearch(event.target.value)}
+                  placeholder="Search catalog sources"
+                  aria-label="Search catalog sources"
+                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
           <DataGrid
             columns={gridColumns}
-            records={payload.records}
-            emptyTitle="No records for this module"
-            emptyDescription="The contract is ready to connect real data from the API."
+            records={filteredRecords}
+            emptyTitle={catalogSearchTerm ? "No matching catalog sources" : "No records for this module"}
+            emptyDescription={catalogSearchTerm ? "Try a different search term." : "The contract is ready to connect real data from the API."}
           />
         </CardContent>
       </Card>

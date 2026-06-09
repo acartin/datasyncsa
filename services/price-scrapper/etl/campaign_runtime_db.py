@@ -16,8 +16,6 @@ class CampaignRow:
     id: int
     name: str
     slug: str
-    frequency_type: str
-    frequency_note: str | None
     is_active: bool
 
 
@@ -95,8 +93,6 @@ copy (
     id,
     name,
     slug,
-    frequency_type,
-    frequency_note,
     is_active::text
   from public.mkt_dim_campaign
   where id = {int(campaign_id)}
@@ -111,8 +107,6 @@ copy (
         id=int(row["id"]),
         name=row["name"].strip(),
         slug=row["slug"].strip(),
-        frequency_type=row["frequency_type"].strip(),
-        frequency_note=_flatten_text(row["frequency_note"]),
         is_active=_parse_bool_text(row["is_active"]),
     )
 

@@ -75,6 +75,12 @@ Convención operativa:
 - `load_*`: futura etapa de carga hacia dimensiones y facts.
 - `update_*`: mantenimiento de configuración/runtime en BD.
 
+`update_chain_root_categories.py` tambien esta expuesto como job manual de Dagster:
+`refresh_chain_root_categories_job`. El launchpad acepta `chain_id` vacio para
+refrescar todas las cadenas VTEX activas, o un `chain_id` especifico para acotar
+la actualizacion. Este job solo descubre categorias raiz y preserva la bandera
+`is_enabled`; no ejecuta scraping de productos ni regeneracion canonica.
+
 ## Runtime de cadenas
 
 La cadena, engine, scope y contexto operativo salen de `mkt_dim_chain`.
@@ -83,6 +89,10 @@ Las categorías raíz que entran al scrape salen de `mkt_dim_category`:
 
 - `is_enabled = true`: entra al scrape por defecto
 - `is_enabled = false`: no entra al scrape por defecto
+
+Las categorias no se crean manualmente desde la web. `Catalog Sources` permite
+activar o desactivar categorias descubiertas; nombre, slug y URL vienen de la
+cadena/API externa mediante el proceso de discovery.
 
 ## Salidas
 

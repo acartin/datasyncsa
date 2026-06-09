@@ -1,4 +1,4 @@
-import { ExternalLink, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -46,12 +46,6 @@ export function Topbar({
           />
         ) : null}
         <Badge>{menu.user.role_label}</Badge>
-        <Button asChild variant="outline" className={compact ? "h-9 w-9 px-0" : undefined} title="Superset">
-          <a href="http://192.168.10.32:8088/" target="_blank" rel="noreferrer">
-            {!compact ? "Superset" : null}
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        </Button>
         <ThemeToggle />
         <form action="/api/auth/logout" method="post">
           <Button type="submit" variant="ghost" className="h-9 w-9 px-0" aria-label="Sign out" title="Sign out">

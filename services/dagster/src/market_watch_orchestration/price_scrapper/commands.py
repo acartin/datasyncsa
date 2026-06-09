@@ -110,3 +110,12 @@ class PriceScrapperCommands:
 
         return self.runner.run(command)
 
+    def run_update_chain_root_categories(
+        self,
+        *,
+        chain_id: str | None,
+    ) -> subprocess.CompletedProcess[str]:
+        command = ["python3", "commands/update_chain_root_categories.py"]
+        if chain_id:
+            command.extend(["--chain-id", chain_id])
+        return self.runner.run(command)

@@ -23,6 +23,8 @@ type CrudConfig = {
   action: string;
   description: string;
   fields: FieldConfig[];
+  submitDisabled?: boolean;
+  submitLabel?: string;
 };
 
 function configForPayload(payload: ModulePayload): CrudConfig | null {
@@ -98,6 +100,39 @@ function configForPayload(payload: ModulePayload): CrudConfig | null {
     };
   }
 
+  if (payload.module.id === "operations.campaigns") {
+    return {
+      title: "New campaign",
+      createLabel: "Create campaign",
+      action: "/api/operations/campaigns",
+      description: "Create a campaign and assign initial access to the active tenant.",
+      fields: [
+        { label: "Name", name: "name" },
+        { label: "Slug", name: "slug", required: false },
+        { label: "Description", name: "description", required: false },
+        {
+          label: "Status",
+          name: "status",
+          defaultValue: "active",
+          options: [
+            { value: "active", label: "active" },
+            { value: "inactive", label: "inactive" }
+          ]
+        },
+        {
+          label: "Initial access role",
+          name: "access_role",
+          defaultValue: "owner",
+          options: [
+            { value: "owner", label: "owner" },
+            { value: "admin", label: "admin" },
+            { value: "viewer", label: "viewer" }
+          ]
+        }
+      ]
+    };
+  }
+
   return null;
 }
 
@@ -109,6 +144,7 @@ function Field({ field }: { field: FieldConfig }) {
         <select
           name={field.name}
           multiple={field.multiple}
+          defaultValue={field.multiple ? undefined : field.defaultValue}
           className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
         >
           {field.options.map((option) => (
@@ -166,7 +202,7 @@ export function CrudToolbar({ payload }: { payload: ModulePayload }) {
       </div>
 
       <Modal open={open} title={config.title} description={config.description} onClose={() => setOpen(false)}>
-        <form action={config.action} method="post" className="space-y-5">
+        <form action={config.action || undefined} method="post" className="space-y-5">
           <div className="grid gap-3 md:grid-cols-2">
             {config.fields.map((field) => (
               <Field key={field.name} field={field} />
@@ -176,7 +212,9 @@ export function CrudToolbar({ payload }: { payload: ModulePayload }) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit" disabled={config.submitDisabled}>
+              {config.submitLabel ?? "Save"}
+            </Button>
           </div>
         </form>
       </Modal>

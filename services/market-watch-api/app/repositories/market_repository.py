@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import date
 from decimal import Decimal
 import re
 from typing import Any
@@ -258,8 +259,7 @@ class MarketRepository:
                         when c.is_active then 'active'
                         else 'inactive'
                       end as status,
-                      c.frequency_type,
-                      c.frequency_note,
+                      c.description,
                       current_access.access_role,
                       current_access.is_default,
                       count(distinct cp.product_key)::int as products,
@@ -286,8 +286,7 @@ class MarketRepository:
                       c.slug,
                       c.deleted_at,
                       c.is_active,
-                      c.frequency_type,
-                      c.frequency_note,
+                      c.description,
                       current_access.access_role,
                       current_access.is_default
                     order by c.name;
@@ -295,6 +294,1305 @@ class MarketRepository:
                     {"client_id": client_id},
                 )
                 return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def create_campaign(
+        self,
+        *,
+        client_id: str,
+        name: str,
+        slug: str,
+        description: str | None,
+        is_active: bool,
+        access_role: str,
+        is_default: bool,
+    ) -> dict[str, object]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.mkt_dim_campaign (
+                      name,
+                      slug,
+                      description,
+                      is_active
+                    )
+                    values (
+                      %(name)s,
+                      %(slug)s,
+                      %(description)s,
+                      %(is_active)s
+                    )
+                    returning id;
+                    """,
+                    {
+                        "name": name,
+                        "slug": slug,
+                        "description": description,
+                        "is_active": is_active,
+                    },
+                )
+                campaign = cursor.fetchone()
+                campaign_id = int(campaign["id"])
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_client_access (
+                      campaign_id,
+                      client_id,
+                      access_role,
+                      is_default,
+                      is_active
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(client_id)s::bigint,
+                      %(access_role)s,
+                      %(is_default)s,
+                      true
+                    );
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": client_id,
+                        "access_role": access_role,
+                        "is_default": is_default,
+                    },
+                )
+
+                row = self._fetch_campaign_for_client(cursor, campaign_id=campaign_id, client_id=client_id)
+                connection.commit()
+                return row or {"id": str(campaign_id), "name": name, "slug": slug, "status": "active" if is_active else "inactive"}
+
+    def update_campaign(
+        self,
+        *,
+        client_id: str,
+        campaign_id: int,
+        name: str | None,
+        slug: str | None,
+        description: str | None,
+        is_active: bool | None,
+        is_system_operator: bool,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.mkt_dim_campaign c
+                    set
+                      name = coalesce(%(name)s, c.name),
+                      slug = coalesce(%(slug)s, c.slug),
+                      description = coalesce(%(description)s, c.description),
+                      is_active = coalesce(%(is_active)s, c.is_active),
+                      updated_at = now()
+                    where c.id = %(campaign_id)s
+                      and c.deleted_at is null
+                      and exists (
+                        select 1
+                        from public.mkt_campaign_client_access cca
+                        where cca.campaign_id = c.id
+                          and cca.client_id::text = %(client_id)s
+                          and cca.is_active
+                          and (cca.valid_from is null or current_date >= cca.valid_from)
+                          and (cca.valid_to is null or current_date <= cca.valid_to)
+                          and (
+                            %(is_system_operator)s
+                            or cca.access_role in ('owner', 'admin')
+                          )
+                      )
+                    returning c.id;
+                    """,
+                    {
+                        "client_id": client_id,
+                        "campaign_id": campaign_id,
+                        "name": name,
+                        "slug": slug,
+                        "description": description,
+                        "is_active": is_active,
+                        "is_system_operator": is_system_operator,
+                    },
+                )
+                row = cursor.fetchone()
+                if not row:
+                    connection.commit()
+                    return None
+
+                campaign = self._fetch_campaign_for_client(cursor, campaign_id=campaign_id, client_id=client_id)
+                connection.commit()
+                return campaign
+
+    def _fetch_campaign_for_client(self, cursor: psycopg.Cursor, *, campaign_id: int, client_id: str) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            select
+              c.id::text as id,
+              c.name,
+              c.slug,
+              case
+                when c.deleted_at is not null then 'deleted'
+                when c.is_active then 'active'
+                else 'inactive'
+              end as status,
+              c.description,
+              current_access.access_role,
+              current_access.is_default,
+              count(distinct cp.product_key)::int as products,
+              count(distinct cl.location_key)::int as locations,
+              count(distinct all_access.client_id)::int as authorized_clients
+            from public.mkt_dim_campaign c
+            join public.mkt_campaign_client_access current_access
+              on current_access.campaign_id = c.id
+             and current_access.client_id::text = %(client_id)s
+             and current_access.is_active
+             and (current_access.valid_from is null or current_date >= current_access.valid_from)
+             and (current_access.valid_to is null or current_date <= current_access.valid_to)
+            left join public.mkt_campaign_product cp
+              on cp.campaign_id = c.id
+            left join public.mkt_campaign_location cl
+              on cl.campaign_id = c.id
+            left join public.mkt_campaign_client_access all_access
+              on all_access.campaign_id = c.id
+             and all_access.is_active
+            where c.id = %(campaign_id)s
+              and c.deleted_at is null
+            group by
+              c.id,
+              c.name,
+              c.slug,
+              c.deleted_at,
+              c.is_active,
+              c.description,
+              current_access.access_role,
+              current_access.is_default
+            limit 1;
+            """,
+            {"client_id": client_id, "campaign_id": campaign_id},
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def list_campaign_access_client_options(self) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      id::text as id,
+                      name,
+                      client_key,
+                      market,
+                      mode,
+                      status
+                    from public.auth_clients
+                    where status = 'active'
+                    order by name;
+                    """
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def _fetch_campaign_access(
+        self,
+        cursor: psycopg.Cursor,
+        *,
+        campaign_id: int,
+        client_id: int,
+    ) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            select
+              ac.id::text as client_id,
+              ac.name as client,
+              ac.market,
+              ac.status as client_status,
+              cca.access_role,
+              cca.is_default,
+              cca.is_active,
+              cca.valid_from,
+              cca.valid_to
+            from public.mkt_campaign_client_access cca
+            join public.auth_clients ac
+              on ac.id = cca.client_id
+            where cca.campaign_id = %(campaign_id)s
+              and cca.client_id = %(client_id)s
+            limit 1;
+            """,
+            {"campaign_id": campaign_id, "client_id": client_id},
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def upsert_campaign_client_access(
+        self,
+        *,
+        campaign_id: int,
+        client_id: int,
+        access_role: str,
+        is_default: bool,
+        is_active: bool,
+        valid_from: date | None,
+        valid_to: date | None,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.auth_clients
+                      where id = %(client_id)s
+                    ) as client_exists;
+                    """,
+                    {"campaign_id": campaign_id, "client_id": client_id},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["client_exists"]:
+                    connection.commit()
+                    return None
+
+                if is_default:
+                    cursor.execute(
+                        """
+                        update public.mkt_campaign_client_access
+                        set is_default = false,
+                            updated_at = now()
+                        where client_id = %(client_id)s
+                          and campaign_id <> %(campaign_id)s;
+                        """,
+                        {"campaign_id": campaign_id, "client_id": client_id},
+                    )
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_client_access (
+                      campaign_id,
+                      client_id,
+                      access_role,
+                      is_default,
+                      is_active,
+                      valid_from,
+                      valid_to
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(client_id)s,
+                      %(access_role)s,
+                      %(is_default)s,
+                      %(is_active)s,
+                      %(valid_from)s,
+                      %(valid_to)s
+                    )
+                    on conflict (campaign_id, client_id) do update
+                    set access_role = excluded.access_role,
+                        is_default = excluded.is_default,
+                        is_active = excluded.is_active,
+                        valid_from = excluded.valid_from,
+                        valid_to = excluded.valid_to,
+                        updated_at = now();
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": client_id,
+                        "access_role": access_role,
+                        "is_default": is_default,
+                        "is_active": is_active,
+                        "valid_from": valid_from,
+                        "valid_to": valid_to,
+                    },
+                )
+                access = self._fetch_campaign_access(cursor, campaign_id=campaign_id, client_id=client_id)
+                connection.commit()
+                return access
+
+    def update_campaign_client_access(
+        self,
+        *,
+        campaign_id: int,
+        client_id: int,
+        access_role: str | None,
+        is_default: bool | None,
+        is_active: bool | None,
+        valid_from: date | None,
+        valid_to: date | None,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                if is_default:
+                    cursor.execute(
+                        """
+                        update public.mkt_campaign_client_access
+                        set is_default = false,
+                            updated_at = now()
+                        where client_id = %(client_id)s
+                          and campaign_id <> %(campaign_id)s;
+                        """,
+                        {"campaign_id": campaign_id, "client_id": client_id},
+                    )
+
+                cursor.execute(
+                    """
+                    update public.mkt_campaign_client_access cca
+                    set
+                      access_role = coalesce(%(access_role)s, cca.access_role),
+                      is_default = coalesce(%(is_default)s, cca.is_default),
+                      is_active = coalesce(%(is_active)s, cca.is_active),
+                      valid_from = coalesce(%(valid_from)s, cca.valid_from),
+                      valid_to = coalesce(%(valid_to)s, cca.valid_to),
+                      updated_at = now()
+                    where cca.campaign_id = %(campaign_id)s
+                      and cca.client_id = %(client_id)s
+                      and exists (
+                        select 1
+                        from public.mkt_dim_campaign c
+                        where c.id = cca.campaign_id
+                          and c.deleted_at is null
+                      )
+                    returning cca.campaign_id;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": client_id,
+                        "access_role": access_role,
+                        "is_default": is_default,
+                        "is_active": is_active,
+                        "valid_from": valid_from,
+                        "valid_to": valid_to,
+                    },
+                )
+                row = cursor.fetchone()
+                if not row:
+                    connection.commit()
+                    return None
+                access = self._fetch_campaign_access(cursor, campaign_id=campaign_id, client_id=client_id)
+                connection.commit()
+                return access
+
+    def list_campaign_chain_options(self) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      ch.chain_key::text as id,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code,
+                      ch.is_active,
+                      count(l.location_key)::int as stores,
+                      count(l.location_key) filter (where l.is_active)::int as active_stores
+                    from public.mkt_dim_chain ch
+                    left join public.mkt_dim_location l
+                      on l.chain_key = ch.chain_key
+                    group by
+                      ch.chain_key,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code,
+                      ch.is_active
+                    order by ch.chain_name;
+                    """
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def assign_campaign_chain(self, *, campaign_id: int, chain_key: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_chain
+                      where chain_key = %(chain_key)s
+                    ) as chain_exists;
+                    """,
+                    {"campaign_id": campaign_id, "chain_key": chain_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["chain_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_location (
+                      campaign_id,
+                      location_key
+                    )
+                    select
+                      %(campaign_id)s,
+                      l.location_key
+                    from public.mkt_dim_location l
+                    where l.chain_key = %(chain_key)s
+                      and l.is_active
+                    on conflict (campaign_id, location_key) do update
+                    set updated_at = now();
+                    """,
+                    {"campaign_id": campaign_id, "chain_key": chain_key},
+                )
+
+                cursor.execute(
+                    """
+                    select
+                      ch.chain_key::text as id,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code,
+                      count(cl.location_key)::int as assigned_locations
+                    from public.mkt_dim_chain ch
+                    left join public.mkt_dim_location l
+                      on l.chain_key = ch.chain_key
+                     and l.is_active
+                    left join public.mkt_campaign_location cl
+                      on cl.location_key = l.location_key
+                     and cl.campaign_id = %(campaign_id)s
+                    where ch.chain_key = %(chain_key)s
+                    group by
+                      ch.chain_key,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code;
+                    """,
+                    {"campaign_id": campaign_id, "chain_key": chain_key},
+                )
+                row = cursor.fetchone()
+                connection.commit()
+                return self._json_ready(row) if row else None
+
+    def remove_campaign_chain(self, *, campaign_id: int, chain_key: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_chain
+                      where chain_key = %(chain_key)s
+                    ) as chain_exists;
+                    """,
+                    {"campaign_id": campaign_id, "chain_key": chain_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["chain_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    delete from public.mkt_campaign_location cl
+                    using public.mkt_dim_location l
+                    where cl.location_key = l.location_key
+                      and cl.campaign_id = %(campaign_id)s
+                      and l.chain_key = %(chain_key)s;
+                    """,
+                    {"campaign_id": campaign_id, "chain_key": chain_key},
+                )
+                removed_locations = cursor.rowcount
+                connection.commit()
+                return {
+                    "campaign_id": str(campaign_id),
+                    "chain_key": str(chain_key),
+                    "removed_locations": removed_locations,
+                }
+
+    def list_campaign_store_options(self) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      l.location_key::text as id,
+                      l.location_key::text as location_key,
+                      ch.chain_key::text as chain_key,
+                      ch.chain_id,
+                      ch.chain_name,
+                      l.location_name as store,
+                      l.location_code,
+                      l.sales_channel,
+                      l.province,
+                      l.canton,
+                      l.district,
+                      l.is_default,
+                      l.is_active
+                    from public.mkt_dim_location l
+                    join public.mkt_dim_chain ch
+                      on ch.chain_key = l.chain_key
+                    where l.is_active
+                      and ch.is_active
+                    order by ch.chain_name, l.location_name;
+                    """
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def _fetch_campaign_store(
+        self,
+        cursor: psycopg.Cursor,
+        *,
+        campaign_id: int,
+        location_key: int,
+    ) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            select
+              l.location_key::text as id,
+              ch.chain_name,
+              l.location_name as store,
+              l.location_code,
+              l.sales_channel,
+              l.province,
+              l.canton,
+              l.district,
+              l.is_default,
+              l.is_active
+            from public.mkt_campaign_location cl
+            join public.mkt_dim_location l
+              on l.location_key = cl.location_key
+            join public.mkt_dim_chain ch
+              on ch.chain_key = l.chain_key
+            where cl.campaign_id = %(campaign_id)s
+              and cl.location_key = %(location_key)s
+            limit 1;
+            """,
+            {"campaign_id": campaign_id, "location_key": location_key},
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def assign_campaign_store(self, *, campaign_id: int, location_key: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_location
+                      where location_key = %(location_key)s
+                        and is_active
+                    ) as store_exists;
+                    """,
+                    {"campaign_id": campaign_id, "location_key": location_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["store_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_location (
+                      campaign_id,
+                      location_key
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(location_key)s
+                    )
+                    on conflict (campaign_id, location_key) do update
+                    set updated_at = now();
+                    """,
+                    {"campaign_id": campaign_id, "location_key": location_key},
+                )
+                store = self._fetch_campaign_store(cursor, campaign_id=campaign_id, location_key=location_key)
+                connection.commit()
+                return store
+
+    def remove_campaign_store(self, *, campaign_id: int, location_key: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_location
+                      where location_key = %(location_key)s
+                    ) as store_exists;
+                    """,
+                    {"campaign_id": campaign_id, "location_key": location_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["store_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    delete from public.mkt_campaign_location
+                    where campaign_id = %(campaign_id)s
+                      and location_key = %(location_key)s;
+                    """,
+                    {"campaign_id": campaign_id, "location_key": location_key},
+                )
+                removed_locations = cursor.rowcount
+                connection.commit()
+                return {
+                    "campaign_id": str(campaign_id),
+                    "location_key": str(location_key),
+                    "removed_locations": removed_locations,
+                }
+
+    def list_campaign_product_options(self) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    with product_media as (
+                      select distinct on (l.product_key)
+                        l.product_key,
+                        l.product_url,
+                        l.image_url
+                      from public.mkt_dim_listing l
+                      where l.product_key is not null
+                        and (l.product_url is not null or l.image_url is not null)
+                      order by
+                        l.product_key,
+                        case when l.image_url is not null then 0 else 1 end,
+                        l.updated_at desc nulls last,
+                        l.created_at desc nulls last
+                    ),
+                    chain_coverage as (
+                      select
+                        product_key,
+                        jsonb_agg(
+                          jsonb_build_object(
+                            'chain_key', chain_key::text,
+                            'chain_id', chain_id,
+                            'chain_name', chain_name,
+                            'active_listings', active_listings,
+                            'listings_seen', listings_seen
+                          )
+                          order by chain_name
+                        ) as chain_coverage
+                      from public.mw_product_chain_coverage_detail
+                      where active_listings > 0
+                      group by product_key
+                    )
+                    select
+                      p.product_key::text as id,
+                      p.product_key::text as product_key,
+                      p.brand_name as brand,
+                      p.product_name as product,
+                      p.gtin_norm,
+                      p.content_quantity,
+                      p.content_unit,
+                      product_media.product_url,
+                      product_media.image_url,
+                      coalesce(chain_coverage.chain_coverage, '[]'::jsonb) as chain_coverage,
+                      p.is_active
+                    from public.mkt_dim_product p
+                    left join product_media
+                      on product_media.product_key = p.product_key
+                    left join chain_coverage
+                      on chain_coverage.product_key = p.product_key
+                    where p.is_active
+                    order by p.brand_name nulls last, p.product_name, p.product_key
+                    limit 2000;
+                    """
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def list_catalog_sources(self) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      cat.category_key::text as id,
+                      cat.chain_key::text as chain_key,
+                      chain.chain_id,
+                      chain.chain_name as chain,
+                      chain.engine,
+                      cat.category_name,
+                      cat.category_slug,
+                      cat.category_url,
+                      cat.source_category_reference,
+                      cat.is_enabled,
+                      case when cat.is_enabled then 'enabled' else 'disabled' end as status,
+                      count(distinct i.stage_catalog_item_key)::int as staged_items,
+                      max(r.started_at) as latest_run_at
+                    from public.mkt_dim_category cat
+                    join public.mkt_dim_chain chain
+                      on chain.chain_key = cat.chain_key
+                    left join public.mkt_stage_catalog_item i
+                      on i.chain_key = cat.chain_key
+                     and i.root_category_slug = cat.category_slug
+                    left join public.mkt_run r
+                      on r.run_key = i.run_key
+                    group by
+                      cat.category_key,
+                      cat.chain_key,
+                      chain.chain_id,
+                      chain.chain_name,
+                      chain.engine,
+                      cat.category_name,
+                      cat.category_slug,
+                      cat.category_url,
+                      cat.source_category_reference,
+                      cat.is_enabled
+                    order by chain.chain_name, cat.category_name;
+                    """
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def update_catalog_source(
+        self,
+        *,
+        category_key: int,
+        is_enabled: bool | None,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.mkt_dim_category cat
+                    set
+                      is_enabled = coalesce(%(is_enabled)s, cat.is_enabled),
+                      updated_at = now()
+                    where cat.category_key = %(category_key)s
+                    returning cat.category_key;
+                    """,
+                    {
+                        "category_key": category_key,
+                        "is_enabled": is_enabled,
+                    },
+                )
+                row = cursor.fetchone()
+                if not row:
+                    connection.commit()
+                    return None
+                category = self._fetch_catalog_source(cursor, category_key=category_key)
+                connection.commit()
+                return category
+
+    def _fetch_catalog_source(self, cursor: psycopg.Cursor, *, category_key: int) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            select
+              cat.category_key::text as id,
+              cat.chain_key::text as chain_key,
+              chain.chain_id,
+              chain.chain_name as chain,
+              chain.engine,
+              cat.category_name,
+              cat.category_slug,
+              cat.category_url,
+              cat.source_category_reference,
+              cat.is_enabled,
+              case when cat.is_enabled then 'enabled' else 'disabled' end as status
+            from public.mkt_dim_category cat
+            join public.mkt_dim_chain chain
+              on chain.chain_key = cat.chain_key
+            where cat.category_key = %(category_key)s
+            limit 1;
+            """,
+            {"category_key": category_key},
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def _fetch_campaign_product(
+        self,
+        cursor: psycopg.Cursor,
+        *,
+        campaign_id: int,
+        product_key: int,
+    ) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            with product_media as (
+              select distinct on (l.product_key)
+                l.product_key,
+                l.product_url,
+                l.image_url
+              from public.mkt_dim_listing l
+              where l.product_key is not null
+                and (l.product_url is not null or l.image_url is not null)
+              order by
+                l.product_key,
+                case when l.image_url is not null then 0 else 1 end,
+                l.updated_at desc nulls last,
+                l.created_at desc nulls last
+            ),
+            chain_coverage as (
+              select
+                product_key,
+                jsonb_agg(
+                  jsonb_build_object(
+                    'chain_key', chain_key::text,
+                    'chain_id', chain_id,
+                    'chain_name', chain_name,
+                    'active_listings', active_listings,
+                    'listings_seen', listings_seen
+                  )
+                  order by chain_name
+                ) as chain_coverage
+              from public.mw_product_chain_coverage_detail
+              where active_listings > 0
+              group by product_key
+            )
+            select
+              p.product_key::text as id,
+              cp.product_role,
+              p.brand_name as brand,
+              p.product_name as product,
+              p.gtin_norm,
+              p.content_quantity,
+              p.content_unit,
+              product_media.product_url,
+              product_media.image_url,
+              coalesce(chain_coverage.chain_coverage, '[]'::jsonb) as chain_coverage,
+              p.is_active
+            from public.mkt_campaign_product cp
+            join public.mkt_dim_product p
+              on p.product_key = cp.product_key
+            left join product_media
+              on product_media.product_key = p.product_key
+            left join chain_coverage
+              on chain_coverage.product_key = p.product_key
+            where cp.campaign_id = %(campaign_id)s
+              and cp.product_key = %(product_key)s
+            limit 1;
+            """,
+            {"campaign_id": campaign_id, "product_key": product_key},
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def assign_campaign_product(
+        self,
+        *,
+        campaign_id: int,
+        product_key: int,
+        product_role: str,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_product
+                      where product_key = %(product_key)s
+                        and is_active
+                    ) as product_exists;
+                    """,
+                    {"campaign_id": campaign_id, "product_key": product_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["product_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_product (
+                      campaign_id,
+                      product_key,
+                      product_role
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(product_key)s,
+                      %(product_role)s
+                    )
+                    on conflict (campaign_id, product_key) do update
+                    set product_role = excluded.product_role,
+                        updated_at = now();
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "product_key": product_key,
+                        "product_role": product_role,
+                    },
+                )
+                product = self._fetch_campaign_product(cursor, campaign_id=campaign_id, product_key=product_key)
+                connection.commit()
+                return product
+
+    def update_campaign_product(
+        self,
+        *,
+        campaign_id: int,
+        product_key: int,
+        product_role: str | None,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.mkt_campaign_product cp
+                    set
+                      product_role = coalesce(%(product_role)s, cp.product_role),
+                      updated_at = now()
+                    where cp.campaign_id = %(campaign_id)s
+                      and cp.product_key = %(product_key)s
+                      and exists (
+                        select 1
+                        from public.mkt_dim_campaign c
+                        where c.id = cp.campaign_id
+                          and c.deleted_at is null
+                      )
+                    returning cp.campaign_id;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "product_key": product_key,
+                        "product_role": product_role,
+                    },
+                )
+                row = cursor.fetchone()
+                if not row:
+                    connection.commit()
+                    return None
+                product = self._fetch_campaign_product(cursor, campaign_id=campaign_id, product_key=product_key)
+                connection.commit()
+                return product
+
+    def remove_campaign_product(self, *, campaign_id: int, product_key: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from public.mkt_dim_campaign
+                      where id = %(campaign_id)s
+                        and deleted_at is null
+                    ) as campaign_exists,
+                    exists (
+                      select 1
+                      from public.mkt_dim_product
+                      where product_key = %(product_key)s
+                    ) as product_exists;
+                    """,
+                    {"campaign_id": campaign_id, "product_key": product_key},
+                )
+                exists_row = cursor.fetchone()
+                if not exists_row or not exists_row["campaign_exists"] or not exists_row["product_exists"]:
+                    connection.commit()
+                    return None
+
+                cursor.execute(
+                    """
+                    delete from public.mkt_campaign_product
+                    where campaign_id = %(campaign_id)s
+                      and product_key = %(product_key)s;
+                    """,
+                    {"campaign_id": campaign_id, "product_key": product_key},
+                )
+                removed_products = cursor.rowcount
+                connection.commit()
+                return {
+                    "campaign_id": str(campaign_id),
+                    "product_key": str(product_key),
+                    "removed_products": removed_products,
+                }
+
+    def fetch_campaign_workspace(self, *, client_id: str, campaign_id: int) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                campaign = self._fetch_campaign_for_client(cursor, campaign_id=campaign_id, client_id=client_id)
+                if not campaign:
+                    return None
+
+                cursor.execute(
+                    """
+                    select
+                      ac.id::text as client_id,
+                      ac.name as client,
+                      ac.market,
+                      ac.status as client_status,
+                      cca.access_role,
+                      cca.is_default,
+                      cca.is_active,
+                      cca.valid_from,
+                      cca.valid_to
+                    from public.mkt_campaign_client_access cca
+                    join public.auth_clients ac
+                      on ac.id = cca.client_id
+                    where cca.campaign_id = %(campaign_id)s
+                    order by cca.is_default desc, ac.name;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                access = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      ch.chain_key::text as id,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code,
+                      ch.is_active,
+                      count(distinct l.location_key)::int as stores
+                    from public.mkt_campaign_location cl
+                    join public.mkt_dim_location l
+                      on l.location_key = cl.location_key
+                    join public.mkt_dim_chain ch
+                      on ch.chain_key = l.chain_key
+                    where cl.campaign_id = %(campaign_id)s
+                    group by
+                      ch.chain_key,
+                      ch.chain_id,
+                      ch.chain_name,
+                      ch.engine,
+                      ch.pricing_scope,
+                      ch.country_code,
+                      ch.is_active
+                    order by ch.chain_name;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                chains = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      l.location_key::text as id,
+                      ch.chain_name,
+                      l.location_name as store,
+                      l.location_code,
+                      l.sales_channel,
+                      l.province,
+                      l.canton,
+                      l.district,
+                      l.is_default,
+                      l.is_active
+                    from public.mkt_campaign_location cl
+                    join public.mkt_dim_location l
+                      on l.location_key = cl.location_key
+                    join public.mkt_dim_chain ch
+                      on ch.chain_key = l.chain_key
+                    where cl.campaign_id = %(campaign_id)s
+                    order by ch.chain_name, l.location_name;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                stores = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    with product_media as (
+                      select distinct on (l.product_key)
+                        l.product_key,
+                        l.product_url,
+                        l.image_url
+                      from public.mkt_dim_listing l
+                      where l.product_key is not null
+                        and (l.product_url is not null or l.image_url is not null)
+                      order by
+                        l.product_key,
+                        case when l.image_url is not null then 0 else 1 end,
+                        l.updated_at desc nulls last,
+                        l.created_at desc nulls last
+                    ),
+                    chain_coverage as (
+                      select
+                        product_key,
+                        jsonb_agg(
+                          jsonb_build_object(
+                            'chain_key', chain_key::text,
+                            'chain_id', chain_id,
+                            'chain_name', chain_name,
+                            'active_listings', active_listings,
+                            'listings_seen', listings_seen
+                          )
+                          order by chain_name
+                        ) as chain_coverage
+                      from public.mw_product_chain_coverage_detail
+                      where active_listings > 0
+                      group by product_key
+                    )
+                    select
+                      p.product_key::text as id,
+                      cp.product_role,
+                      p.brand_name as brand,
+                      p.product_name as product,
+                      p.gtin_norm,
+                      p.content_quantity,
+                      p.content_unit,
+                      product_media.product_url,
+                      product_media.image_url,
+                      coalesce(chain_coverage.chain_coverage, '[]'::jsonb) as chain_coverage,
+                      p.is_active
+                    from public.mkt_campaign_product cp
+                    join public.mkt_dim_product p
+                      on p.product_key = cp.product_key
+                    left join product_media
+                      on product_media.product_key = p.product_key
+                    left join chain_coverage
+                      on chain_coverage.product_key = p.product_key
+                    where cp.campaign_id = %(campaign_id)s
+                    order by cp.product_role, p.brand_name, p.product_name;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                products = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      ch.chain_name,
+                      count(distinct f.product_key)::int as observed_products,
+                      count(distinct f.listing_key)::int as observed_listings,
+                      max(r.finished_at) as latest_finished_at
+                    from public.mkt_run r
+                    join public.mkt_dim_chain ch
+                      on ch.chain_key = r.chain_key
+                    left join public.mkt_fact_listing_snapshot f
+                      on f.run_key = r.run_key
+                    where r.campaign_id = %(campaign_id)s
+                      and r.run_status = 'succeeded'
+                    group by ch.chain_name
+                    order by ch.chain_name;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                product_coverage = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      r.run_key::text as id,
+                      r.run_kind,
+                      r.run_status,
+                      ch.chain_name,
+                      l.location_name as store,
+                      r.business_date_key,
+                      r.started_at,
+                      r.finished_at,
+                      r.elapsed_seconds,
+                      r.catalog_records,
+                      r.unique_products,
+                      r.error_message
+                    from public.mkt_run r
+                    left join public.mkt_dim_chain ch
+                      on ch.chain_key = r.chain_key
+                    left join public.mkt_dim_location l
+                      on l.location_key = r.location_key
+                    where r.campaign_id = %(campaign_id)s
+                    order by r.started_at desc nulls last, r.run_key desc
+                    limit 25;
+                    """,
+                    {"campaign_id": campaign_id},
+                )
+                runs = [self._json_ready(row) for row in cursor.fetchall()]
+
+        return {
+            "campaign": campaign,
+            "summary": {
+                "clients": len(access),
+                "chains": len(chains),
+                "stores": len(stores),
+                "products": len(products),
+                "runs": len(runs),
+            },
+            "sections": [
+                {
+                    "id": "overview",
+                    "label": "Overview",
+                    "description": "Campaign identity, coverage and current operational shape.",
+                    "records": [
+                        {"metric": "Authorized clients", "value": len(access)},
+                        {"metric": "Chains", "value": len(chains)},
+                        {"metric": "Stores", "value": len(stores)},
+                        {"metric": "Products", "value": len(products)},
+                        {"metric": "Recent runs", "value": len(runs)},
+                    ],
+                },
+                {
+                    "id": "access",
+                    "label": "Access",
+                    "description": "Clients and tenants authorized for this campaign.",
+                    "records": access,
+                },
+                {
+                    "id": "chains",
+                    "label": "Chains",
+                    "description": "Chains included through campaign store assignments.",
+                    "records": chains,
+                },
+                {
+                    "id": "stores",
+                    "label": "Stores",
+                    "description": "Stores monitored by chain for this campaign.",
+                    "records": stores,
+                },
+                {
+                    "id": "products",
+                    "label": "Products",
+                    "description": "Canonical products assigned to the campaign.",
+                    "records": products,
+                },
+                {
+                    "id": "products-by-chain",
+                    "label": "Chain Coverage",
+                    "description": "Observed product and listing coverage by chain from succeeded runs.",
+                    "records": product_coverage,
+                },
+                {
+                    "id": "runs",
+                    "label": "Runs",
+                    "description": "Recent ETL executions linked to this campaign.",
+                    "records": runs,
+                },
+                {
+                    "id": "data-quality",
+                    "label": "Data Quality",
+                    "description": "Initial checks for missing campaign configuration.",
+                    "records": [
+                        {"check": "Has authorized client", "status": "ok" if access else "missing", "count": len(access)},
+                        {"check": "Has chains", "status": "ok" if chains else "missing", "count": len(chains)},
+                        {"check": "Has stores", "status": "ok" if stores else "missing", "count": len(stores)},
+                        {"check": "Has products", "status": "ok" if products else "missing", "count": len(products)},
+                    ],
+                },
+            ],
+        }
 
     def fetch_executive_signals(
         self,

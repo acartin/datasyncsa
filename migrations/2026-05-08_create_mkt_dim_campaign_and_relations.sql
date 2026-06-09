@@ -2,12 +2,9 @@ begin;
 
 create table if not exists public.mkt_dim_campaign (
   id bigint generated always as identity primary key,
-  client_id bigint null references public.mkt_dim_client(id),
   name text not null,
   slug text not null,
   description text null,
-  frequency_type text not null default 'manual',
-  frequency_note text null,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -15,16 +12,11 @@ create table if not exists public.mkt_dim_campaign (
   constraint mkt_dim_campaign_name_chk
     check (length(btrim(name)) > 0),
   constraint mkt_dim_campaign_slug_chk
-    check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
-  constraint mkt_dim_campaign_frequency_type_chk
-    check (frequency_type in ('manual', 'daily', 'weekly', 'custom'))
+    check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$')
 );
 
 create unique index if not exists mkt_dim_campaign_slug_uk
   on public.mkt_dim_campaign (slug);
-
-create index if not exists mkt_dim_campaign_client_id_idx
-  on public.mkt_dim_campaign (client_id);
 
 create index if not exists mkt_dim_campaign_is_active_idx
   on public.mkt_dim_campaign (is_active);
@@ -64,7 +56,7 @@ create index if not exists mkt_run_campaign_id_idx
   on public.mkt_run (campaign_id);
 
 comment on table public.mkt_dim_campaign is
-  'Campañas de monitoreo comercial. Definen frecuencia, cliente y universo objetivo para corridas analíticas.';
+  'Campañas de monitoreo comercial. Definen el universo objetivo para corridas analíticas; el acceso por cliente se administra en mkt_campaign_client_access.';
 
 comment on table public.mkt_campaign_product is
   'Relación entre campaña y productos canónicos incluidos en el monitoreo.';

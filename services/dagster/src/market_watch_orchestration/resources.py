@@ -122,3 +122,10 @@ class PriceScrapperResource(ConfigurableResource):
             spread_until_cr=spread_until_cr,
             only_pending=only_pending,
         )
+
+    def run_update_chain_root_categories(
+        self,
+        *,
+        chain_id: str | None,
+    ) -> subprocess.CompletedProcess[str]:
+        return self.commands.run_update_chain_root_categories(chain_id=chain_id)

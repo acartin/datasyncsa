@@ -1,9 +1,9 @@
 # BRAIN_MAP
 
-- Generated UTC: `2026-06-03T18:23:45Z`
+- Generated UTC: `2026-06-08T17:21:26Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Junio-03`
-- Git commit: `5dfa172`
+- Git branch: `HETZNER-LOCAL-2026-Junio-07`
+- Git commit: `20d7106`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -28,15 +28,15 @@
 ## 3. SERVICIOS DOCKER ACTUALES
 
 ```text
-redis
 postgres
-admin-console-api
-admin-console-web
 market-watch-api
 dagster-webserver
+admin-console-api
+admin-console-web
+dagster-daemon
 market-watch-web
 portainer
-dagster-daemon
+redis
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO
@@ -71,9 +71,13 @@ services/web/market-watch/app/[group]/[module]
 services/web/market-watch/app/api
 services/web/market-watch/app/api/auth
 services/web/market-watch/app/api/filters
+services/web/market-watch/app/api/operations
+services/web/market-watch/app/api/pricing
 services/web/market-watch/app/api/settings
 services/web/market-watch/app/api/table-views
 services/web/market-watch/app/login
+services/web/market-watch/app/operations
+services/web/market-watch/app/operations/campaigns
 services/web/market-watch/app/pricing
 services/web/market-watch/app/pricing/executive-signals
 services/web/market-watch/app/pricing/intraday-radar
@@ -107,12 +111,12 @@ services/price-scrapper/commands/transform_stage_listings.py
 services/price-scrapper/commands/transform_stage_products.py
 services/price-scrapper/commands/update_chain_root_categories.py
 services/price-scrapper/docs/tables/README.md
+services/price-scrapper/docs/tables/mkt_campaign_client_access.md
 services/price-scrapper/docs/tables/mkt_campaign_location.md
 services/price-scrapper/docs/tables/mkt_campaign_product.md
 services/price-scrapper/docs/tables/mkt_dim_campaign.md
 services/price-scrapper/docs/tables/mkt_dim_category.md
 services/price-scrapper/docs/tables/mkt_dim_chain.md
-services/price-scrapper/docs/tables/mkt_dim_client.md
 services/price-scrapper/docs/tables/mkt_dim_date.md
 services/price-scrapper/docs/tables/mkt_dim_listing.md
 services/price-scrapper/docs/tables/mkt_dim_location.md
@@ -155,6 +159,7 @@ services/price-scrapper/seeds/2026-05-22_create_mw_tool_agnostic_semantic_layer.
 services/price-scrapper/seeds/2026-05-26_create_auth_security_baseline.sql
 services/price-scrapper/seeds/2026-05-27_create_mkt_campaign_client_access.sql
 services/price-scrapper/seeds/2026-05-31_create_mkt_dim_market_event_type.sql
+services/price-scrapper/seeds/2026-06-06_create_mw_intraday_experience_views.sql
 services/price-scrapper/web/app.js
 services/price-scrapper/web/catalog-data.js
 services/price-scrapper/web/compare.html
@@ -197,6 +202,7 @@ services/web/market-watch/app/layout.tsx
 services/web/market-watch/app/login/page.tsx
 services/web/market-watch/app/not-found.tsx
 services/web/market-watch/app/page.tsx
+services/web/market-watch/components/market-watch/campaign-workspace.tsx
 services/web/market-watch/components/market-watch/chain-tag.tsx
 services/web/market-watch/components/market-watch/crud-toolbar.tsx
 services/web/market-watch/components/market-watch/data-grid.tsx
@@ -205,6 +211,7 @@ services/web/market-watch/components/market-watch/executive-signals-page.tsx
 services/web/market-watch/components/market-watch/filter-bar.tsx
 services/web/market-watch/components/market-watch/intraday-product-grids.tsx
 services/web/market-watch/components/market-watch/intraday-product-page.tsx
+services/web/market-watch/components/market-watch/intraday-product-store-page.tsx
 services/web/market-watch/components/market-watch/intraday-radar-filters-form.tsx
 services/web/market-watch/components/market-watch/intraday-radar-grid.tsx
 services/web/market-watch/components/market-watch/intraday-radar-page.tsx
@@ -213,7 +220,6 @@ services/web/market-watch/components/market-watch/product-history-chart.tsx
 services/web/market-watch/components/market-watch/product-visual.tsx
 services/web/market-watch/components/market-watch/row-actions.tsx
 services/web/market-watch/components/market-watch/signal-detail-page.tsx
-services/web/market-watch/components/market-watch/signal-filters-form.tsx
 services/web/market-watch/components/market-watch/signal-grid.tsx
 services/web/market-watch/components/market-watch/signal-kpi-cards.tsx
 services/web/market-watch/components/market-watch/signal-severity-badge.tsx

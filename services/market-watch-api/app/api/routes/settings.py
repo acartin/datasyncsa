@@ -231,7 +231,6 @@ def integrations(context: ClientContext = Depends(require_client_context)) -> di
         description="Status of external portal integrations.",
         records=[
             {"id": "keycloak", "name": "Keycloak", "status": "planned"},
-            {"id": "superset", "name": "Superset", "status": "external"},
             {"id": "dagster", "name": "Dagster", "status": "active"},
         ],
     )

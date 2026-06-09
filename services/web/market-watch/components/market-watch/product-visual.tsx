@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { ImageOff, PackageSearch } from "lucide-react";
 
-function Placeholder({ hasSku }: { hasSku: boolean }) {
+function Placeholder({ hasSku, sizeClass }: { hasSku: boolean; sizeClass: string }) {
   return (
-    <div className="flex h-36 w-36 shrink-0 items-center justify-center rounded-md border bg-surface-2 text-muted-foreground">
+    <div className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-md border bg-surface-2 text-muted-foreground`}>
       {hasSku ? <ImageOff className="h-8 w-8" /> : <PackageSearch className="h-8 w-8" />}
     </div>
   );
@@ -25,12 +25,13 @@ function SafeImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ProductVisual({ hasSku, images }: { hasSku: boolean; images: string[] }) {
+export function ProductVisual({ hasSku, images, size = "md" }: { hasSku: boolean; images: string[]; size?: "md" | "lg" }) {
   const [primaryFailed, setPrimaryFailed] = useState(false);
+  const sizeClass = size === "lg" ? "h-44 w-44" : "h-36 w-36";
 
   if (hasSku && images[0] && !primaryFailed) {
     return (
-      <div className="flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
+      <div className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background`}>
         <img
           src={images[0]}
           alt="Product"
@@ -43,7 +44,7 @@ export function ProductVisual({ hasSku, images }: { hasSku: boolean; images: str
 
   if (!hasSku && images.length > 1) {
     return (
-      <div className="grid h-36 w-36 shrink-0 grid-cols-2 gap-1 overflow-hidden rounded-md border bg-background p-1">
+      <div className={`grid ${sizeClass} shrink-0 grid-cols-2 gap-1 overflow-hidden rounded-md border bg-background p-1`}>
         {images.map((image) => (
           <div key={image} className="flex items-center justify-center overflow-hidden rounded-sm bg-card">
             <SafeImage src={image} alt="Related product" />
@@ -53,5 +54,5 @@ export function ProductVisual({ hasSku, images }: { hasSku: boolean; images: str
     );
   }
 
-  return <Placeholder hasSku={hasSku} />;
+  return <Placeholder hasSku={hasSku} sizeClass={sizeClass} />;
 }

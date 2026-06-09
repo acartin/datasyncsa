@@ -5,24 +5,18 @@ with upsert_campaign as (
     name,
     slug,
     description,
-    frequency_type,
-    frequency_note,
     is_active
   )
   values (
     'Sardimar Atun Competencia CR',
     'sardimar-atun-competencia-cr',
     'Campana vitrina para monitorear Sardimar contra Calvo, Great Value, Suli y Tesoro del Mar en las cadenas disponibles.',
-    'manual',
-    'Piloto inicial. Luego se puede calendarizar segun la necesidad comercial.',
     true
   )
   on conflict (slug) do update
   set
     name = excluded.name,
     description = excluded.description,
-    frequency_type = excluded.frequency_type,
-    frequency_note = excluded.frequency_note,
     is_active = excluded.is_active,
     updated_at = now(),
     deleted_at = null

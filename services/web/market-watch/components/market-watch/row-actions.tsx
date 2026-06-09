@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, KeyRound, Pencil, Trash2, Users } from "lucide-react";
+import Link from "next/link";
+import { Eye, FolderOpen, KeyRound, Pencil, Trash2, Users } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -22,9 +23,11 @@ type FieldConfig = {
 };
 
 type RowActionConfig = {
-  resource: "users" | "clients" | "roles" | null;
+  resource: "users" | "clients" | "roles" | "campaigns" | "catalog-sources" | null;
   fields: FieldConfig[];
   titleField: string;
+  readOnly?: boolean;
+  actionBasePath?: string;
 };
 
 function configForPayload(payload: ModulePayload): RowActionConfig | null {
@@ -124,6 +127,60 @@ function configForPayload(payload: ModulePayload): RowActionConfig | null {
     };
   }
 
+  if (payload.module.id === "operations.campaigns") {
+    return {
+      resource: "campaigns",
+      titleField: "name",
+      actionBasePath: "/api/operations",
+      fields: [
+        { label: "ID", name: "id", editable: false },
+        { label: "Name", name: "name" },
+        { label: "Slug", name: "slug" },
+        { label: "Description", name: "description", required: false },
+        {
+          label: "Status",
+          name: "status",
+          options: [
+            { value: "active", label: "active" },
+            { value: "inactive", label: "inactive" }
+          ]
+        },
+        { label: "Access role", name: "access_role", editable: false },
+        { label: "Default", name: "is_default", editable: false },
+        { label: "Products", name: "products", editable: false },
+        { label: "Locations", name: "locations", editable: false },
+        { label: "Authorized clients", name: "authorized_clients", editable: false }
+      ]
+    };
+  }
+
+  if (payload.module.id === "operations.catalog-sources") {
+    return {
+      resource: "catalog-sources",
+      titleField: "category_name",
+      actionBasePath: "/api/operations",
+      fields: [
+        { label: "ID", name: "id", editable: false },
+        { label: "Chain", name: "chain", editable: false },
+        { label: "Engine", name: "engine", editable: false },
+        { label: "Category name", name: "category_name", editable: false },
+        { label: "Category slug", name: "category_slug", editable: false },
+        { label: "Category URL", name: "category_url", type: "url", required: false, editable: false },
+        { label: "Source reference", name: "source_category_reference", required: false, editable: false },
+        {
+          label: "Status",
+          name: "status",
+          options: [
+            { value: "enabled", label: "enabled" },
+            { value: "disabled", label: "disabled" }
+          ]
+        },
+        { label: "Staged items", name: "staged_items", editable: false },
+        { label: "Latest run", name: "latest_run_at", editable: false }
+      ]
+    };
+  }
+
   return null;
 }
 
@@ -207,8 +264,15 @@ export function RowActions({
   if (!config) return null;
 
   const title = String(record[config.titleField] ?? record.id ?? "record");
-  const canDelete = config.resource === "users" || config.resource === "clients";
-  const canUpdate = config.resource === "users" || config.resource === "clients" || config.resource === "roles";
+  const actionBasePath = config.actionBasePath ?? "/api/settings";
+  const canDelete = config.resource === "users" || config.resource === "clients" || config.resource === "campaigns" || config.resource === "catalog-sources";
+  const canUpdate = !config.readOnly && (
+    config.resource === "users"
+    || config.resource === "clients"
+    || config.resource === "roles"
+    || config.resource === "campaigns"
+    || config.resource === "catalog-sources"
+  );
   const rowId = String(record.id ?? "");
   const assignedUsers = Array.isArray(record.assigned_users)
     ? (record.assigned_users as Record<string, unknown>[])
@@ -231,9 +295,17 @@ export function RowActions({
   return (
     <>
       <div className="flex justify-end gap-1">
-        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="View" onClick={() => setMode("view")}>
-          <Eye className="h-4 w-4" />
-        </Button>
+        {config.resource === "campaigns" ? (
+          <Button asChild variant="ghost" className="h-8 w-8 px-0" title="Open workspace">
+            <Link href={`/operations/campaigns/${encodeURIComponent(rowId)}`}>
+              <FolderOpen className="h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="View" onClick={() => setMode("view")}>
+            <Eye className="h-4 w-4" />
+          </Button>
+        )}
         <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Edit" onClick={() => setMode("edit")}>
           <Pencil className="h-4 w-4" />
         </Button>
@@ -248,9 +320,9 @@ export function RowActions({
           </>
         ) : null}
         {canDelete ? (
-          <form action={`/api/settings/${config.resource}/${rowId}`} method="post">
+          <form action={`${actionBasePath}/${config.resource}/${rowId}`} method="post">
             <input type="hidden" name="_method" value="patch" />
-            <input type="hidden" name="status" value="inactive" />
+            <input type="hidden" name="status" value={config.resource === "catalog-sources" ? "disabled" : "inactive"} />
             <Button type="submit" variant="ghost" className="h-8 w-8 px-0" title="Deactivate">
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -268,7 +340,7 @@ export function RowActions({
         description={mode === "edit" ? undefined : "Selected record detail."}
         onClose={() => setMode(null)}
       >
-        <form action={mode === "edit" && canUpdate && config.resource ? `/api/settings/${config.resource}/${rowId}` : undefined} method="post" className="space-y-5">
+        <form action={mode === "edit" && canUpdate && config.resource ? `${actionBasePath}/${config.resource}/${rowId}` : undefined} method="post" className="space-y-5">
           <div className="grid gap-3 md:grid-cols-2">
             {config.fields.map((field) => (
               <Field key={field.name} field={field} record={record} readOnly={mode !== "edit"} />
@@ -278,7 +350,7 @@ export function RowActions({
             <Button type="button" variant="outline" onClick={() => setMode(null)}>
               Cancel
             </Button>
-            {mode === "edit" ? <Button type="submit" disabled={!canUpdate}>Update</Button> : null}
+            {mode === "edit" ? <Button type="submit" disabled={!canUpdate}>{canUpdate ? "Update" : "Coming next"}</Button> : null}
           </div>
         </form>
       </Modal>
