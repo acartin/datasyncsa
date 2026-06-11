@@ -187,14 +187,38 @@ def campaign_workspace(
     workspace = repository.fetch_campaign_workspace(client_id=context.client_id, campaign_id=campaign_id)
     if not workspace:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    can_manage_access = context.role in SYSTEM_OPERATOR_ROLES
+    if not can_manage_access:
+        workspace = {
+            **workspace,
+            "summary": {
+                key: value
+                for key, value in dict(workspace.get("summary", {})).items()
+                if key != "clients"
+            },
+            "sections": [
+                {
+                    **section,
+                    "records": [
+                        record
+                        for record in list(section.get("records", []))
+                        if record.get("metric") != "Authorized clients"
+                    ],
+                }
+                if section.get("id") == "overview"
+                else section
+                for section in list(workspace.get("sections", []))
+                if section.get("id") != "access"
+            ],
+        }
     return {
         "context": {
             "client_id": context.client_id,
             "role": context.role,
-            "can_manage_access": context.role in SYSTEM_OPERATOR_ROLES,
+            "can_manage_access": can_manage_access,
         },
         "available_clients": repository.list_campaign_access_client_options()
-        if context.role in SYSTEM_OPERATOR_ROLES
+        if can_manage_access
         else [],
         "available_chains": repository.list_campaign_chain_options()
         if context.role in SYSTEM_OPERATOR_ROLES
@@ -409,33 +433,41 @@ def campaign_access(context: ClientContext = Depends(require_client_context)) ->
 
 
 @router.get("/monitored-products")
-def monitored_products(context: ClientContext = Depends(require_client_context)) -> dict[str, object]:
+def monitored_products(
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
     require_system_operator(context)
+    payload = repository.list_monitored_products()
     return module_payload(
         context=context,
         module_id="operations.monitored-products",
         title="Monitored Products",
-        description="Placeholder for products, GTINs and matching status assigned to campaigns.",
-        records=[
-            {
-                "id": "campaign-products",
-                "name": "Campaign product assignment",
-                "source": "mkt_campaign_product",
-                "status": "planned",
-                "owner": "system operations",
-            },
-            {
-                "id": "product-matching",
-                "name": "Catalog product matching",
-                "source": "mkt_dim_product",
-                "status": "planned",
-                "owner": "pricing operations",
-            },
-        ],
-        actions=[
-            {"id": "add-product", "label": "Add product", "enabled": False},
-        ],
+        description="Canonical monitored product inventory, coverage and matching status.",
+        status="active",
+        records=payload["items"],
+        actions=[],
+        filters=payload["filters"],
     )
+
+
+@router.get("/monitored-products/{product_key}/workspace")
+def monitored_product_workspace(
+    product_key: int,
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
+    require_system_operator(context)
+    workspace = repository.fetch_monitored_product_workspace(product_key=product_key)
+    if not workspace:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    return {
+        "context": {
+            "client_id": context.client_id,
+            "role": context.role,
+        },
+        **workspace,
+    }
 
 
 @router.get("/locations-chains")

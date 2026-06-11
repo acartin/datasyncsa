@@ -41,6 +41,7 @@ def module_payload(
     status: str = "placeholder",
     records: list[dict[str, object]] | None = None,
     actions: list[dict[str, object]] | None = None,
+    filters: dict[str, object] | None = None,
 ) -> dict[str, object]:
     settings = get_settings()
     return {
@@ -60,6 +61,7 @@ def module_payload(
         },
         "actions": actions or [],
         "records": records or [],
+        "filters": filters or {},
     }
 
 

@@ -11,6 +11,7 @@ portal propio deben consumir datasets de presentacion, no facts crudos.
 facts/dims
   -> mw_core_*
   -> mw_signal_*
+  -> mw_app_*
   -> mw_bi_*
 ```
 
@@ -36,9 +37,23 @@ Contrato estable para `services/retail-signal-engine`:
 
 El Signal Engine no debe depender de vistas de BI.
 
+## App / Portal
+
+Contratos estables para la API y el portal Market Watch. No son vistas por grid:
+deben representar datasets de producto con grano claro.
+
+- `mw_app_product_chain_price_history`: materialized view de historial de producto por cadena y dia.
+- `mw_app_product_store_activity`: materialized view de actividad/evidencia de producto por tienda.
+
+Estas vistas existen como excepcion fundamentada para la ruta critica
+`/pricing/products/{product_key}` y su drill-down por tienda.
+
+Al ser materializadas, deben refrescarse despues de las cargas ETL que actualizan
+`mkt_fact_listing_snapshot`, `mkt_run`, listings o dimensiones relacionadas.
+
 ## BI / Presentation
 
-Datasets para Superset, Metabase o portal:
+Datasets para Superset, Metabase o reporting legacy:
 
 - `mw_bi_brand_chain_price_index`
 - `mw_bi_sku_price_drivers`
@@ -47,10 +62,10 @@ Datasets para Superset, Metabase o portal:
 - `mw_bi_executive_signal_feed`
 
 Estas vistas pueden tener nombres mas amigables y columnas pensadas para
-filtros, tablas, pivots y graficos.
+filtros, tablas, pivots y graficos de BI.
 
 Las columnas expuestas por `mw_bi_*` deben usar ingles en `snake_case`, porque
-son la base visible para Superset, Metabase o el portal.
+son la base visible para Superset, Metabase o consumidores BI legacy.
 
 ## Autorizacion Campana-Cliente
 
@@ -64,7 +79,7 @@ cliente propietario en `mkt_dim_campaign` ni en `mkt_run`.
 Regla:
 
 - `market-watch-api` filtra siempre por el `client_id` de sesion.
-- Las vistas `mw_core_*`, `mw_signal_*` y `mw_bi_*` deben poblar `client_id` mediante
+- Las vistas `mw_core_*`, `mw_signal_*`, `mw_app_*` y `mw_bi_*` deben poblar `client_id` mediante
   `mkt_campaign_client_access`.
 - Si una senal ya trae `perspective_client_id`, debe coincidir con el cliente
   autorizado por la campana.

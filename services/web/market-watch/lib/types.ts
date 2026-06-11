@@ -47,6 +47,7 @@ export type ModulePayload = {
   };
   links: Record<string, string>;
   actions: Array<Record<string, unknown>>;
+  filters?: Record<string, unknown>;
   records: Array<Record<string, unknown>>;
 };
 
@@ -70,4 +71,21 @@ export type CampaignWorkspacePayload = {
   available_products?: Array<Record<string, unknown>>;
   summary: Record<string, number>;
   sections: CampaignWorkspaceSection[];
+};
+
+export type MonitoredProductSection = {
+  id: string;
+  label: string;
+  description: string;
+  records: Array<Record<string, unknown>>;
+};
+
+export type MonitoredProductWorkspacePayload = {
+  context: {
+    client_id: string;
+    role: Role;
+  };
+  product: Record<string, unknown>;
+  summary: Record<string, number>;
+  sections: MonitoredProductSection[];
 };

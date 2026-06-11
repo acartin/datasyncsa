@@ -517,6 +517,9 @@ function ProductDetailCard({
   const sourceUrl = text(product.product_url, "");
   const content = productContentLabel(product);
   const chainCoverage = productChainCoverage(product);
+  const campaignObservations = product.campaign_observations == null ? null : Number(product.campaign_observations);
+  const canOpenProduct = Boolean(productId && (campaignObservations === null ? chainCoverage.length : campaignObservations > 0));
+  const canOpenSourceListing = Boolean(sourceUrl && chainCoverage.length);
 
   return (
     <div className="rounded-md border border-border-2 bg-card p-4">
@@ -573,13 +576,20 @@ function ProductDetailCard({
       </div>
 
       <div className="mt-5 grid gap-2 border-t pt-4 sm:grid-cols-2">
-        <Button asChild variant="outline">
-          <Link href={`/pricing/products/${encodeURIComponent(productId)}`} target="_blank" rel="noreferrer">
+        {canOpenProduct ? (
+          <Button asChild variant="outline">
+            <Link href={`/pricing/products/${encodeURIComponent(productId)}`} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-4 w-4" />
+              Open product
+            </Link>
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" disabled>
             <ExternalLink className="h-4 w-4" />
             Open product
-          </Link>
-        </Button>
-        {sourceUrl ? (
+          </Button>
+        )}
+        {canOpenSourceListing ? (
           <Button asChild variant="outline">
             <a href={sourceUrl} target="_blank" rel="noreferrer">
               <ExternalLink className="h-4 w-4" />

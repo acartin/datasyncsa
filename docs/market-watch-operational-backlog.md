@@ -94,3 +94,111 @@ Impacto:
 - reduce configuracion falsa o escrita a mano
 - permite saber si `Catalog Sources` refleja la API actual de la cadena
 - alinea la activacion de categorias con el proceso de generacion canonica
+
+### 4. Refrescar materialized views `mw_app_*` despues del ETL
+
+Estado: pendiente.
+
+La ruta `/pricing/products/{product_key}` y su drill-down de tienda usan
+materialized views estables de app:
+
+```text
+public.mw_app_product_chain_price_history
+public.mw_app_product_store_activity
+```
+
+Estas vistas se crearon materializadas porque la vista normal obligaba a
+recalcular agregaciones sobre `mw_core_sku_store_observation` durante requests
+web. Con indices, el detalle del producto responde de forma usable.
+
+Pendiente sugerido:
+
+- agregar un paso post-ETL para ejecutar:
+
+```sql
+refresh materialized view public.mw_app_product_chain_price_history;
+refresh materialized view public.mw_app_product_store_activity;
+```
+
+- ubicar ese refresh despues de las cargas que actualizan
+  `mkt_fact_listing_snapshot`, `mkt_run`, `mkt_dim_listing`,
+  `mkt_dim_product`, `mkt_dim_chain` o tiendas
+- evaluar `refresh materialized view concurrently` solo si se agregan indices
+  unicos compatibles y el bloqueo de refresh normal se vuelve un problema real
+
+Impacto:
+
+- mantiene rápida la página de producto
+- evita que el portal muestre datos obsoletos después de un ETL exitoso
+- concentra la excepción `mw_app_*` en un contrato de producto estable
+
+Prompt pendiente para ejecutar en la noche, despues de que termine
+`daily_active_campaigns_analytic_job`:
+
+```text
+Estamos en /srv/datasyncsa. Antes de tocar nada, lee:
+
+- .agent/RULES.md
+- .agent/PY_EXECUTION_MAP.md
+- .agent/MARKET_WATCH_UI_STANDARDS.md
+
+Contexto:
+
+- El job daily_active_campaigns_analytic_job estaba corriendo durante el dia, por
+  eso NO se modifico Dagster ni se reiniciaron contenedores.
+- Ya existen en BD y en repo estas materialized views:
+  - public.mw_app_product_chain_price_history
+  - public.mw_app_product_store_activity
+- Fueron creadas por:
+  services/price-scrapper/seeds/2026-06-09_create_mw_app_product_activity_views.sql
+- La API ya usa esas vistas para:
+  - /pricing/products/{product_key}
+  - drill-down de tienda del producto
+- Validacion previa con product_key=4469:
+  - product detail: ~0.633s
+  - store drill-down: ~0.026s
+- El problema pendiente es que las materialized views deben refrescarse despues
+  del ETL, si no la pagina queda rapida pero puede mostrar datos viejos.
+
+Objetivo:
+
+Agregar al flujo Dagster correspondiente un paso post-ETL que refresque:
+
+refresh materialized view public.mw_app_product_chain_price_history;
+refresh materialized view public.mw_app_product_store_activity;
+
+Alcance esperado:
+
+1. No lanzar jobs manualmente.
+2. No reiniciar contenedores si hay jobs corriendo.
+3. Ubicar el refresh despues de load_fact_listing_snapshots dentro de
+   daily_active_campaigns_analytic_job y antes o junto a la validacion final.
+4. Implementarlo preferiblemente como comando de price-scrapper llamado desde
+   Dagster, no como SQL embebido directamente en definitions.py.
+5. Archivos probables:
+   - services/price-scrapper/commands/refresh_app_materialized_views.py
+   - services/dagster/src/market_watch_orchestration/price_scrapper/commands.py
+   - services/dagster/src/market_watch_orchestration/resources.py
+   - services/dagster/src/market_watch_orchestration/definitions.py
+   - docs/market-watch-operational-backlog.md
+6. El comando debe usar etl.postgres_cli.parse_env y run_psql, siguiendo el
+   patron de los otros commands.
+7. Si el refresh normal bloquea demasiado, NO cambiar a concurrently sin revisar:
+   para concurrently se requieren indices unicos compatibles.
+8. Validar sin correr el job:
+   - python3 -m py_compile para el nuevo command en price-scrapper
+   - docker compose up -d --build dagster-webserver dagster-daemon SOLO si no hay
+     jobs corriendo y el usuario confirma
+   - si no se puede rebuild por seguridad operativa, dejarlo documentado
+9. Actualizar esta seccion del backlog marcando el pendiente como implementado
+   cuando quede conectado.
+
+Notas importantes:
+
+- No crear mas vistas para grids.
+- mw_app_* es una excepcion estable para API/portal, documentada en:
+  - docs/market-watch-semantic-governance.md
+  - docs/market-watch-semantic-layer.md
+- No usar mw_exp_* para contratos estables. Es experimental y borrable.
+- No usar mw_bi_* para nuevos contratos del portal propio.
+```

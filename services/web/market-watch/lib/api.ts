@@ -9,7 +9,7 @@ import {
   IntradayRadarSearchParams,
   SignalDetailPayload
 } from "@/lib/pricing-types";
-import { CampaignWorkspacePayload, MenuPayload, ModulePayload } from "@/lib/types";
+import { CampaignWorkspacePayload, MenuPayload, ModulePayload, MonitoredProductWorkspacePayload } from "@/lib/types";
 
 const API_BASE_URL = process.env.MARKET_WATCH_API_BASE_URL ?? "http://market-watch-api:8000/api/v1";
 export const sessionCookieName = "mw_session";
@@ -50,6 +50,10 @@ export async function getModule(path: string): Promise<ModulePayload> {
 
 export async function getCampaignWorkspace(campaignId: string): Promise<CampaignWorkspacePayload> {
   return getJson<CampaignWorkspacePayload>(`/operations/campaigns/${encodeURIComponent(campaignId)}/workspace`);
+}
+
+export async function getMonitoredProductWorkspace(productKey: string): Promise<MonitoredProductWorkspacePayload> {
+  return getJson<MonitoredProductWorkspacePayload>(`/operations/monitored-products/${encodeURIComponent(productKey)}/workspace`);
 }
 
 function queryString(params: Record<string, string | undefined>) {

@@ -12,7 +12,8 @@ de producto.
 |---|---|---|---|
 | `mw_core_*` | Hechos limpios y agregados con grano tecnico claro. | Alta | Base reutilizable; no contiene narrativa ni filtros de UI. |
 | `mw_signal_*` | Contratos estables para Signal Engine. | Alta | Puede alimentar senales; no debe depender de BI ni portal. |
-| `mw_bi_*` | Datasets de presentacion para API, portal, Superset o Metabase. | Alta | Debe tener consumidor explicito y filtro por cliente antes de salir por API. |
+| `mw_app_*` | Datasets estables consumidos por API/portal web. | Alta | Debe representar un contrato de producto, no un grid aislado. |
+| `mw_bi_*` | Datasets de presentacion para BI/reporting legacy, Superset o Metabase. | Alta | No usar para nuevos contratos del portal salvo transicion documentada. |
 | `mw_exp_*` | Experimentos, prototipos y analisis de validacion. | Baja | Debe tener fecha de revision; no se promete como contrato estable. |
 | `mw_deprecated_*` | Compatibilidad temporal antes de eliminar. | Temporal | Debe indicar reemplazo y fecha objetivo de borrado. |
 
@@ -29,12 +30,32 @@ de producto.
 ## Reglas de Creacion
 
 1. Toda vista nueva nace como `mw_exp_*` salvo que ya exista un consumidor claro.
-2. Toda vista `mw_bi_*` debe estar documentada con consumidor, grano y filtros.
+2. Toda vista `mw_app_*` o `mw_bi_*` debe estar documentada con consumidor, grano y filtros.
 3. Toda vista experimental debe tener fecha de revision maxima de 30 dias.
 4. No crear una vista por pantalla si una vista parametrizable cubre el caso.
 5. Las vistas publicadas deben incluir `comment on view` en SQL.
-6. El portal nunca consume `mw_core_*` directo; consume API sobre `mw_bi_*` o `mw_exp_*` autorizado.
+6. El portal nunca consume `mw_core_*` directo; consume API sobre `mw_app_*` estable o una vista transicional autorizada.
 7. Signal Engine consume `mw_signal_*`, no vistas de BI ni vistas experimentales.
+
+## Reglas `mw_app_*`
+
+`mw_app_*` existe para contratos estables del portal propio. No reemplaza el SQL
+CRUD normal ni autoriza crear una vista por cada tabla visual.
+
+Una vista `mw_app_*` se justifica solo si:
+
+- tiene consumidor directo en API/portal;
+- su grano representa un concepto de producto estable;
+- evita repetir agregaciones sobre facts o vistas core pesadas;
+- incluye `client_id` o queda filtrada por `client_id` antes de salir por API;
+- esta documentada con grano, consumidor y motivo.
+
+No crear `mw_app_*` para CRUDs simples, formularios administrativos o grids cuyo
+SQL pueda vivir claramente en la API.
+
+Las rutas criticas pueden usar materialized views `mw_app_*` cuando una vista
+normal obligue a recalcular agregaciones caras durante requests web. En ese caso
+deben tener indices de acceso y un punto explicito de refresh despues del ETL.
 
 ## Catalogo Actual
 
@@ -50,6 +71,8 @@ de producto.
 | `mw_signal_sku_store_observation` | signal | SKU/tienda/captura | evidencia | active | Evidencia verificable por tienda. |
 | `mw_signal_price_change_daily` | signal | evento diario de precio | BI/API | active | Publica cambios de precio diarios. |
 | `mw_signal_promo_daily` | signal | evento diario de promo | BI/API | active | Publica eventos de promo diarios. |
+| `mw_app_product_chain_price_history` | app | cliente/campana/SKU/cadena/dia | Portal/API | active | Materialized view para `/pricing/products/{product_key}` y Product Across Chains. |
+| `mw_app_product_store_activity` | app | cliente/campana/SKU/cadena/tienda/dia/run/listing | Portal/API | active | Materialized view de evidencia y drill-down por tienda para detalle de producto. |
 | `mw_bi_brand_chain_price_index` | BI | marca/cadena/dia/cliente autorizado | Superset/API futuro | active | Contexto de posicionamiento. |
 | `mw_bi_sku_price_drivers` | BI | SKU/cadena/dia/cliente autorizado | Portal/API | active | Drivers y comparacion contra mejor precio observado. |
 | `mw_bi_sku_store_price_evidence` | BI | SKU/tienda/captura/cliente autorizado | Portal/API | active | Evidencia de precio, promo y URL. |
