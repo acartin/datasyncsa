@@ -34,6 +34,17 @@ function contentLabel(record: Record<string, unknown>) {
   return [quantity, unit].filter(Boolean).join(" ") || "-";
 }
 
+function ProductIdentifier({ value }: { value: unknown }) {
+  const identifier = text(value, "");
+  if (!identifier) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-[6px] border border-border-2 bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+      GTIN
+      <code className="select-all font-mono text-[11px] font-normal tracking-normal text-foreground">{identifier}</code>
+    </span>
+  );
+}
+
 function chainOptions(payload: ModulePayload) {
   const fromPayload = payload.filters?.chains;
   if (Array.isArray(fromPayload)) return fromPayload.map(String).filter(Boolean);
@@ -138,8 +149,8 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
             <Badge>{payload.module.status}</Badge>
             <Badge>role: {payload.context.role}</Badge>
           </div>
-          <h1 className="text-2xl font-light">{payload.module.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{payload.module.description}</p>
+          <h1 className="text-page-title font-light">{payload.module.title}</h1>
+          <p className="mt-2 max-w-3xl text-page-subtitle text-muted-foreground">{payload.module.description}</p>
         </div>
       </div>
 
@@ -147,7 +158,7 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <PackageSearch className="h-4 w-4 text-muted-foreground" />
-            <div className="font-medium">Filters</div>
+            <div className="text-card-title font-medium">Filters</div>
           </div>
         </CardHeader>
         <CardContent>
@@ -158,13 +169,13 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search product, GTIN, brand or chain"
               aria-label="Search monitored products"
-              className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-control rounded-md border bg-background px-3 text-body-sm outline-none focus:ring-2 focus:ring-ring"
             />
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value)}
               aria-label="Filter by status"
-              className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-control rounded-md border bg-background px-3 text-body-sm outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">All statuses</option>
               {statuses.map((item) => (
@@ -175,7 +186,7 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
               value={chain}
               onChange={(event) => setChain(event.target.value)}
               aria-label="Filter by chain"
-              className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-control rounded-md border bg-background px-3 text-body-sm outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">All chains</option>
               {chains.map((item) => (
@@ -186,7 +197,7 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
               value={coverage}
               onChange={(event) => setCoverage(event.target.value)}
               aria-label="Filter by coverage"
-              className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-control rounded-md border bg-background px-3 text-body-sm outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">All coverage</option>
               <option value="with_active_listings">With active listings</option>
@@ -200,13 +211,13 @@ export function MonitoredProductsPage({ payload }: { payload: ModulePayload }) {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="font-medium">Canonical products</div>
-              <div className="mt-1 text-sm text-muted-foreground">{records.length} of {payload.records.length} products visible</div>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+              <div className="text-card-title font-medium">Canonical products</div>
+              <div className="mt-1 text-body-sm text-muted-foreground">{records.length} of {payload.records.length} products visible</div>
+              </div>
             </div>
-          </div>
-        </CardHeader>
+          </CardHeader>
         <CardContent>
           <DataGrid
             columns={columns}
@@ -246,13 +257,29 @@ export function MonitoredProductWorkspace({
 
   const columns = activeSection
     ? Array.from(new Set(activeSection.records.flatMap((record) => Object.keys(record))))
-        .filter((column) => !["id", "image_url", "product_url"].includes(column))
+        .filter((column) => !["id", "image_url", "product_url", "detail_url"].includes(column))
         .slice(0, 9)
         .map((column) => ({ id: column, header: column }))
     : [];
 
   const gridColumns: DataGridColumn<Record<string, unknown>>[] = [
     ...columns,
+    ...(activeSection?.records.some((record) => record.detail_url)
+      ? [{
+          id: "detail",
+          header: "",
+          sortable: false,
+          className: "w-16 text-right",
+          cell: (record: Record<string, unknown>) =>
+            record.detail_url ? (
+              <Button asChild variant="outline" className="h-8 w-8 px-0" aria-label="Open product intelligence">
+                <Link href={text(record.detail_url)}>
+                  <Eye className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null,
+        } satisfies DataGridColumn<Record<string, unknown>>]
+      : []),
     ...(activeSection?.records.some((record) => record.product_url)
       ? [{
           id: "source",
@@ -283,20 +310,30 @@ export function MonitoredProductWorkspace({
           </Button>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge>{text(product.status)}</Badge>
-            <Badge>{text(product.gtin_norm)}</Badge>
           </div>
-          <h1 className="truncate text-2xl font-light">{text(product.product)}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            {text(product.brand)} · {contentLabel(product)}
-          </p>
+          <h1 className="truncate text-page-title font-light">{text(product.product)}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-page-subtitle text-muted-foreground">
+            <span>{text(product.brand)}</span>
+            <span className="text-border-2">/</span>
+            <span>{contentLabel(product)}</span>
+            <ProductIdentifier value={product.gtin_norm} />
+          </div>
+          <div className="mt-4">
+            <Button asChild variant="outline">
+              <Link href={`/pricing/products/${encodeURIComponent(text(product.product_key))}`}>
+                <Eye className="h-4 w-4" />
+                Product intelligence
+              </Link>
+            </Button>
+          </div>
         </div>
         <div className="flex flex-col gap-4 md:flex-row md:items-start">
           <ProductVisual hasSku={Boolean(product.gtin_norm)} images={images} size="md" />
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-body-sm">
             {Object.entries(payload.summary).map(([key, value]) => (
               <div key={key} className="rounded-md border border-border-2 px-3 py-2">
-                <div className="text-lg font-medium">{value}</div>
-                <div className="text-xs capitalize text-muted-foreground">{key.replaceAll("_", " ")}</div>
+                <div className="text-section-title font-medium">{value}</div>
+                <div className="text-meta capitalize text-muted-foreground">{key.replaceAll("_", " ")}</div>
               </div>
             ))}
           </div>
@@ -315,8 +352,8 @@ export function MonitoredProductWorkspace({
       {activeSection ? (
         <Card>
           <CardHeader>
-            <div className="font-medium">{activeSection.label}</div>
-            <div className="mt-1 text-sm text-muted-foreground">{activeSection.description}</div>
+            <div className="text-card-title font-medium">{activeSection.label}</div>
+            <div className="mt-1 text-body-sm text-muted-foreground">{activeSection.description}</div>
           </CardHeader>
           <CardContent>
             <DataGrid

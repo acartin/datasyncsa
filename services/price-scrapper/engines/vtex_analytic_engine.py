@@ -5,14 +5,19 @@ from __future__ import annotations
 
 import base64
 import json
-import random
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from etl.http_client import BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import (
+    BrowserSession,
+    DomainCircuitOpen,
+    create_browser_session,
+    request_with_retry,
+    set_rate_limiter,
+)
 
 
 REQUEST_TIMEOUT = 30
@@ -89,8 +94,8 @@ class VtexAnalyticScraper:
         *,
         chain: VtexAnalyticChainConfig,
         location: VtexAnalyticLocation,
-        sleep_min: float = 1.25,
-        sleep_max: float = 3.00,
+        sleep_min: float = 0.0,
+        sleep_max: float = 0.0,
     ) -> None:
         self.chain = chain
         self.location = location
@@ -99,9 +104,13 @@ class VtexAnalyticScraper:
         self.started_at = utc_now_iso()
         self.started_monotonic = time.monotonic()
         self.request_counter = 0
+        self.response_body_bytes = 0
+        self.request_body_bytes = 0
         self.session = self._build_session()
 
     def _build_session(self) -> BrowserSession:
+        domain = self.chain.base_url.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         session = create_browser_session(
             headers={
                 "Accept": "application/json, text/plain, text/html, */*",
@@ -136,9 +145,7 @@ class VtexAnalyticScraper:
         return session
 
     def _sleep_if_needed(self) -> None:
-        if self.request_counter <= 0:
-            return
-        time.sleep(random.uniform(self.sleep_min, self.sleep_max))
+        return
 
     def fetch_html(self, url: str) -> str:
         self._sleep_if_needed()
@@ -149,6 +156,7 @@ class VtexAnalyticScraper:
             timeout=REQUEST_TIMEOUT,
         )
         self.request_counter += 1
+        self.response_body_bytes += len(response.content or b"")
         response.raise_for_status()
         return response.text
 
@@ -162,26 +170,7 @@ class VtexAnalyticScraper:
             timeout=REQUEST_TIMEOUT,
         )
         self.request_counter += 1
-        response.raise_for_status()
-        return response.json()
-
-    def post_json(
-        self,
-        url: str,
-        *,
-        params: dict[str, Any] | None = None,
-        payload: dict[str, Any],
-    ) -> Any:
-        self._sleep_if_needed()
-        response = request_with_retry(
-            self.session,
-            "POST",
-            url,
-            params=params,
-            json=payload,
-            timeout=REQUEST_TIMEOUT,
-        )
-        self.request_counter += 1
+        self.response_body_bytes += len(response.content or b"")
         response.raise_for_status()
         return response.json()
 
@@ -266,75 +255,9 @@ class VtexAnalyticScraper:
             "pricing_signal_kind": "catalog_system_products_search",
         }
 
-    def fetch_checkout_simulation(self, target: VtexAnalyticTarget) -> dict[str, Any] | None:
-        endpoint = f"{self.chain.base_url}/api/checkout/pub/orderForms/simulation"
-        payload: dict[str, Any] = {
-            "items": [
-                {
-                    "id": target.source_sku,
-                    "quantity": 1,
-                    "seller": target.seller_id or "1",
-                }
-            ],
-            "country": "CRI",
-        }
-        if self.location.postal_code:
-            payload["postalCode"] = self.location.postal_code
-
-        simulation = self.post_json(
-            endpoint,
-            params={"sc": self.location.sales_channel},
-            payload=payload,
-        )
-        return simulation if isinstance(simulation, dict) else None
-
-    @staticmethod
-    def derive_checkout_promotion_payload(simulation_payload: dict[str, Any] | None) -> dict[str, Any]:
-        if not simulation_payload:
-            return {
-                "price_tags": [],
-                "simulation_teasers": [],
-                "simulation_price": None,
-                "simulation_list_price": None,
-                "simulation_selling_price": None,
-            }
-
-        items = simulation_payload.get("items") or []
-        item = items[0] if items and isinstance(items[0], dict) else {}
-        rates = simulation_payload.get("ratesAndBenefitsData") or {}
-        return {
-            "price_tags": item.get("priceTags") or [],
-            "simulation_teasers": rates.get("teaser") or [],
-            "simulation_price": normalize_number(item.get("price")),
-            "simulation_list_price": normalize_number(item.get("listPrice")),
-            "simulation_selling_price": normalize_number(item.get("sellingPrice")),
-        }
-
     def derive_observed_payload(self, target: VtexAnalyticTarget) -> dict[str, Any]:
         catalog_payload = self.fetch_catalog_product(target)
-        observed = self.derive_catalog_offer_payload(catalog_payload, target)
-        try:
-            simulation_payload = self.fetch_checkout_simulation(target)
-        except Exception as exc:
-            observed["checkout_simulation_error"] = str(exc)
-            return observed
-
-        simulation = self.derive_checkout_promotion_payload(simulation_payload)
-        observed.update(simulation)
-        observed["has_discount"] = bool(
-            observed.get("has_discount")
-            or has_promotion_signals(
-                simulation["price_tags"],
-                simulation["simulation_teasers"],
-            )
-            or has_price_discount(
-                simulation["simulation_selling_price"],
-                simulation["simulation_price"],
-                simulation["simulation_list_price"],
-            )
-        )
-        observed["pricing_signal_kind"] = "catalog_system_search_with_checkout_simulation"
-        return observed
+        return self.derive_catalog_offer_payload(catalog_payload, target)
 
     def extract_product_ld_json(self, html: str) -> dict[str, Any]:
         for script_text in PRODUCT_LD_JSON_PATTERN.findall(html):
@@ -452,7 +375,6 @@ class VtexAnalyticScraper:
                 ),
                 "pricing_signal_kind": observed.get("pricing_signal_kind"),
                 "price_tags": observed.get("price_tags") or [],
-                "checkout_simulation_error": observed.get("checkout_simulation_error"),
             },
         }
 
@@ -464,11 +386,15 @@ class VtexAnalyticScraper:
             try:
                 try:
                     observed = self.derive_observed_payload(target)
+                except DomainCircuitOpen:
+                    raise
                 except Exception:
                     html = self.fetch_html(target.product_url)
                     product_ld = self.extract_product_ld_json(html)
                     observed = self.derive_offer_payload(product_ld)
                 records.append(self.build_record(target, observed))
+            except DomainCircuitOpen:
+                raise
             except Exception as exc:
                 errors.append(
                     {
@@ -498,5 +424,12 @@ class VtexAnalyticScraper:
             "campaign_record_total_requested": len(targets),
             "campaign_record_total_succeeded": len(records),
             "campaign_record_total_failed": len(errors),
+            "http_request_count": self.request_counter,
+            "http_request_body_bytes": self.request_body_bytes,
+            "http_response_body_bytes": self.response_body_bytes,
+            "http_total_body_bytes": self.request_body_bytes + self.response_body_bytes,
+            "http_avg_response_body_bytes": round(self.response_body_bytes / self.request_counter, 2)
+            if self.request_counter
+            else 0,
         }
         return records, metadata

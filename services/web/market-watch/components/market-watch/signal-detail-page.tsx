@@ -65,7 +65,6 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
   const images = uniqueImages(payload.drivers, payload.evidence);
   const product = textValue(firstDriver?.product) ?? textValue(firstEvidence?.product) ?? signal.evidence_product ?? signal.product_display;
   const gtin = firstValue(payload.drivers, (item) => textValue(item.gtin)) ?? firstValue(payload.evidence, (item) => textValue(item.gtin));
-  const productKey = signal.product_key ?? textValue(firstDriver?.product_key) ?? textValue(firstEvidence?.product_key);
   const productUrl = firstValue(payload.drivers, (item) => item.product_url) ?? firstValue(payload.evidence, (item) => item.product_url);
   const hasSynthesis = Boolean(signal.summary || signal.business_reading || signal.recommended_action);
 
@@ -87,21 +86,21 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
           <h1 className="max-w-5xl text-2xl font-light">{signal.headline}</h1>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{signal.summary}</p>
           {hasSynthesis ? (
-            <div className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-card/80 shadow-sm">
-              <div className="border-b border-border/70 bg-muted/40 px-4 py-3">
+            <div className="mt-4 overflow-hidden rounded-md border border-border-2 bg-card shadow-[0_1px_2px_var(--shadow-color)]">
+              <div className="border-b bg-surface-2 px-4 py-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">LLM Synthesis</div>
               </div>
               <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
                 <div className="space-y-3">
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">Business Reading</div>
-                    <p className="mt-1 text-sm leading-6 text-foreground/90">{signal.business_reading || "No business reading available."}</p>
+                    <p className="mt-1 text-sm leading-6 text-foreground">{signal.business_reading || "No business reading available."}</p>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div>
                     <div className="text-xs font-medium uppercase text-muted-foreground">Recommended Action</div>
-                    <p className="mt-1 text-sm leading-6 text-foreground/90">{signal.recommended_action || "No recommended action available."}</p>
+                    <p className="mt-1 text-sm leading-6 text-foreground">{signal.recommended_action || "No recommended action available."}</p>
                   </div>
                 </div>
               </div>
@@ -124,7 +123,6 @@ export function SignalDetailPage({ payload }: { payload: SignalDetailPayload }) 
                 <DetailItem label="Chain" value={signal.chain} />
                 <DetailItem label="Product" value={product} />
                 <DetailItem label="GTIN" value={gtin} />
-                <DetailItem label="Product key" value={productKey ?? (hasSku ? "-" : "Multiple products")} />
                 <DetailItem label="Signal type" value={signal.signal_type} />
                 <DetailItem label="Impact score" value={signal.impact_score} />
               </div>

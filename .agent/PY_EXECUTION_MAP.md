@@ -31,6 +31,7 @@ Reglas base:
 | `.env.example` | No aplica Python | Revisar alineacion con compose afectado | No aplica |
 | `services/web/admin-console/` | Fuera del scope Market Watch | No tocar salvo instruccion explicita | No aplica |
 | `services/web/chat-web-renderer/` | Fuera del scope Market Watch | No tocar salvo instruccion explicita | No aplica |
+| `services/proxy-residencial/` | Host | No aplica | `python3 -m py_compile $(find services/proxy-residencial -name '*.py' -print)` |
 
 ## Nota Critica de Montajes
 

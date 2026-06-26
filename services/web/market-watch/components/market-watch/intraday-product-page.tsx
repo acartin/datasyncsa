@@ -13,14 +13,15 @@ import {
 import { ChainTag } from "@/components/market-watch/chain-tag";
 import { IntradayProductChainGrid, IntradayProductEventsGrid, IntradayProductStoreEvidenceGrid } from "@/components/market-watch/intraday-product-grids";
 import { ProductNormalPromoPriceCharts } from "@/components/market-watch/product-history-chart";
+import { ProductVisual } from "@/components/market-watch/product-visual";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs } from "@/components/ui/tabs";
-import { changeIndicator, changeToneClass, showHeaderMetrics } from "@/lib/event-presentation";
+import { changeIndicator, changeToneClass, formatEventChangeValue, formatEventValue, showHeaderMetrics } from "@/lib/event-presentation";
 import { friendlyApiError } from "@/lib/feedback";
-import { IntradayProductDetailPayload, IntradayRadarEvent } from "@/lib/pricing-types";
+import { AvailabilityLocationChange, IntradayProductDetailPayload, IntradayRadarEvent } from "@/lib/pricing-types";
 import { cn } from "@/lib/utils";
 
 type ProductIntelligenceSource = "radar" | "signals" | "search" | "comparison" | "all";
@@ -43,21 +44,247 @@ function formatDDMMYYYY(value: unknown) {
   return `${text.slice(6, 8)}-${text.slice(4, 6)}-${text.slice(0, 4)}`;
 }
 
-function currency(value: unknown) {
-  if (typeof value !== "number") return "-";
-  return new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(value);
+function ProductIdentifier({ value }: { value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-[6px] border border-border-2 bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+      GTIN
+      <code className="select-all font-mono text-[11px] font-normal tracking-normal text-foreground">{value}</code>
+    </span>
+  );
 }
 
-function percent(value: unknown) {
-  if (typeof value !== "number") return "-";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
+function EventIdentifier({ value }: { value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-[6px] border border-border-2 bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+      Event ID
+      <code className="select-all font-mono text-[11px] font-normal tracking-normal text-foreground">{value}</code>
+    </span>
+  );
 }
 
-function points(value: unknown) {
-  if (typeof value !== "number") return "-";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(0)} pts`;
+function numericValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function quantityLabel(value: unknown) {
+  const number = numericValue(value);
+  if (number === null) return "-";
+  return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function signedCount(value: unknown) {
+  const number = numericValue(value);
+  if (number === null) return "-";
+  return number > 0 ? `+${number}` : String(number);
+}
+
+function availabilitySummary(event: IntradayRadarEvent | null) {
+  return event?.evidence?.availability_change_summary ?? null;
+}
+
+function availabilityLocations(event: IntradayRadarEvent | null, key: "recovered_locations" | "lost_locations") {
+  const value = event?.evidence?.[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function hasAvailabilityEvidence(event: IntradayRadarEvent | null) {
+  if (!event || event.event_area !== "availability") return false;
+  const summary = availabilitySummary(event);
+  return Boolean(
+    summary ||
+    availabilityLocations(event, "recovered_locations").length ||
+    availabilityLocations(event, "lost_locations").length ||
+    event.evidence?.location_name
+  );
+}
+
+function AvailabilityLocationList({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: AvailabilityLocationChange[];
+  empty: string;
+}) {
+  return (
+    <div className="rounded-md border border-border-2">
+      <div className="border-b border-border-2 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">{title}</div>
+      <div className="divide-y divide-border-2">
+        {items.length ? items.slice(0, 8).map((item) => (
+          <div key={`${item.location_key ?? item.location_name}-${item.previous_qty}-${item.current_qty}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[11px]">
+            <div className="min-w-0">
+              <div className="font-medium text-foreground">{item.location_name ?? item.location_code ?? item.location_key ?? "-"}</div>
+              <div className="mt-0.5 text-ink-muted">{[item.province, item.canton].filter(Boolean).join(" / ")}</div>
+            </div>
+            <div className="font-mono text-foreground">{quantityLabel(item.previous_qty)} -&gt; {quantityLabel(item.current_qty)}</div>
+          </div>
+        )) : (
+          <div className="px-3 py-2 text-[11px] text-ink-muted">{empty}</div>
+        )}
+        {items.length > 8 ? <div className="px-3 py-2 text-[11px] text-ink-muted">{items.length - 8} more stores</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function AvailabilityChangePanel({
+  event,
+  mode,
+}: {
+  event: IntradayRadarEvent | null;
+  mode: "overview" | "evidence";
+}) {
+  if (!hasAvailabilityEvidence(event)) return null;
+
+  const summary = availabilitySummary(event);
+  const recovered = availabilityLocations(event, "recovered_locations");
+  const lost = availabilityLocations(event, "lost_locations");
+  const isStoreEvent = event?.event_type === "store_offer_became_available" || event?.event_type === "store_offer_became_unavailable";
+  const previousAvailable = summary?.previous_available_locations ?? numericValue(event?.previous_value);
+  const currentAvailable = summary?.current_available_locations ?? numericValue(event?.current_value);
+  const delta = summary?.available_locations_delta ?? (previousAvailable !== null && currentAvailable !== null ? currentAvailable - previousAvailable : null);
+  const previousQty = summary?.previous_source_available_quantity ?? event?.evidence?.previous_source_available_quantity ?? event?.previous_value;
+  const currentQty = summary?.current_source_available_quantity ?? event?.evidence?.current_source_available_quantity ?? event?.current_value;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="text-[13px] font-medium">Availability change</div>
+        <div className="mt-1 text-[11px] text-ink-muted">
+          {isStoreEvent ? "Store-level availability transition from the previous closed day." : "Net chain-level availability change with the stores that explain the movement."}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isStoreEvent ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border border-border-2 px-3 py-2">
+              <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Store</div>
+              <div className="mt-1 text-sm font-medium">{event?.evidence?.location_name ?? "-"}</div>
+            </div>
+            <div className="rounded-md border border-border-2 px-3 py-2">
+              <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Previous qty</div>
+              <div className="mt-1 font-mono text-sm">{quantityLabel(previousQty)}</div>
+            </div>
+            <div className="rounded-md border border-border-2 px-3 py-2">
+              <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Current qty</div>
+              <div className="mt-1 font-mono text-sm">{quantityLabel(currentQty)}</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-md border border-border-2 px-3 py-2">
+                <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Previous available</div>
+                <div className="mt-1 font-mono text-lg">{quantityLabel(previousAvailable)}</div>
+              </div>
+              <div className="rounded-md border border-border-2 px-3 py-2">
+                <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Current available</div>
+                <div className="mt-1 font-mono text-lg">{quantityLabel(currentAvailable)}</div>
+              </div>
+              <div className="rounded-md border border-border-2 px-3 py-2">
+                <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Net change</div>
+                <div className={cn("mt-1 font-mono text-lg", changeToneClass(event))}>{signedCount(delta)}</div>
+              </div>
+              <div className="rounded-md border border-border-2 px-3 py-2">
+                <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Changed stores</div>
+                <div className="mt-1 font-mono text-lg">{recovered.length + lost.length}</div>
+              </div>
+            </div>
+            {mode === "evidence" ? (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                <AvailabilityLocationList title="Recovered stores" items={recovered} empty="No recovered stores for this event." />
+                <AvailabilityLocationList title="New unavailable stores" items={lost} empty="No newly unavailable stores for this event." />
+              </div>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function recommendationText(event: IntradayRadarEvent | null) {
+  if (!event) return "Select a radar event to review the recommended follow-up.";
+  if (event.signal?.recommended_action) return event.signal.recommended_action;
+  if (event.event_area === "availability") {
+    if (event.event_type === "chain_available_store_count_recovered") {
+      return "Validate the recovered and lost stores before treating this as a stable chain-level recovery.";
+    }
+    if (event.event_type === "chain_available_store_count_dropped") {
+      return "Prioritize validation of newly unavailable stores and confirm whether the drop is isolated or spreading.";
+    }
+    if (event.event_type === "store_offer_became_available") {
+      return "Validate the store capture and keep monitoring the chain view before escalating as a broader recovery.";
+    }
+    if (event.event_type === "store_offer_became_unavailable") {
+      return "Validate the store capture and check whether nearby stores or the same chain show the same transition.";
+    }
+  }
+  if (event.event_area === "promotion") {
+    return "Validate the promotion evidence and compare against related products before deciding whether a response is needed.";
+  }
+  return "Review the event metrics, store evidence, and chain comparison before taking a pricing action.";
+}
+
+function signalText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function RecommendationPanel({ event }: { event: IntradayRadarEvent | null }) {
+  const signal = event?.signal ?? null;
+  const summary = signalText(signal?.summary);
+  const businessReading = signalText(signal?.business_reading);
+  const recommendedAction = signalText(signal?.recommended_action) ?? recommendationText(event);
+  const hasSynthesis = Boolean(summary || businessReading || signalText(signal?.headline));
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[13px] font-medium">Recommendations</div>
+            <div className="mt-1 text-[11px] text-ink-muted">Executive synthesis and operational next step for this radar event.</div>
+          </div>
+          {signal?.llm_provider ? (
+            <span className="inline-flex items-center rounded-[6px] border border-border-2 bg-surface-2 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">
+              {signal.llm_provider}
+              {signal.llm_model ? <span className="ml-1 normal-case tracking-normal text-foreground">{signal.llm_model}</span> : null}
+            </span>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {hasSynthesis ? (
+          <div className="rounded-md border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Executive synthesis</div>
+            {signalText(signal?.headline) ? <div className="mt-2 text-sm font-medium text-foreground">{signalText(signal?.headline)}</div> : null}
+            {summary ? <p className="mt-2 text-sm leading-6 text-ink-secondary">{summary}</p> : null}
+          </div>
+        ) : null}
+        {businessReading ? (
+          <div className="rounded-md border border-border-2 bg-card px-4 py-3">
+            <div className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Business reading</div>
+            <p className="mt-2 text-sm leading-6 text-ink-secondary">{businessReading}</p>
+          </div>
+        ) : null}
+        <div className="rounded-md border border-border-2 bg-surface-2 px-4 py-3 text-sm leading-6 text-foreground">
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.07em] text-ink-muted">Recommended action</div>
+          {recommendedAction}
+        </div>
+        {signal?.llm_prompt_version ? (
+          <div className="text-[10px] text-ink-muted">Prompt version: {signal.llm_prompt_version}</div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
 }
 
 function sourceFromValue(value?: string): ProductIntelligenceSource {
@@ -69,6 +296,7 @@ type ProductIntelligenceContext = {
   campaignId?: string;
   dateKey?: string;
   chain?: string;
+  eventId?: string;
   historyDays?: string;
   source?: string;
   routeBase?: string;
@@ -79,6 +307,13 @@ const analysisTabs = [
   { id: "summary", label: "Event Overview" },
   { id: "evidence", label: "Store Evidence" },
   { id: "chains", label: "Product Across Chains" },
+  { id: "recommendations", label: "Recommendations" },
+];
+
+const productAnalysisTabs = [
+  { id: "summary", label: "Product Overview" },
+  { id: "evidence", label: "Store Coverage" },
+  { id: "chains", label: "Radar Events" },
 ];
 
 type PriceMode = "regular" | "promo" | "both";
@@ -106,6 +341,7 @@ function selectedEvent(payload: IntradayProductDetailPayload, context: ProductIn
   if (context.viewMode === "product" && !context.dateKey && !context.chain) return null;
   const dateKey = context.dateKey ? Number(context.dateKey) : undefined;
   return (
+    payload.events.find((event) => context.eventId && event.event_id === context.eventId) ??
     payload.events.find((event) => (!dateKey || event.date_key === dateKey) && (!context.chain || event.chain === context.chain)) ??
     payload.events.find((event) => !context.chain || event.chain === context.chain) ??
     payload.events[0] ??
@@ -116,6 +352,18 @@ function selectedEvent(payload: IntradayProductDetailPayload, context: ProductIn
 function eventTitle(event: IntradayRadarEvent | null) {
   if (!event) return "PRODUCT INTELLIGENCE";
   return event.presentation?.display_label ?? event.event_type.replaceAll("_", " ").toUpperCase();
+}
+
+function eventBadgeLabel(event: IntradayRadarEvent | null) {
+  const label = eventTitle(event);
+  return label
+    .split(" ")
+    .map((word) => {
+      if (word.length <= 3 && word === word.toUpperCase()) return word;
+      const lower = word.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
 }
 
 function isStoreAveragePriceEvent(event: IntradayRadarEvent | null) {
@@ -139,6 +387,13 @@ function metricLabelsForEvent(event: IntradayRadarEvent | null) {
 }
 
 function metricContextForEvent(event: IntradayRadarEvent | null, storeCount: number) {
+  if (event?.event_area === "availability") {
+    const visible = event.visible_locations ?? event.previous_value ?? null;
+    const available = event.available_locations ?? event.current_value ?? null;
+    if (typeof visible === "number" && typeof available === "number") {
+      return `${available} of ${visible} stores available`;
+    }
+  }
   if (!isStoreAveragePriceEvent(event)) return null;
   const eventStoreCount = event?.available_locations ?? event?.visible_locations ?? event?.observed_locations ?? null;
   const count = typeof eventStoreCount === "number" && eventStoreCount > 0 ? eventStoreCount : storeCount;
@@ -146,20 +401,12 @@ function metricContextForEvent(event: IntradayRadarEvent | null, storeCount: num
   return `Average across ${count} stores`;
 }
 
-function valueForEvent(event: IntradayRadarEvent | null, value: number | null) {
-  if (!event) return "-";
-  if (event.presentation?.value_format === "percent" || event.event_area === "promotion") {
-    return `${(value ?? 0).toFixed(1)}%`;
-  }
-  return currency(value);
+function valueForEvent(event: IntradayRadarEvent | null, value: number | null, slot: "previous" | "current") {
+  return formatEventValue(event, value, slot);
 }
 
 function changeForEvent(event: IntradayRadarEvent | null) {
-  if (!event || typeof event.previous_value !== "number" || typeof event.current_value !== "number") return "-";
-  const delta = event.current_value - event.previous_value;
-  if (event.presentation?.change_format === "points" || event.event_area === "promotion") return points(delta);
-  if (event.previous_value === 0) return currency(delta);
-  return percent((delta / event.previous_value) * 100);
+  return formatEventChangeValue(event);
 }
 
 function ChangeTrendIcon({ event }: { event: IntradayRadarEvent | null }) {
@@ -177,11 +424,54 @@ function eventBorderClass(event: IntradayRadarEvent | null) {
   return "border-t-border-2";
 }
 
+function eventBadgeClass(event: IntradayRadarEvent | null) {
+  const token = event?.presentation?.accent_token;
+  if (token === "danger") return "border-[var(--red)] bg-[var(--red-bg)] text-[var(--red-text)]";
+  if (token === "warning") return "border-[var(--amber)] bg-[var(--amber-bg)] text-[var(--amber-text)]";
+  if (token === "success") return "border-[var(--green)] bg-[var(--green-bg)] text-[var(--green-text)]";
+  return "border-border-2 bg-surface-3 text-ink-secondary";
+}
+
+function eventBadgeIconClass(event: IntradayRadarEvent | null) {
+  const token = event?.presentation?.accent_token;
+  if (token === "danger") return "bg-semantic-red text-white";
+  if (token === "warning") return "bg-semantic-amber text-white";
+  if (token === "success") return "bg-semantic-green text-white";
+  return "bg-ink-secondary text-white";
+}
+
+function EventTypeBadge({ event }: { event: IntradayRadarEvent | null }) {
+  if (!event) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex min-h-8 items-center gap-2 rounded-[6px] border px-2.5 py-1 text-[12px] font-semibold leading-none shadow-sm",
+        eventBadgeClass(event)
+      )}
+    >
+      <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px]", eventBadgeIconClass(event))}>
+        <ChangeTrendIcon event={event} />
+      </span>
+      <span>{eventBadgeLabel(event)}</span>
+    </span>
+  );
+}
+
 function headerProductUrl(payload: IntradayProductDetailPayload, event: IntradayRadarEvent | null) {
   if (event?.product_url) return event.product_url;
   const eventChain = event?.chain ?? payload.product?.chain;
   const matchingChain = payload.chain_snapshot.find((record) => record.chain === eventChain && record.product_url);
   return matchingChain?.product_url ?? payload.product?.product_url ?? null;
+}
+
+function productImages(payload: IntradayProductDetailPayload) {
+  return Array.from(
+    new Set([
+      payload.product?.image_url,
+      ...payload.chain_snapshot.map((record) => record.image_url),
+      ...payload.store_evidence.map((record) => record.image_url),
+    ].filter((value): value is string => Boolean(value)))
+  );
 }
 
 function productRouteBase(context: ProductIntelligenceContext) {
@@ -264,6 +554,7 @@ export function IntradayProductPage({
   }
 
   const productKey = product.product_key;
+  const isProductMode = context.viewMode === "product";
 
   const chains = chainOptions(currentPayload, context.chain ?? product.chain ?? undefined);
   const initialSelectedChains = context.chain && chains.includes(context.chain) ? [context.chain] : chains;
@@ -280,6 +571,14 @@ export function IntradayProductPage({
   const displayedChains = selectedChains;
   const event = selectedEvent(currentPayload, context);
   const productUrl = headerProductUrl(currentPayload, event);
+  const images = productImages(currentPayload);
+  const hasSku = Boolean(product.gtin || images.length);
+  const visibleChainLabel = isProductMode && !context.chain ? `${chains.length} chains monitored` : event?.chain ?? product.chain;
+  const activeTabs = isProductMode ? productAnalysisTabs : analysisTabs;
+  const heroTitle = product.product;
+  const heroSubtitle = isProductMode ? "Product intelligence" : eventTitle(event);
+  const heroDate = compactDate(event?.date_key ?? product.date_key);
+  const showEventMetrics = !isProductMode && showHeaderMetrics(event);
   const visibleDateKeys = new Set(
     currentPayload.price_history
       .filter((point) => displayedChains.includes(point.chain))
@@ -378,27 +677,31 @@ export function IntradayProductPage({
             {navigation.label}
           </Link>
         </Button>
-        <span className="text-border-2">/</span>
-        <span>{product.brand}</span>
-        <span className="text-border-2">/</span>
-        <span className="font-medium text-foreground">{product.product}</span>
       </div>
 
-      <Card className={cn("border-t-2", eventBorderClass(event))}>
+      <Card className={cn("border-t-2", isProductMode ? "border-t-border-2" : eventBorderClass(event))}>
         <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="text-[10px] font-medium uppercase tracking-[0.1em] text-ink-secondary">{eventTitle(event)}</div>
-              <div className="text-[11px] text-ink-muted">{compactDate(event?.date_key ?? product.date_key)}</div>
-            </div>
-            <h1 className="max-w-5xl text-xl font-light leading-snug tracking-[-0.01em]">{product.product}</h1>
+          <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+            {isProductMode ? <ProductVisual hasSku={hasSku} images={images} size="md" /> : null}
+            <div className="min-w-0">
+	            <div className="mb-3 flex flex-wrap items-center gap-2">
+	              {isProductMode ? (
+	                <div className="text-[10px] font-medium uppercase tracking-[0.1em] text-ink-secondary">{heroSubtitle}</div>
+	              ) : (
+	                <EventTypeBadge event={event} />
+	              )}
+	              <div className="text-[11px] text-ink-muted">{heroDate}</div>
+	              {!isProductMode ? <EventIdentifier value={event?.event_id} /> : null}
+	            </div>
+            <h1 className={cn("max-w-5xl font-light leading-snug", isProductMode ? "text-2xl" : "text-3xl")}>{heroTitle}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-muted">
-              <ChainTag chain={event?.chain ?? product.chain} />
+              {visibleChainLabel ? <ChainTag chain={visibleChainLabel} /> : null}
               <span>{product.brand}</span>
               <span className="text-border-2">/</span>
               <span>
                 {product.content_quantity ?? "-"} {product.content_unit ?? ""}
               </span>
+              <ProductIdentifier value={product.gtin} />
               <span className="text-border-2">/</span>
               <span>Campaign {event?.campaign_id ?? product.campaign_id}</span>
               {productUrl ? (
@@ -416,16 +719,17 @@ export function IntradayProductPage({
                 </>
               ) : null}
             </div>
+            </div>
           </div>
-          {showHeaderMetrics(event) ? (
+          {showEventMetrics ? (
             <div className="grid overflow-hidden rounded-lg border border-border-2 text-center text-sm sm:grid-cols-3">
               <div className="min-w-32 border-b border-border p-4 sm:border-b-0 sm:border-r">
                 <div className="mb-1 text-[10px] uppercase tracking-[0.07em] text-ink-muted">{metricLabels.previous}</div>
-                <div className="font-mono text-lg font-normal">{valueForEvent(event, event?.previous_value ?? null)}</div>
+                <div className="font-mono text-lg font-normal">{valueForEvent(event, event?.previous_value ?? null, "previous")}</div>
               </div>
               <div className="min-w-32 border-b border-border p-4 sm:border-b-0 sm:border-r">
                 <div className="mb-1 text-[10px] uppercase tracking-[0.07em] text-ink-muted">{metricLabels.current}</div>
-                <div className="font-mono text-lg font-normal">{valueForEvent(event, event?.current_value ?? null)}</div>
+                <div className="font-mono text-lg font-normal">{valueForEvent(event, event?.current_value ?? null, "current")}</div>
               </div>
               <div className="min-w-32 p-4">
                 <div className="mb-1 text-[10px] uppercase tracking-[0.07em] text-ink-muted">{metricLabels.change}</div>
@@ -445,7 +749,7 @@ export function IntradayProductPage({
       </Card>
 
       <div className="border-b border-border-2">
-        <Tabs items={analysisTabs} value={activeTab} onValueChange={setActiveTab} />
+        <Tabs items={activeTabs} value={activeTab} onValueChange={setActiveTab} />
       </div>
 
       {activeTab === "summary" ? <section className="space-y-4">
@@ -453,8 +757,10 @@ export function IntradayProductPage({
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-[13px] font-medium">Price timeline</div>
-                <div className="mt-1 text-[11px] text-ink-muted">Regular and promotional prices across chains.</div>
+                <div className="text-[13px] font-medium">{isProductMode ? "Product price history" : "Price timeline"}</div>
+                <div className="mt-1 text-[11px] text-ink-muted">
+                  {isProductMode ? "Regular and promotional price behavior across monitored chains." : "Regular and promotional prices around this radar event."}
+                </div>
               </div>
               <div className="flex flex-wrap gap-3 border-b border-border-2 pb-px">
                 {(["both", "regular", "promo"] as PriceMode[]).map((mode) => (
@@ -513,8 +819,10 @@ export function IntradayProductPage({
 
         <Card>
           <CardHeader>
-            <div className="text-[13px] font-medium">Related events</div>
-            <div className="mt-1 text-[11px] text-ink-muted">Filtered by the selected chains and chart period.</div>
+            <div className="text-[13px] font-medium">{isProductMode ? "Latest radar events" : "Related events"}</div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              {isProductMode ? "Recent price, promotion and availability signals for this product." : "Filtered by the selected chains and chart period."}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <IntradayProductEventsGrid records={filteredEvents} />
@@ -545,8 +853,10 @@ export function IntradayProductPage({
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="text-[13px] font-medium">Store-level evidence</div>
-                <div className="mt-1 text-[11px] text-ink-muted">Current closed-day captures for the event product and chain.</div>
+                <div className="text-[13px] font-medium">{isProductMode ? "Store coverage" : "Store-level evidence"}</div>
+                <div className="mt-1 text-[11px] text-ink-muted">
+                  {isProductMode ? "Latest closed-day listing, availability and promo coverage by store." : "Current closed-day captures for the event product and chain."}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(["all", "available", "promo", "unavailable"] as EvidenceFilter[]).map((filter) => (
@@ -575,7 +885,7 @@ export function IntradayProductPage({
       {activeTab === "chains" ? <section className="space-y-4">
         <div className="flex items-center gap-2">
           <GitCompare className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-medium">Product Across Chains</h2>
+          <h2 className="text-lg font-medium">{isProductMode ? "Radar Events" : "Product Across Chains"}</h2>
         </div>
         <Card>
           <CardHeader>
@@ -595,6 +905,11 @@ export function IntradayProductPage({
             <IntradayProductEventsGrid records={productEvents} />
           </CardContent>
         </Card>
+      </section> : null}
+
+      {activeTab === "recommendations" ? <section className="space-y-4">
+        <RecommendationPanel event={event} />
+        <AvailabilityChangePanel event={event} mode="evidence" />
       </section> : null}
     </div>
   );

@@ -31,11 +31,11 @@ export function Alert({
   const Icon = icons[variant];
 
   return (
-    <div className={cn("flex gap-3 rounded-md border px-4 py-3 text-sm", styles[variant], className)}>
+    <div className={cn("flex gap-3 rounded-md border px-4 py-3 text-body-sm", styles[variant], className)}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0">
-        <div className="font-medium">{title}</div>
-        {children ? <div className="mt-1 text-muted-foreground">{children}</div> : null}
+        <div className="text-card-title font-medium">{title}</div>
+        {children ? <div className="mt-1 text-body-sm text-muted-foreground">{children}</div> : null}
       </div>
     </div>
   );

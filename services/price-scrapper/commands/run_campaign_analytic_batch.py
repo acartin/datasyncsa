@@ -47,8 +47,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chain-id", action="append", default=None, help="Filtra a una o varias cadenas.")
     parser.add_argument("--max-locations-per-chain", type=int, default=None, help="Limita locations por cadena.")
     parser.add_argument("--max-products-per-chain", type=int, default=None, help="Limita productos por cadena.")
-    parser.add_argument("--sleep-min", type=float, default=1.25, help="Sleep mínimo entre requests.")
-    parser.add_argument("--sleep-max", type=float, default=3.00, help="Sleep máximo entre requests.")
+    parser.add_argument(
+        "--sleep-min",
+        type=float,
+        default=0.0,
+        help="Parámetro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
+    )
+    parser.add_argument(
+        "--sleep-max",
+        type=float,
+        default=0.0,
+        help="Parámetro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
+    )
     parser.add_argument(
         "--business-date",
         default=None,

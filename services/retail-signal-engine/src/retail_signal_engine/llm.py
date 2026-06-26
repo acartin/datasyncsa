@@ -9,7 +9,7 @@ from typing import Any
 
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
-PROMPT_VERSION = "retail_signal_synthesis_v2_en"
+PROMPT_VERSION = "retail_signal_synthesis_v3_en"
 
 
 def fallback_narrative(signal: dict[str, Any]) -> dict[str, str]:
@@ -17,6 +17,14 @@ def fallback_narrative(signal: dict[str, Any]) -> dict[str, str]:
     brand = signal.get("perspective_brand") or "The brand"
     chain = signal.get("chain") or "the chain"
     metrics = signal.get("metrics") or {}
+    evidence = signal.get("evidence") or {}
+    product = evidence.get("product") or "the monitored product"
+
+    def money(value: Any) -> str:
+        return "N/A" if value is None else f"CRC {float(value):,.0f}"
+
+    def pct(value: Any) -> str:
+        return "N/A" if value is None else f"{float(value):.1f}%"
 
     if signal_type == "brand_over_market":
         gap = metrics.get("gap_pct")
@@ -54,6 +62,39 @@ def fallback_narrative(signal: dict[str, Any]) -> dict[str, str]:
             "recommended_action": "Validate the store evidence and assess whether the promotion requires a competitive response or closer monitoring.",
             "tone": "opportunity",
         }
+    if signal_type in {"regular_price_decrease", "regular_price_increase"}:
+        previous_price = metrics.get("previous_value")
+        current_price = metrics.get("current_value")
+        change_pct = metrics.get("change_pct")
+        observed_locations = metrics.get("observed_locations")
+        available_locations = metrics.get("available_locations")
+        direction = "decreased" if signal_type == "regular_price_decrease" else "increased"
+        tone = "opportunity" if signal_type == "regular_price_decrease" else "warning"
+        coverage = (
+            f" across {available_locations} available stores out of {observed_locations} observed"
+            if available_locations is not None and observed_locations is not None
+            else ""
+        )
+        return {
+            "headline": f"{product} {direction} in regular price at {chain}.",
+            "summary": f"The observed regular price moved from {money(previous_price)} to {money(current_price)} ({pct(change_pct)}){coverage}.",
+            "business_reading": "This is a store-observed regular price movement, not a promotion, and should be read against the product's competitive position in the same chain.",
+            "recommended_action": "Validate the store evidence, compare against the product across chains, and decide whether the new regular price requires monitoring or a commercial response.",
+            "tone": tone,
+        }
+    if signal_type == "sku_price_gap":
+        avg_price = metrics.get("avg_price")
+        best_price = metrics.get("market_best_price")
+        gap_pct = metrics.get("gap_pct")
+        gap_amount = metrics.get("gap_amount")
+        best_chain = evidence.get("best_price_chain") or "the best observed chain"
+        return {
+            "headline": f"{product} is above the best observed market price in {chain}.",
+            "summary": f"Average observed price is {money(avg_price)} vs {money(best_price)} in {best_chain}, a gap of {money(gap_amount)} ({pct(gap_pct)}).",
+            "business_reading": "The gap is SKU-specific, so the first review should focus on this product and its store evidence before broader brand action.",
+            "recommended_action": "Check the store evidence and product-across-chains view, then decide whether the gap is acceptable positioning or needs a pricing response.",
+            "tone": "warning",
+        }
     return {
         "headline": f"Relevant price gap detected for {brand} in {chain}.",
         "summary": "A relevant difference was detected against the best observed market price.",
@@ -89,6 +130,8 @@ def synthesize_with_gemini(
             "For promo_price_break signals, make the promotional price break the "
             "center of the story; do not dilute it into a generic best-price "
             "or market-alignment message. "
+            "If signal.llm_guidance is present, follow it as the event-specific "
+            "brief for what to emphasize and what not to infer. "
             "Respond in English and return JSON only."
         ),
         "required_json_fields": [

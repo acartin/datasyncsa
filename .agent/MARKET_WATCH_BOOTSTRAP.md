@@ -5,6 +5,7 @@ Este archivo resume el foco operativo del repo recortado. Las reglas autoritativ
 ## Foco
 
 - `services/price-scrapper`: scraping, ETL, campañas, facts y queries base.
+- `services/proxy-residencial`: proxy residencial BrightData para rotacion de IP en scrappers.
 - `services/market-watch-api`: API de producto, auth/multitenancy, datasets livianos y control de `client_id`.
 - `services/web/market-watch`: frontend cliente, SEO, dashboards, tablas y pivots.
 

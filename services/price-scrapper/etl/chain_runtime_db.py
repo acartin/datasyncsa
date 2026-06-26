@@ -151,6 +151,23 @@ def load_vtex_location_runtime_config(env: dict[str, str], chain_id: str) -> dic
     }
 
 
+def load_algolia_catalog_runtime_config(env: dict[str, str], chain_id: str) -> dict[str, Any]:
+    payload = load_chain_row(env, chain_id)
+    if payload["engine"] != "algolia":
+        raise RuntimeError(
+            f"Cadena {chain_id!r} no usa engine Algolia (engine={payload['engine']!r})."
+        )
+    extras = dict(payload.get("engine_extras") or {})
+    return {
+        "chain_id": payload["chain_id"],
+        "base_url": payload["base_url"],
+        "display_name": payload["display_name"],
+        "algolia_app_id": extras.get("algolia_app_id"),
+        "algolia_api_key": extras.get("algolia_api_key"),
+        "algolia_index": extras.get("algolia_index", "Product_CatalogueV2"),
+    }
+
+
 def load_instaleap_location_runtime_config(env: dict[str, str], chain_id: str) -> dict[str, Any]:
     payload = load_chain_row(env, chain_id)
     if payload["engine"] != "instaleap":

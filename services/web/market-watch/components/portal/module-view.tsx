@@ -72,8 +72,8 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
             <Badge>{payload.module.status}</Badge>
             <Badge>role: {payload.context.role}</Badge>
           </div>
-          <h1 className="text-2xl font-light">{payload.module.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          <h1 className="text-page-title font-light">{payload.module.title}</h1>
+          <p className="mt-2 max-w-3xl text-page-subtitle text-muted-foreground">
             {payload.module.description}
           </p>
         </div>
@@ -106,8 +106,8 @@ export function ModuleView({ payload, feedback }: { payload: ModulePayload; feed
         <CardHeader>
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <div className="font-medium">{isCrudModule ? "Records" : "Initial data"}</div>
-              <div className="mt-1 text-sm text-muted-foreground">
+              <div className="text-card-title font-medium">{isCrudModule ? "Records" : "Initial data"}</div>
+              <div className="mt-1 text-body-sm text-muted-foreground">
                 {isCrudModule ? "Search, inspect and prepare changes using the shared CRUD surface." : "Placeholder contract ready to connect to real data."}
               </div>
             </div>

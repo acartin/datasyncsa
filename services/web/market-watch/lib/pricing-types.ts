@@ -103,6 +103,55 @@ export type ExecutiveSignalSearchParams = {
   offset?: string;
 };
 
+export type AvailabilityLocationChange = {
+  location_key?: string | number | null;
+  location_name?: string | null;
+  location_code?: string | null;
+  province?: string | null;
+  canton?: string | null;
+  district?: string | null;
+  sales_channel?: string | null;
+  region_id?: string | null;
+  previous_qty?: number | null;
+  current_qty?: number | null;
+};
+
+export type AvailabilityChangeSummary = {
+  transition?: string | null;
+  previous_available_locations?: number | null;
+  current_available_locations?: number | null;
+  available_locations_delta?: number | null;
+  recovered_locations_count?: number | null;
+  lost_locations_count?: number | null;
+  previous_is_available?: boolean | null;
+  current_is_available?: boolean | null;
+  previous_source_available_quantity?: number | null;
+  current_source_available_quantity?: number | null;
+};
+
+export type IntradayRadarEventEvidence = Record<string, unknown> & {
+  availability_change_summary?: AvailabilityChangeSummary | null;
+  recovered_locations?: AvailabilityLocationChange[] | null;
+  lost_locations?: AvailabilityLocationChange[] | null;
+  location_name?: string | null;
+  previous_source_available_quantity?: number | null;
+  current_source_available_quantity?: number | null;
+};
+
+export type IntradayRadarEventSignal = Record<string, unknown> & {
+  signal_key?: string | null;
+  signal_type?: string | null;
+  signal_status?: string | null;
+  headline?: string | null;
+  summary?: string | null;
+  business_reading?: string | null;
+  recommended_action?: string | null;
+  narrative?: Record<string, unknown> | null;
+  llm_provider?: string | null;
+  llm_model?: string | null;
+  llm_prompt_version?: string | null;
+};
+
 export type IntradayRadarEvent = Record<string, unknown> & {
   event_id: string;
   event_area: string;
@@ -150,6 +199,9 @@ export type IntradayRadarEvent = Record<string, unknown> & {
   visible_locations: number | null;
   available_locations: number | null;
   product_url: string | null;
+  metrics?: Record<string, unknown> | null;
+  evidence?: IntradayRadarEventEvidence | null;
+  signal?: IntradayRadarEventSignal | null;
 };
 
 export type IntradayRadarKpis = {
@@ -311,12 +363,18 @@ export type IntradayProductPricePoint = Record<string, unknown> & {
   promo_price_amount: number | null;
   promo_detected: boolean | null;
   discount_pct: number | null;
+  availability_state?: "available" | "listed_unavailable" | "unobserved" | null;
+  visible_locations?: number | null;
+  available_locations?: number | null;
+  is_listed?: boolean | null;
+  is_available?: boolean | null;
 };
 
 export type IntradayProductStoreCapture = IntradayProductPricePoint & {
   location_key: number;
   is_listed: boolean | null;
   is_available: boolean | null;
+  available_quantity: number | null;
   product_url: string | null;
   store_context_url: string | null;
 };

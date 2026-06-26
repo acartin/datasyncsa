@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Bookmark, CalendarDays, Check, ChevronDown, Filter, LayoutList, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { NavigationLoadingOverlay } from "@/components/market-watch/navigation-loading-overlay";
 import { dateKeyToInputValue, normalizeClosedDateKey } from "@/lib/closed-day";
 import { cn } from "@/lib/utils";
 import {
@@ -109,13 +111,13 @@ function MultiSelectField({
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
-        className="flex h-9 w-full items-center justify-between gap-3 rounded-md border bg-background px-3 text-left text-sm outline-none hover:bg-surface-2 focus:ring-2 focus:ring-ring"
+        className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-border-2 bg-background px-3 text-left text-sm outline-none hover:bg-surface-hover focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
       >
         <span className={cn("min-w-0 truncate", values.length ? "text-foreground" : "text-muted-foreground")}>{selectedLabel}</span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        <div className="overflow-hidden rounded-md border border-border-2 bg-surface">
+        <div className="overflow-hidden rounded-md border border-border-2 bg-surface shadow-[0_12px_24px_var(--shadow-color)]">
           {field.searchable || field.type === "product" ? (
             <div className="border-b p-2">
               <div className="relative">
@@ -123,7 +125,7 @@ function MultiSelectField({
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="h-9 w-full rounded-md border border-border-2 bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                   placeholder={field.type === "product" ? "Search product..." : "Filter options..."}
                 />
               </div>
@@ -139,8 +141,8 @@ function MultiSelectField({
                     type="button"
                     onClick={() => onChange(toggleValue(values, option.id))}
                     className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-2",
-                      active && "bg-surface-2 text-foreground"
+                      "flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-hover",
+                      active && "bg-surface-selected text-foreground"
                     )}
                   >
                     <span className="min-w-0 truncate">{option.label}</span>
@@ -180,7 +182,7 @@ function DateFilterField({
   const preset = value?.mode === "relative" ? value.preset : "last_day";
 
   return (
-    <div className="space-y-3 rounded-md border border-border-2 p-3 md:col-span-2">
+    <div className="space-y-3 rounded-md border border-border-2 bg-surface-2 p-3 md:col-span-2">
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm font-medium">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -194,7 +196,7 @@ function DateFilterField({
         <button
           type="button"
           data-active={mode === "relative"}
-          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground hover:bg-surface-hover data-[active=true]:border-primary data-[active=true]:bg-surface-selected data-[active=true]:text-foreground"
           onClick={() => onChange({ mode: "relative", preset })}
         >
           Preset
@@ -202,7 +204,7 @@ function DateFilterField({
         <button
           type="button"
           data-active={mode === "single"}
-          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground hover:bg-surface-hover data-[active=true]:border-primary data-[active=true]:bg-surface-selected data-[active=true]:text-foreground"
           onClick={() => onChange({ mode: "single" })}
         >
           Single date
@@ -210,7 +212,7 @@ function DateFilterField({
         <button
           type="button"
           data-active={mode === "range"}
-          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+          className="h-9 rounded-md border border-border-2 px-3 text-sm text-muted-foreground hover:bg-surface-hover data-[active=true]:border-primary data-[active=true]:bg-surface-selected data-[active=true]:text-foreground"
           onClick={() => onChange({ mode: "range" })}
         >
           Range
@@ -220,7 +222,7 @@ function DateFilterField({
         <select
           value={preset}
           onChange={(event) => onChange({ mode: "relative", preset: event.target.value as Extract<DataViewDateFilter, { mode: "relative" }>["preset"] })}
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="h-9 w-full rounded-md border border-border-2 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         >
           {datePresets.map((option) => (
             <option key={option.id} value={option.id}>
@@ -235,7 +237,7 @@ function DateFilterField({
           value={singleValue}
           max={field.max}
           onChange={(event) => onChange(event.target.value ? { mode: "single", value: inputValueToDateKey(event.target.value) } : { mode: "single" })}
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="h-9 w-full rounded-md border border-border-2 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         />
       ) : null}
       {mode === "range" ? (
@@ -247,7 +249,7 @@ function DateFilterField({
               value={rangeFrom}
               max={field.max}
               onChange={(event) => onChange({ mode: "range", from: inputValueToDateKey(event.target.value), to: value?.mode === "range" ? value.to : undefined })}
-              className="h-9 rounded-md border bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 rounded-md border border-border-2 bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
             />
           </label>
           <label className="grid gap-1 text-xs text-muted-foreground">
@@ -257,7 +259,7 @@ function DateFilterField({
               value={rangeTo}
               max={field.max}
               onChange={(event) => onChange({ mode: "range", from: value?.mode === "range" ? value.from : undefined, to: inputValueToDateKey(event.target.value) })}
-              className="h-9 rounded-md border bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 rounded-md border border-border-2 bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
             />
           </label>
         </div>
@@ -283,6 +285,8 @@ export function DataViewToolbar({
   filters: DataViewFilterConfig[];
   dateFilters?: DataViewDateConfig[];
 }) {
+  const router = useRouter();
+  const [isNavigating, startNavigation] = useTransition();
   const [workingState, setWorkingState] = useState<DataViewState>(compactDataViewState(currentState));
   const [savedViews, setSavedViews] = useState(views);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -296,6 +300,14 @@ export function DataViewToolbar({
   const changedFromCurrent = !dataViewStatesEqual(workingState, compactCurrent);
   const canUpdateActiveView = Boolean(activeView && changedFromCurrent);
   const filterCount = selectedCount(workingState);
+
+  useEffect(() => {
+    setWorkingState(compactDataViewState(currentState));
+  }, [currentState]);
+
+  useEffect(() => {
+    setSavedViews(views);
+  }, [views]);
 
   function updateFilter(key: string, values: string[]) {
     setWorkingState((current) => ({
@@ -315,7 +327,10 @@ export function DataViewToolbar({
   }
 
   function applyState(state = workingState) {
-    window.location.href = viewHref(basePath, compactDataViewState(state));
+    const href = viewHref(basePath, compactDataViewState(state));
+    startNavigation(() => {
+      router.push(href);
+    });
   }
 
   function closeFilterModal() {
@@ -354,37 +369,45 @@ export function DataViewToolbar({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex min-h-14 items-center justify-between border-b bg-background">
+    <div className="relative overflow-hidden rounded-md border border-border-2 bg-card shadow-[0_1px_2px_var(--shadow-color)]">
+      {isNavigating ? (
+        <NavigationLoadingOverlay description="Fetching the selected period..." />
+      ) : null}
+      <div className="flex min-h-14 items-center justify-between border-b bg-surface-2">
         <div className="flex min-w-0 items-center overflow-x-auto">
-          <a
-            href={basePath}
+          <button
+            type="button"
+            onClick={() => {
+              startNavigation(() => {
+                router.push(basePath);
+              });
+            }}
             className={cn(
               "inline-flex h-14 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium",
-              !activeView ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              !activeView ? "border-primary bg-surface-selected text-foreground" : "border-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground"
             )}
           >
             <LayoutList className="h-4 w-4" />
             Default
-          </a>
+          </button>
           {savedViews.map((view) => (
             <div
               key={view.table_view_id}
               className={cn(
                 "group inline-flex h-14 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium",
                 activeView?.table_view_id === view.table_view_id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-primary bg-surface-selected text-foreground"
+                  : "border-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground"
               )}
             >
-              <a href={viewHref(basePath, view.state)} className="inline-flex min-w-0 items-center gap-2">
+              <button type="button" onClick={() => applyState(view.state)} className="inline-flex min-w-0 items-center gap-2">
                 <Bookmark className="h-4 w-4 shrink-0" />
                 <span className="truncate">{view.label}</span>
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => handleDelete(view.table_view_id)}
-                className="rounded p-0.5 opacity-0 hover:bg-surface-2 group-hover:opacity-100"
+                className="rounded p-0.5 opacity-0 hover:bg-surface-hover group-hover:opacity-100"
                 aria-label={`Delete ${view.label}`}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -412,7 +435,7 @@ export function DataViewToolbar({
               type="search"
               value={workingState.search ?? ""}
               onChange={(event) => setWorkingState((current) => ({ ...current, search: event.target.value }))}
-              className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-10 w-full rounded-md border border-border-2 bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
               placeholder="Search products, brands or chains"
             />
           </form>
@@ -496,7 +519,7 @@ export function DataViewToolbar({
               value={viewLabel}
               onChange={(event) => setViewLabel(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && handleSave()}
-              className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 rounded-md border border-border-2 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
               placeholder="Example: Megasuper high severity"
             />
           </label>

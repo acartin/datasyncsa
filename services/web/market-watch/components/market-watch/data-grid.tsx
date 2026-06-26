@@ -71,21 +71,21 @@ export function DataGrid<TRecord extends Record<string, unknown>>({
 
   return (
     <div className={cn("overflow-auto", className)}>
-      <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-card">
-          <tr className="border-b text-left text-sm font-semibold tracking-normal text-ink-muted">
+      <table className="w-full border-collapse text-grid-cell">
+        <thead className="sticky top-0 z-10 bg-surface-2">
+          <tr className="border-b border-border-2 text-left text-grid-header font-semibold tracking-normal text-ink-muted">
             {columns.map((column) => {
               const sortable = column.sortable !== false && column.header !== "";
               const active = sort?.id === column.id;
               const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
 
               return (
-                <th key={column.id} className={cn("whitespace-nowrap px-3 py-2 font-normal", column.headerClassName, column.className)}>
+                <th key={column.id} className={cn("whitespace-nowrap px-3 py-2.5 font-medium", column.headerClassName, column.className)}>
                   {sortable ? (
                     <button
                       type="button"
                       className={cn(
-                        "inline-flex items-center gap-1 text-left text-inherit hover:text-foreground",
+                        "inline-flex items-center gap-1 text-left text-inherit transition-colors hover:text-foreground",
                         column.headerClassName?.includes("text-right") && "justify-end"
                       )}
                       onClick={() =>
@@ -109,12 +109,12 @@ export function DataGrid<TRecord extends Record<string, unknown>>({
         </thead>
         <tbody>
           {sortedRecords.map((record, index) => (
-            <tr key={index} className="border-b last:border-0 hover:bg-surface-2">
+            <tr key={index} className="h-grid-row border-b last:border-0 hover:bg-surface-hover">
               {columns.map((column) => (
                 <td
                   key={column.id}
                   className={cn(
-                    "px-3 py-2 align-middle",
+                    "px-3 py-2.5 align-middle text-grid-cell",
                     isNumericValue(record[column.id]) && "text-right font-mono",
                     column.className
                   )}

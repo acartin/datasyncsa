@@ -20,7 +20,7 @@ export function Topbar({
   onToggleSidebar?: () => void;
 }) {
   return (
-    <header className={cn("flex items-center justify-between border-b bg-background px-5", compact ? "min-h-12" : "min-h-16")}>
+    <header className={cn("flex items-center justify-between border-b bg-surface px-5 shadow-[0_1px_2px_var(--shadow-color)]", compact ? "min-h-12" : "min-h-16")}>
       <div className="flex min-w-0 items-center gap-3">
         <Button
           type="button"
@@ -33,8 +33,8 @@ export function Topbar({
           {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
         <div className="min-w-0">
-          {!compact ? <div className="text-sm text-muted-foreground">Tenant {menu.tenant.client_id}</div> : null}
-          <div className="truncate font-medium">{menu.tenant.name}</div>
+          {!compact ? <div className="text-meta font-medium uppercase tracking-[0.08em] text-ink-muted">Tenant {menu.tenant.client_id}</div> : null}
+          <div className="truncate text-body font-semibold">{menu.tenant.name}</div>
         </div>
       </div>
       <div className="flex items-center gap-3">

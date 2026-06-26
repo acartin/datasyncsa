@@ -2,9 +2,10 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import date
 from decimal import Decimal
+import json
 import re
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import psycopg
 from psycopg import errors
@@ -21,6 +22,107 @@ _MEASURE_SUFFIX_RE = re.compile(
 class MarketRepository:
     def __init__(self, connection_factory: ConnectionFactory) -> None:
         self._connection_factory = connection_factory
+
+    @staticmethod
+    def _report_signal_family(signal_type: object) -> tuple[str, str]:
+        value = str(signal_type or "").lower()
+        if value == "driver_sku_detected":
+            return ("driver_sku", "Driver SKU")
+        if value in {"brand_over_market", "brand_under_market"}:
+            return ("market_position", "Market position")
+        if "promo" in value:
+            return ("promotion", "Promotion")
+        if "stock" in value or "availability" in value or "oos" in value:
+            return ("availability", "Availability")
+        if "price" in value or "gap" in value or "market" in value:
+            return ("price_gap", "Price gap")
+        return ("other", "Other")
+
+    @classmethod
+    def _report_highlights(cls, signals: list[dict[str, object]], *, limit: int = 4) -> list[dict[str, object]]:
+        severity_rank = {"critical": 5, "high": 4, "medium": 3, "low": 2}
+        family_rank = {
+            "price_gap": 6,
+            "driver_sku": 5,
+            "market_position": 4,
+            "promotion": 3,
+            "availability": 2,
+            "other": 1,
+        }
+
+        selected: dict[str, dict[str, object]] = {}
+        for signal in signals:
+            family_id, family_label = cls._report_signal_family(signal.get("signal_type"))
+            candidate = {
+                **signal,
+                "family_id": family_id,
+                "family_label": family_label,
+            }
+            current = selected.get(family_id)
+
+            def score(row: dict[str, object]) -> tuple[int, float, int]:
+                severity = str(row.get("severity") or "").lower()
+                impact = float(row.get("impact_score") or 0)
+                repeat_count = int(row.get("repeat_count") or 0)
+                return (severity_rank.get(severity, 1), impact, repeat_count)
+
+            if current is None or score(candidate) > score(current):
+                selected[family_id] = candidate
+
+        return sorted(
+            selected.values(),
+            key=lambda row: (
+                family_rank.get(str(row.get("family_id")), 0),
+                severity_rank.get(str(row.get("severity") or "").lower(), 1),
+                float(row.get("impact_score") or 0),
+            ),
+            reverse=True,
+        )[:limit]
+
+    @staticmethod
+    def _format_report_metric(value: object, value_format: object = None) -> str:
+        if value is None:
+            return "-"
+        if isinstance(value, Decimal):
+            value = float(value)
+        metric_format = str(value_format or "")
+        if metric_format == "currency":
+            return f"₡{float(value):,.0f}"
+        if metric_format == "percent":
+            return f"{float(value):.1f}%"
+        if isinstance(value, float):
+            if value.is_integer():
+                return str(int(value))
+            return f"{value:.2f}".rstrip("0").rstrip(".")
+        return str(value)
+
+    @classmethod
+    def _radar_report_highlights(cls, events: list[dict[str, object]]) -> list[dict[str, object]]:
+        highlights: list[dict[str, object]] = []
+        for event in events:
+            product = str(event.get("product") or "Product")
+            chain = str(event.get("chain") or "chain")
+            label = str(event.get("short_label") or event.get("display_label") or event.get("event_type") or "Radar event")
+            previous_label = str(event.get("metric_previous_label") or "Previous")
+            current_label = str(event.get("metric_current_label") or "Current")
+            change_label = str(event.get("metric_change_label") or "Change")
+            previous_value = cls._format_report_metric(event.get("previous_value"), event.get("value_format"))
+            current_value = cls._format_report_metric(event.get("current_value"), event.get("value_format"))
+            change_value = cls._format_report_metric(
+                event.get("change_pct") if event.get("change_pct") is not None else event.get("change_amount"),
+                "percent" if event.get("change_pct") is not None else event.get("change_format"),
+            )
+            highlights.append(
+                {
+                    **event,
+                    "source": "radar",
+                    "family_id": str(event.get("event_area") or "radar"),
+                    "family_label": str(event.get("event_area") or "Radar").replace("_", " ").title(),
+                    "headline": f"{label}: {product} in {chain}",
+                    "summary": f"{previous_label}: {previous_value}. {current_label}: {current_value}. {change_label}: {change_value}.",
+                }
+            )
+        return highlights
 
     def fetch_overview(self, *, client_id: str) -> dict[str, object]:
         with self._connection_factory() as connection:
@@ -1071,7 +1173,7 @@ class MarketRepository:
                         product_key,
                         max(captured_at_cr) as latest_observation_at,
                         count(*)::int as observations
-                      from public.mw_app_product_store_activity
+                      from public.mw_app_product_store_day
                       group by product_key
                     )
                     select
@@ -1127,7 +1229,7 @@ class MarketRepository:
             },
         }
 
-    def fetch_monitored_product_workspace(self, *, product_key: int) -> dict[str, object] | None:
+    def fetch_monitored_product_workspace(self, *, product_key: int, client_id: str) -> dict[str, object] | None:
         with self._connection_factory() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1173,7 +1275,7 @@ class MarketRepository:
                         product_key,
                         max(captured_at_cr) as latest_observation_at,
                         count(*)::int as observations
-                      from public.mw_app_product_store_activity
+                      from public.mw_app_product_store_day
                       where product_key = %(product_key)s
                       group by product_key
                     )
@@ -1305,7 +1407,7 @@ class MarketRepository:
                       discount_pct_display as discount_pct,
                       product_url,
                       source_engine
-                    from public.mw_app_product_store_activity
+                    from public.mw_app_product_store_day
                     where product_key = %(product_key)s
                     order by captured_at_cr desc nulls last, date_key desc
                     limit 200;
@@ -1313,6 +1415,140 @@ class MarketRepository:
                     {"product_key": product_key},
                 )
                 recent_activity = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      e.event_id::text as id,
+                      e.business_date::text as business_date,
+                      e.date_key,
+                      e.campaign_id,
+                      e.campaign,
+                      e.chain,
+                      e.event_area,
+                      e.event_type,
+                      e.severity,
+                      e.previous_value,
+                      e.current_value,
+                      e.change_amount,
+                      e.change_pct,
+                      e.visible_locations,
+                      e.available_locations,
+                      e.product_url,
+                      et.short_label,
+                      et.value_format,
+                      et.change_format
+                    from public.mw_bi_radar_event_feed e
+                    join public.mkt_dim_market_event_type et
+                      on et.event_type = e.event_type
+                     and et.is_active
+                    where e.client_id::text = %(client_id)s
+                      and (
+                        e.product_key = %(product_key_text)s
+                        or (%(gtin_norm)s::text is not null and e.gtin = %(gtin_norm)s::text)
+                      )
+                    order by
+                      e.date_key desc,
+                      case lower(coalesce(e.severity, ''))
+                        when 'high' then 1
+                        when 'medium' then 2
+                        when 'low' then 3
+                        else 9
+                      end,
+                      e.chain,
+                      e.event_type
+                    limit 120;
+                    """,
+                    {
+                        "client_id": client_id,
+                        "product_key_text": str(product_key),
+                        "gtin_norm": product_row.get("gtin_norm"),
+                    },
+                )
+                related_event_rows = [self._json_ready(row) for row in cursor.fetchall()]
+
+        def format_number(value: object) -> str:
+            if value is None:
+                return "-"
+            if isinstance(value, Decimal):
+                value = float(value)
+            if isinstance(value, float):
+                if value.is_integer():
+                    return str(int(value))
+                return f"{value:.2f}".rstrip("0").rstrip(".")
+            if isinstance(value, int):
+                return str(value)
+            return str(value)
+
+        def format_currency(value: object) -> str:
+            if value is None:
+                return "-"
+            amount = float(value)
+            return f"₡{amount:,.0f}"
+
+        def format_percent(value: object) -> str:
+            if value is None:
+                return "-"
+            return f"{float(value):.1f}%"
+
+        def format_event_value(row: dict[str, object], field: str) -> str:
+            value = row.get(field)
+            if value is None:
+                return "-"
+            value_format = str(row.get("value_format") or "")
+            event_area = str(row.get("event_area") or "")
+            if value_format == "percent" or event_area == "promotion":
+                return format_percent(value)
+            if value_format == "currency" or event_area == "price":
+                return format_currency(value)
+            return format_number(value)
+
+        def format_event_change(row: dict[str, object]) -> str:
+            change_format = str(row.get("change_format") or "")
+            event_area = str(row.get("event_area") or "")
+            if change_format == "points" or event_area == "promotion":
+                value = row.get("change_amount")
+                return "-" if value is None else f"{float(value):.1f} pts"
+            if change_format == "currency":
+                return format_currency(row.get("change_amount"))
+            if change_format == "percent":
+                return format_percent(row.get("change_pct"))
+            return format_number(row.get("change_amount"))
+
+        related_events: list[dict[str, object]] = []
+        for row in related_event_rows:
+            date_key = row.get("date_key")
+            chain = str(row.get("chain") or "")
+            detail_url = (
+                f"/pricing/products/{quote(str(product_key))}"
+                f"?campaign_id={quote(str(row.get('campaign_id') or ''))}"
+                f"&date_key={quote(str(date_key or ''))}"
+                f"&chain={quote(chain)}"
+                "&source=radar"
+                if row.get("campaign_id") and date_key and chain
+                else f"/pricing/products/{quote(str(product_key))}"
+            )
+            visible_locations = row.get("visible_locations")
+            available_locations = row.get("available_locations")
+            stores = "-"
+            if visible_locations is not None and available_locations is not None:
+                stores = f"{format_number(available_locations)}/{format_number(visible_locations)} available"
+
+            related_events.append(
+                {
+                    "Date": row.get("business_date"),
+                    "Event": row.get("short_label") or row.get("event_type"),
+                    "Chain": row.get("chain"),
+                    "Campaign": row.get("campaign"),
+                    "Severity": row.get("severity"),
+                    "Previous": format_event_value(row, "previous_value"),
+                    "Current": format_event_value(row, "current_value"),
+                    "Change": format_event_change(row),
+                    "Stores": stores,
+                    "detail_url": detail_url,
+                    "product_url": row.get("product_url"),
+                }
+            )
 
         quality = [
             {
@@ -1349,6 +1585,7 @@ class MarketRepository:
                 "listings": int(product_row.get("active_listings") or 0),
                 "campaigns": int(product_row.get("campaigns") or 0),
                 "observations": int(product_row.get("observations") or 0),
+                "related_events": len(related_events),
             },
             "sections": [
                 {
@@ -1380,6 +1617,12 @@ class MarketRepository:
                     "label": "Campaigns",
                     "description": "Campaign baskets currently using this product.",
                     "records": campaigns,
+                },
+                {
+                    "id": "related-events",
+                    "label": "Related Events",
+                    "description": "Radar-visible price, promotion and availability events associated with this product.",
+                    "records": related_events,
                 },
                 {
                     "id": "recent-activity",
@@ -1717,7 +1960,478 @@ class MarketRepository:
                     "removed_products": removed_products,
                 }
 
-    def fetch_campaign_workspace(self, *, client_id: str, campaign_id: int) -> dict[str, object] | None:
+    def list_campaign_report_recipient_user_options(self, *, client_id: str) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      u.id::text as id,
+                      u.display_name,
+                      u.email,
+                      u.username,
+                      u.status
+                    from public.auth_user_clients uc
+                    join public.auth_users u
+                      on u.id = uc.user_id
+                    where uc.client_id::text = %(client_id)s
+                      and u.status = 'active'
+                    order by u.display_name, u.email;
+                    """,
+                    {"client_id": client_id},
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def _fetch_campaign_report_recipient(
+        self,
+        cursor: psycopg.Cursor,
+        *,
+        campaign_id: int,
+        client_id: str,
+        recipient_id: int,
+    ) -> dict[str, object] | None:
+        cursor.execute(
+            """
+            select
+              r.id::text as id,
+              r.campaign_id::text as campaign_id,
+              r.client_id::text as client_id,
+              r.user_id::text as user_id,
+              r.email,
+              r.display_name,
+              r.recipient_type,
+              r.report_kind,
+              r.is_active,
+              r.created_at,
+              r.updated_at
+            from public.mkt_campaign_report_recipient r
+            where r.campaign_id = %(campaign_id)s
+              and r.client_id::text = %(client_id)s
+              and r.id = %(recipient_id)s;
+            """,
+            {
+                "campaign_id": campaign_id,
+                "client_id": client_id,
+                "recipient_id": recipient_id,
+            },
+        )
+        row = cursor.fetchone()
+        return self._json_ready(row) if row else None
+
+    def create_campaign_report_recipient(
+        self,
+        *,
+        campaign_id: int,
+        client_id: str,
+        user_id: int | None,
+        email: str | None,
+        display_name: str | None,
+        recipient_type: str,
+        report_kind: str,
+        is_active: bool,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                campaign = self._fetch_campaign_for_client(cursor, campaign_id=campaign_id, client_id=client_id)
+                if not campaign:
+                    return None
+
+                resolved_email = email.strip().lower() if email else None
+                resolved_display_name = display_name.strip() if display_name else None
+                if user_id is not None:
+                    cursor.execute(
+                        """
+                        select u.email, u.display_name
+                        from public.auth_user_clients uc
+                        join public.auth_users u
+                          on u.id = uc.user_id
+                        where uc.client_id::text = %(client_id)s
+                          and uc.user_id = %(user_id)s
+                          and u.status = 'active';
+                        """,
+                        {"client_id": client_id, "user_id": user_id},
+                    )
+                    user = cursor.fetchone()
+                    if not user:
+                        return None
+                    resolved_email = str(user["email"]).strip().lower()
+                    resolved_display_name = resolved_display_name or str(user["display_name"]).strip()
+
+                if not resolved_email:
+                    return None
+
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_report_recipient (
+                      campaign_id,
+                      client_id,
+                      user_id,
+                      email,
+                      display_name,
+                      recipient_type,
+                      report_kind,
+                      is_active
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(client_id)s,
+                      %(user_id)s,
+                      %(email)s,
+                      %(display_name)s,
+                      %(recipient_type)s,
+                      %(report_kind)s,
+                      %(is_active)s
+                    )
+                    returning id;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": int(client_id),
+                        "user_id": user_id,
+                        "email": resolved_email,
+                        "display_name": resolved_display_name,
+                        "recipient_type": recipient_type,
+                        "report_kind": report_kind,
+                        "is_active": is_active,
+                    },
+                )
+                row = cursor.fetchone()
+                connection.commit()
+                return self._fetch_campaign_report_recipient(
+                    cursor,
+                    campaign_id=campaign_id,
+                    client_id=client_id,
+                    recipient_id=int(row["id"]),
+                )
+
+    def update_campaign_report_recipient(
+        self,
+        *,
+        campaign_id: int,
+        client_id: str,
+        recipient_id: int,
+        email: str | None,
+        display_name: str | None,
+        recipient_type: str | None,
+        report_kind: str | None,
+        is_active: bool | None,
+    ) -> dict[str, object] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.mkt_campaign_report_recipient
+                    set
+                      email = coalesce(%(email)s, email),
+                      display_name = coalesce(%(display_name)s, display_name),
+                      recipient_type = coalesce(%(recipient_type)s, recipient_type),
+                      report_kind = coalesce(%(report_kind)s, report_kind),
+                      is_active = coalesce(%(is_active)s, is_active),
+                      updated_at = now()
+                    where campaign_id = %(campaign_id)s
+                      and client_id::text = %(client_id)s
+                      and id = %(recipient_id)s
+                    returning id;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": client_id,
+                        "recipient_id": recipient_id,
+                        "email": email.strip().lower() if email else None,
+                        "display_name": display_name.strip() if display_name else None,
+                        "recipient_type": recipient_type,
+                        "report_kind": report_kind,
+                        "is_active": is_active,
+                    },
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                connection.commit()
+                return self._fetch_campaign_report_recipient(
+                    cursor,
+                    campaign_id=campaign_id,
+                    client_id=client_id,
+                    recipient_id=recipient_id,
+                )
+
+    def list_active_campaign_report_recipients(
+        self,
+        *,
+        campaign_id: int,
+        client_id: str,
+        report_kind: str = "daily_price_radar",
+    ) -> list[dict[str, object]]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      r.id::text as id,
+                      r.user_id::text as user_id,
+                      coalesce(r.display_name, u.display_name, r.email) as display_name,
+                      r.email,
+                      r.recipient_type,
+                      r.report_kind
+                    from public.mkt_campaign_report_recipient r
+                    left join public.auth_users u
+                      on u.id = r.user_id
+                    where r.campaign_id = %(campaign_id)s
+                      and r.client_id::text = %(client_id)s
+                      and r.report_kind = %(report_kind)s
+                      and r.is_active
+                    order by r.recipient_type, display_name, r.email;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": client_id,
+                        "report_kind": report_kind,
+                    },
+                )
+                return [self._json_ready(row) for row in cursor.fetchall()]
+
+    def create_campaign_report_delivery(
+        self,
+        *,
+        campaign_id: int,
+        client_id: str,
+        business_date: date,
+        report_kind: str,
+        status: str,
+        subject: str | None,
+        recipients: list[dict[str, object]],
+        requested_by_user_id: str,
+        error_summary: str | None = None,
+    ) -> dict[str, object]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.mkt_campaign_report_delivery (
+                      campaign_id,
+                      client_id,
+                      report_kind,
+                      business_date,
+                      status,
+                      subject,
+                      recipients_json,
+                      requested_by_user_id,
+                      error_summary,
+                      sent_at
+                    )
+                    values (
+                      %(campaign_id)s,
+                      %(client_id)s,
+                      %(report_kind)s,
+                      %(business_date)s,
+                      %(status)s,
+                      %(subject)s,
+                      %(recipients_json)s::jsonb,
+                      %(requested_by_user_id)s,
+                      %(error_summary)s,
+                      case when %(status)s = 'sent' then now() else null end
+                    )
+                    returning id::text as id, status, created_at, sent_at;
+                    """,
+                    {
+                        "campaign_id": campaign_id,
+                        "client_id": int(client_id),
+                        "report_kind": report_kind,
+                        "business_date": business_date,
+                        "status": status,
+                        "subject": subject,
+                        "recipients_json": json.dumps(recipients),
+                        "requested_by_user_id": int(requested_by_user_id),
+                        "error_summary": error_summary,
+                    },
+                )
+                row = self._json_ready(cursor.fetchone() or {})
+                connection.commit()
+                return row
+
+    def _fetch_campaign_report_preview(
+        self,
+        cursor: psycopg.Cursor,
+        *,
+        client_id: str,
+        campaign_id: int,
+        business_date: date,
+    ) -> dict[str, object]:
+        try:
+            cursor.execute(
+                """
+                select
+                  business_date,
+                  date_key,
+                  campaign_id::text as campaign_id,
+                  campaign,
+                  brand,
+                  chain,
+                  signal_type,
+                  signal_status,
+                  severity,
+                  impact_score,
+                  headline,
+                  summary,
+                  business_reading,
+                  recommended_action,
+                  notification_status,
+                  repeat_count,
+                  nullif(evidence_json ->> 'product', '') as product,
+                  nullif(evidence_json ->> 'product_url', '') as product_url
+                from public.mw_bi_executive_signal_feed
+                where client_id::text = %(client_id)s
+                  and campaign_id = %(campaign_id)s
+                  and business_date = %(business_date)s
+                order by
+                  impact_score desc nulls last,
+                  case lower(coalesce(severity, ''))
+                    when 'critical' then 1
+                    when 'high' then 2
+                    when 'medium' then 3
+                    when 'low' then 4
+                    else 9
+                  end,
+                  repeat_count desc nulls last,
+                  chain,
+                  headline
+                limit 30;
+                """,
+                {
+                    "client_id": client_id,
+                    "campaign_id": campaign_id,
+                    "business_date": business_date,
+                },
+            )
+            signals = [self._json_ready(row) for row in cursor.fetchall()]
+
+            cursor.execute(
+                """
+                select
+                  count(*)::int as total_signals,
+                  count(*) filter (where lower(coalesce(severity, '')) in ('critical', 'high'))::int as high_severity_signals,
+                  count(*) filter (where signal_type ilike '%%promo%%')::int as promo_signals,
+                  count(*) filter (where signal_type ilike '%%price%%' or signal_type ilike '%%gap%%')::int as price_signals,
+                  count(*) filter (where signal_type ilike '%%stock%%' or signal_type ilike '%%availability%%')::int as availability_signals,
+                  count(distinct chain)::int as chains_with_signals
+                from public.mw_bi_executive_signal_feed
+                where client_id::text = %(client_id)s
+                  and campaign_id = %(campaign_id)s
+                  and business_date = %(business_date)s;
+                """,
+                {
+                    "client_id": client_id,
+                    "campaign_id": campaign_id,
+                    "business_date": business_date,
+                },
+            )
+            kpis = self._json_ready(cursor.fetchone() or {})
+
+            cursor.execute(
+                """
+                select
+                  count(*)::int as run_count,
+                  count(*) filter (where run_status = 'succeeded')::int as succeeded_runs,
+                  max(finished_at) as latest_finished_at
+                from public.mkt_run
+                where campaign_id = %(campaign_id)s
+                  and business_date_key = to_char(%(business_date)s::date, 'YYYYMMDD')::int;
+                """,
+                {
+                    "campaign_id": campaign_id,
+                    "business_date": business_date,
+                },
+            )
+            diagnostics = self._json_ready(cursor.fetchone() or {})
+
+            cursor.execute(
+                """
+                select
+                  e.event_id,
+                  e.event_area,
+                  e.event_type,
+                  e.severity,
+                  e.business_date,
+                  e.date_key,
+                  e.campaign_id::text as campaign_id,
+                  e.campaign,
+                  e.chain,
+                  e.brand,
+                  e.product,
+                  e.product_key,
+                  e.previous_value,
+                  e.current_value,
+                  e.change_amount,
+                  e.change_pct,
+                  e.promo_share_pct,
+                  e.discount_pct,
+                  e.visible_locations,
+                  e.available_locations,
+                  e.product_url,
+                  et.display_label,
+                  et.short_label,
+                  et.metric_previous_label,
+                  et.metric_current_label,
+                  et.metric_change_label,
+                  et.value_format,
+                  et.change_format
+                from public.mw_bi_radar_event_feed e
+                left join public.mkt_dim_market_event_type et
+                  on et.event_type = e.event_type
+                where e.client_id::text = %(client_id)s
+                  and e.campaign_id = %(campaign_id)s
+                  and e.business_date = %(business_date)s
+                order by
+                  case lower(coalesce(e.severity, ''))
+                    when 'high' then 1
+                    when 'medium' then 2
+                    when 'low' then 3
+                    else 9
+                  end,
+                  abs(coalesce(e.change_pct, e.change_amount, 0)) desc,
+                  e.chain,
+                  e.product
+                limit 4;
+                """,
+                {
+                    "client_id": client_id,
+                    "campaign_id": campaign_id,
+                    "business_date": business_date,
+                },
+            )
+            radar_highlights = [self._json_ready(row) for row in cursor.fetchall()]
+        except errors.UndefinedTable:
+            signals = []
+            kpis = {}
+            diagnostics = {}
+            radar_highlights = []
+
+        return {
+            "business_date": business_date.isoformat(),
+            "kpis": {
+                "total_signals": int(kpis.get("total_signals") or 0),
+                "high_severity_signals": int(kpis.get("high_severity_signals") or 0),
+                "promo_signals": int(kpis.get("promo_signals") or 0),
+                "price_signals": int(kpis.get("price_signals") or 0),
+                "availability_signals": int(kpis.get("availability_signals") or 0),
+                "chains_with_signals": int(kpis.get("chains_with_signals") or 0),
+            },
+            "diagnostics": {
+                "run_count": int(diagnostics.get("run_count") or 0),
+                "succeeded_runs": int(diagnostics.get("succeeded_runs") or 0),
+                "latest_finished_at": diagnostics.get("latest_finished_at"),
+            },
+            "highlights": self._radar_report_highlights(radar_highlights),
+            "records": signals,
+        }
+
+    def fetch_campaign_workspace(
+        self,
+        *,
+        client_id: str,
+        campaign_id: int,
+        report_business_date: date,
+    ) -> dict[str, object] | None:
         with self._connection_factory() as connection:
             with connection.cursor() as cursor:
                 campaign = self._fetch_campaign_for_client(cursor, campaign_id=campaign_id, client_id=client_id)
@@ -1745,6 +2459,28 @@ class MarketRepository:
                     {"campaign_id": campaign_id},
                 )
                 access = [self._json_ready(row) for row in cursor.fetchall()]
+
+                cursor.execute(
+                    """
+                    select
+                      r.id::text as id,
+                      r.user_id::text as user_id,
+                      coalesce(r.display_name, u.display_name, r.email) as display_name,
+                      r.email,
+                      r.recipient_type,
+                      r.report_kind,
+                      r.is_active,
+                      r.updated_at
+                    from public.mkt_campaign_report_recipient r
+                    left join public.auth_users u
+                      on u.id = r.user_id
+                    where r.campaign_id = %(campaign_id)s
+                      and r.client_id::text = %(client_id)s
+                    order by r.is_active desc, r.recipient_type, display_name, r.email;
+                    """,
+                    {"campaign_id": campaign_id, "client_id": client_id},
+                )
+                report_recipients = [self._json_ready(row) for row in cursor.fetchall()]
 
                 cursor.execute(
                     """
@@ -1898,14 +2634,22 @@ class MarketRepository:
                     {"campaign_id": campaign_id},
                 )
                 product_coverage = [self._json_ready(row) for row in cursor.fetchall()]
+                report_preview = self._fetch_campaign_report_preview(
+                    cursor,
+                    client_id=client_id,
+                    campaign_id=campaign_id,
+                    business_date=report_business_date,
+                )
 
         return {
             "campaign": campaign,
+            "report_preview": report_preview,
             "summary": {
                 "clients": len(access),
                 "chains": len(chains),
                 "stores": len(stores),
                 "products": len(products),
+                "recipients": len([recipient for recipient in report_recipients if recipient.get("is_active")]),
             },
             "sections": [
                 {
@@ -1924,6 +2668,18 @@ class MarketRepository:
                     "label": "Access",
                     "description": "Clients and tenants authorized for this campaign.",
                     "records": access,
+                },
+                {
+                    "id": "report-recipients",
+                    "label": "Report Recipients",
+                    "description": "People who receive campaign report emails and PDF attachments for the active tenant.",
+                    "records": report_recipients,
+                },
+                {
+                    "id": "report-preview",
+                    "label": "Report Preview",
+                    "description": f"Daily report preview for {report_preview['business_date']}.",
+                    "records": report_preview["records"],
                 },
                 {
                     "id": "chains",
@@ -2203,8 +2959,21 @@ class MarketRepository:
                             %(date_key)s::int,
                             (
                               select max(e.date_key)
-                              from public.mw_bi_radar_event_feed e
-                              where e.client_id::text = %(client_id)s
+                              from public.mkt_market_event e
+                              join public.mkt_dim_market_event_type et
+                                on et.event_type = e.event_type
+                               and et.is_active
+                               and et.appears_in_intraday_radar
+                              join public.mkt_campaign_client_access cca
+                                on cca.campaign_id = e.campaign_id
+                               and cca.is_active
+                               and (cca.valid_from is null or e.business_date >= cca.valid_from)
+                               and (cca.valid_to is null or e.business_date <= cca.valid_to)
+                              join public.auth_clients ac
+                                on ac.id = cca.client_id
+                               and ac.status = 'active'
+                              where cca.client_id::text = %(client_id)s
+                                and (e.client_id is null or e.client_id = cca.client_id)
                                 and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
                                 and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
                             )
@@ -2212,8 +2981,8 @@ class MarketRepository:
                         ),
                         enriched as (
                           select
-                            e.event_id,
-                            e.event_area,
+                            e.event_key as event_id,
+                            et.event_area,
                             e.event_type,
                             e.severity,
                             jsonb_build_object(
@@ -2236,37 +3005,47 @@ class MarketRepository:
                             ) as presentation,
                             e.business_date::text as business_date,
                             e.date_key,
-                            e.previous_date_key,
+                            nullif(e.metrics_json ->> 'previous_date_key', '')::int as previous_date_key,
                             e.campaign_id,
-                            coalesce(e.campaign, '') as campaign,
+                            coalesce(e.campaign_name, '') as campaign,
                             e.chain,
-                            e.brand,
-                            e.product,
-                            coalesce(dp.content_quantity, e.content_quantity) as content_quantity,
-                            coalesce(dp.content_unit, e.content_unit) as content_unit,
-                            e.gtin,
-                            e.product_key,
-                            e.captured_at_cr,
-                            e.previous_captured_at_cr,
-                            e.previous_value,
-                            e.current_value,
-                            e.change_amount,
-                            e.change_pct,
-                            e.promo_share_pct,
-                            e.discount_pct,
-                            e.observed_locations,
-                            e.visible_locations,
-                            e.available_locations,
-                            e.product_url
-                          from public.mw_bi_radar_event_feed e
+                            e.evidence_json ->> 'brand' as brand,
+                            e.evidence_json ->> 'product' as product,
+                            null::numeric as content_quantity,
+                            null::text as content_unit,
+                            e.evidence_json ->> 'gtin' as gtin,
+                            e.evidence_json ->> 'product_key' as product_key,
+                            e.business_date::text as captured_at_cr,
+                            null::text as previous_captured_at_cr,
+                            nullif(e.metrics_json ->> 'previous_value', '')::numeric(12,2) as previous_value,
+                            nullif(e.metrics_json ->> 'current_value', '')::numeric(12,2) as current_value,
+                            nullif(e.metrics_json ->> 'change_abs', '')::numeric(12,2) as change_amount,
+                            nullif(e.metrics_json ->> 'change_pct', '')::numeric(12,2) as change_pct,
+                            case
+                              when et.event_area = 'promotion' then nullif(e.metrics_json ->> 'promo_share_current', '')::numeric(5,2)
+                              else null::numeric
+                            end as promo_share_pct,
+                            null::numeric(5,2) as discount_pct,
+                            nullif(e.metrics_json ->> 'observed_locations', '')::int as observed_locations,
+                            nullif(e.metrics_json ->> 'visible_locations', '')::int as visible_locations,
+                            nullif(e.metrics_json ->> 'available_locations', '')::int as available_locations,
+                            e.evidence_json ->> 'product_url' as product_url
+                          from public.mkt_market_event e
                           cross join selected_date sd
                           join public.mkt_dim_market_event_type et
                             on et.event_type = e.event_type
                            and et.is_active
-                          left join public.mkt_dim_product dp
-                            on dp.product_key::text = e.product_key
-                            or (e.product_key is null and dp.gtin_norm = e.gtin)
-                          where e.client_id::text = %(client_id)s
+                           and et.appears_in_intraday_radar
+                          join public.mkt_campaign_client_access cca
+                            on cca.campaign_id = e.campaign_id
+                           and cca.is_active
+                           and (cca.valid_from is null or e.business_date >= cca.valid_from)
+                           and (cca.valid_to is null or e.business_date <= cca.valid_to)
+                          join public.auth_clients ac
+                            on ac.id = cca.client_id
+                           and ac.status = 'active'
+                          where cca.client_id::text = %(client_id)s
+                            and (e.client_id is null or e.client_id = cca.client_id)
                             and (
                               (%(date_key)s::int is not null and e.date_key = sd.selected_date_key)
                               or (
@@ -2283,15 +3062,15 @@ class MarketRepository:
                               )
                             )
                             and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
-                            and (%(brands)s::text[] = '{}'::text[] or e.brand = any(%(brands)s::text[]))
+                            and (%(brands)s::text[] = '{}'::text[] or e.evidence_json ->> 'brand' = any(%(brands)s::text[]))
                             and (%(chains)s::text[] = '{}'::text[] or e.chain = any(%(chains)s::text[]))
-                            and (%(product_keys)s::text[] = '{}'::text[] or e.product_key = any(%(product_keys)s::text[]))
-                            and (%(event_areas)s::text[] = '{}'::text[] or e.event_area = any(%(event_areas)s::text[]))
+                            and (%(product_keys)s::text[] = '{}'::text[] or e.evidence_json ->> 'product_key' = any(%(product_keys)s::text[]))
+                            and (%(event_areas)s::text[] = '{}'::text[] or et.event_area = any(%(event_areas)s::text[]))
                             and (%(severities)s::text[] = '{}'::text[] or e.severity = any(%(severities)s::text[]))
                             and (
                               %(query)s::text is null
-                              or e.product ilike %(query)s
-                              or e.brand ilike %(query)s
+                              or e.evidence_json ->> 'product' ilike %(query)s
+                              or e.evidence_json ->> 'brand' ilike %(query)s
                               or e.chain ilike %(query)s
                               or e.event_type ilike %(query)s
                               or et.display_label ilike %(query)s
@@ -2329,10 +3108,24 @@ class MarketRepository:
                             %(date_key_to)s::int,
                             max(e.date_key)
                           ) as selected_date_key,
-                          max(e.previous_date_key) filter (where e.date_key = coalesce(%(date_key)s::int, %(date_key_to)s::int, e.date_key)) as prior_closed_date_key,
+                          max(nullif(e.metrics_json ->> 'previous_date_key', '')::int)
+                            filter (where e.date_key = coalesce(%(date_key)s::int, %(date_key_to)s::int, e.date_key)) as prior_closed_date_key,
                           to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int as current_cr_date_key
-                        from public.mw_bi_radar_event_feed e
-                        where e.client_id::text = %(client_id)s
+                        from public.mkt_market_event e
+                        join public.mkt_dim_market_event_type et
+                          on et.event_type = e.event_type
+                         and et.is_active
+                         and et.appears_in_intraday_radar
+                        join public.mkt_campaign_client_access cca
+                          on cca.campaign_id = e.campaign_id
+                         and cca.is_active
+                         and (cca.valid_from is null or e.business_date >= cca.valid_from)
+                         and (cca.valid_to is null or e.business_date <= cca.valid_to)
+                        join public.auth_clients ac
+                          on ac.id = cca.client_id
+                         and ac.status = 'active'
+                        where cca.client_id::text = %(client_id)s
+                          and (e.client_id is null or e.client_id = cca.client_id)
                           and e.date_key < to_char((now() at time zone 'America/Costa_Rica')::date, 'YYYYMMDD')::int
                           and (%(date_key_from)s::int is null or e.date_key >= %(date_key_from)s::int)
                           and (%(date_key_to)s::int is null or e.date_key <= %(date_key_to)s::int)
@@ -2592,7 +3385,7 @@ null::numeric(5,2) as discount_pct,
                             max(o.date_key)
                           ) as selected_date_key,
                           max(o.date_key) as latest_history_date_key
-                        from public.mw_app_product_chain_price_history o
+                        from public.mw_app_product_chain_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
@@ -2634,7 +3427,7 @@ null::numeric(5,2) as discount_pct,
                           bool_or(o.promo_detected) as promo_seen,
                           max(o.image_url) filter (where o.image_url is not null) as image_url,
                           max(o.product_url) filter (where o.product_url is not null) as product_url
-                        from public.mw_app_product_chain_price_history o
+                        from public.mw_app_product_chain_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and o.date_key = %(date_key)s
@@ -2667,7 +3460,7 @@ null::numeric(5,2) as discount_pct,
                           max(o.available_locations) as available_locations,
                           max(o.product_url) filter (where o.product_url is not null) as product_url,
                           max(o.image_url) filter (where o.image_url is not null) as image_url
-                        from public.mw_app_product_chain_price_history o
+                        from public.mw_app_product_chain_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and o.date_key = %(date_key)s
@@ -2704,7 +3497,7 @@ null::numeric(5,2) as discount_pct,
                           o.available_quantity,
                           o.product_url,
                           o.source_engine
-                        from public.mw_app_product_store_activity o
+                        from public.mw_app_product_store_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and o.date_key = %(date_key)s
@@ -2735,7 +3528,7 @@ null::numeric(5,2) as discount_pct,
                           price_index,
                           price_reading,
                           suggested_action
-                        from public.mw_app_product_chain_price_history
+                        from public.mw_app_product_chain_day
                         where client_id::text = %(client_id)s
                           and product_key::text = %(product_key)s
                           and (%(campaign_id)s::int is null or campaign_id = %(campaign_id)s)
@@ -2760,7 +3553,7 @@ null::numeric(5,2) as discount_pct,
                           max_discount_pct,
                           visible_locations,
                           available_locations
-                        from public.mw_app_product_chain_price_history
+                        from public.mw_app_product_chain_day
                         where client_id::text = %(client_id)s
                           and product_key::text = %(product_key)s
                           and date_key = %(date_key)s
@@ -2784,8 +3577,15 @@ null::numeric(5,2) as discount_pct,
                             round(avg(o.reference_price_amount) filter (where o.reference_price_amount is not null), 2) as reference_price_amount,
                             round(avg(o.promo_price_amount) filter (where o.promo_price_amount is not null), 2) as promo_price_amount,
                             bool_or(o.promo_detected) as promo_detected,
-                            max(o.max_discount_pct) as discount_pct
-                          from public.mw_app_product_chain_price_history as o
+                            max(o.max_discount_pct) as discount_pct,
+                            max(o.visible_locations) as visible_locations,
+                            max(o.available_locations) as available_locations,
+                            case
+                              when max(o.available_locations) > 0 then 'available'
+                              when max(o.visible_locations) > 0 then 'listed_unavailable'
+                              else 'unobserved'
+                            end as availability_state
+                          from public.mw_app_product_chain_day as o
                           where o.client_id::text = %(client_id)s
                             and o.product_key::text = %(product_key)s
                             and o.date_key <= %(history_date_key)s
@@ -2822,6 +3622,9 @@ null::numeric(5,2) as discount_pct,
                           promo_price_amount,
                           promo_detected,
                           discount_pct,
+                          visible_locations,
+                          available_locations,
+                          availability_state,
                           previous_date_key
                         from sequenced
                         order by date_key, chain;
@@ -2835,7 +3638,7 @@ null::numeric(5,2) as discount_pct,
                         """
                         with visible_dates as (
                           select distinct o.date_key
-                          from public.mw_app_product_chain_price_history as o
+                          from public.mw_app_product_chain_day as o
                           where o.client_id::text = %(client_id)s
                             and o.product_key::text = %(product_key)s
                             and o.date_key <= %(history_date_key)s
@@ -2843,14 +3646,14 @@ null::numeric(5,2) as discount_pct,
                           order by o.date_key desc
                           limit %(history_days)s
                         )
-                        select
-                            e.event_id,
-                            e.event_type,
-                            e.severity,
-                            e.event_area,
-                            jsonb_build_object(
-                              'display_label', et.display_label,
-                              'short_label', et.short_label,
+	                        select
+	                            me.event_key as event_id,
+	                            me.event_type,
+	                            me.severity,
+	                            et.event_area,
+	                            jsonb_build_object(
+	                              'display_label', et.display_label,
+	                              'short_label', et.short_label,
                               'description', et.description,
                               'metric_labels', jsonb_build_object(
                                 'previous', et.metric_previous_label,
@@ -2864,47 +3667,92 @@ null::numeric(5,2) as discount_pct,
                               'icon_name', et.icon_name,
                               'accent_token', et.accent_token,
                               'chart_annotation_label', et.chart_annotation_label,
-                              'config', et.presentation_config
-                            ) as presentation,
-                            e.business_date::text as business_date,
-                            e.date_key,
-                            e.previous_date_key,
-                            e.campaign_id,
-                            coalesce(e.campaign, '') as campaign,
-                            e.chain,
-                            e.brand,
-                            e.product,
-                            coalesce(dp.content_quantity, e.content_quantity) as content_quantity,
-                            coalesce(dp.content_unit, e.content_unit) as content_unit,
-                            e.gtin,
-                            e.product_key,
-                            e.previous_value,
-                            e.current_value,
-                            e.change_amount,
-                            e.change_pct,
-                            e.promo_share_pct,
-                            e.discount_pct,
-                            e.observed_locations,
-                            e.visible_locations,
-                            e.available_locations,
-                            e.product_url
-                        from public.mw_bi_radar_event_feed e
-                        join public.mkt_dim_market_event_type et
-                            on et.event_type = e.event_type
-                           and et.is_active
-                        left join public.mkt_dim_product dp
-                            on dp.product_key::text = e.product_key
-                            or (e.product_key is null and dp.gtin_norm = e.gtin)
-                        where e.client_id::text = %(client_id)s
-                            and (%(campaign_id)s::int is null or e.campaign_id = %(campaign_id)s)
-                            and (%(history_date_key)s::int is null or e.date_key <= %(history_date_key)s)
-                            and e.product_key::text = %(product_key)s
-                            and (
-                              (%(date_key)s::int is not null and e.date_key = %(date_key)s)
-                              or e.date_key in (select date_key from visible_dates)
-                              or e.previous_date_key in (select date_key from visible_dates)
-                            )
-                        order by e.date_key desc
+	                              'config', et.presentation_config
+	                            ) as presentation,
+	                            me.business_date::text as business_date,
+	                            me.date_key,
+	                            nullif(me.metrics_json ->> 'previous_date_key', '')::int as previous_date_key,
+	                            me.campaign_id,
+	                            coalesce(me.campaign_name, '') as campaign,
+	                            coalesce(me.chain, me.evidence_json ->> 'chain') as chain,
+	                            me.evidence_json ->> 'brand' as brand,
+	                            me.evidence_json ->> 'product' as product,
+	                            dp.content_quantity,
+	                            dp.content_unit,
+	                            me.evidence_json ->> 'gtin' as gtin,
+	                            me.evidence_json ->> 'product_key' as product_key,
+	                            coalesce(
+	                              nullif(me.metrics_json ->> 'previous_value', '')::numeric(12,2),
+	                              nullif(me.metrics_json ->> 'market_best_price', '')::numeric(12,2)
+	                            ) as previous_value,
+	                            coalesce(
+	                              nullif(me.metrics_json ->> 'current_value', '')::numeric(12,2),
+	                              nullif(me.metrics_json ->> 'avg_price', '')::numeric(12,2)
+	                            ) as current_value,
+	                            coalesce(
+	                              nullif(me.metrics_json ->> 'change_abs', '')::numeric(12,2),
+	                              nullif(me.metrics_json ->> 'gap_amount', '')::numeric(12,2)
+	                            ) as change_amount,
+	                            coalesce(
+	                              nullif(me.metrics_json ->> 'change_pct', '')::numeric(12,2),
+	                              nullif(me.metrics_json ->> 'gap_pct', '')::numeric(12,2)
+	                            ) as change_pct,
+	                            case
+	                              when et.event_area = 'promotion' then nullif(me.metrics_json ->> 'promo_share_current', '')::numeric(5,2)
+	                              else null::numeric
+	                            end as promo_share_pct,
+	                            null::numeric(5,2) as discount_pct,
+	                            nullif(me.metrics_json ->> 'observed_locations', '')::int as observed_locations,
+	                            nullif(me.metrics_json ->> 'visible_locations', '')::int as visible_locations,
+	                            nullif(me.metrics_json ->> 'available_locations', '')::int as available_locations,
+	                            me.evidence_json ->> 'product_url' as product_url,
+	                            me.metrics_json as metrics,
+	                            me.evidence_json as evidence,
+	                            cs.signal_json as signal
+	                        from public.mkt_market_event me
+	                        join public.mkt_dim_market_event_type et
+	                            on et.event_type = me.event_type
+	                           and et.is_active
+	                        join public.mkt_campaign_client_access cca
+	                            on cca.campaign_id = me.campaign_id
+	                           and cca.is_active
+	                           and cca.client_id::text = %(client_id)s
+	                           and (cca.valid_from is null or me.business_date >= cca.valid_from)
+	                           and (cca.valid_to is null or me.business_date <= cca.valid_to)
+	                        left join lateral (
+	                            select jsonb_build_object(
+	                              'signal_key', s.signal_key,
+	                              'signal_type', s.signal_type,
+	                              'signal_status', s.lifecycle_status,
+	                              'headline', s.headline,
+	                              'summary', s.summary,
+	                              'business_reading', s.business_reading,
+	                              'recommended_action', s.recommended_action,
+	                              'narrative', s.narrative_json,
+	                              'llm_provider', s.llm_provider,
+	                              'llm_model', s.llm_model,
+	                              'llm_prompt_version', s.llm_prompt_version
+	                            ) as signal_json
+	                            from public.mkt_client_signal s
+	                            where s.event_key = me.event_key
+	                              and s.perspective_client_id::text = %(client_id)s
+	                              and s.campaign_id = me.campaign_id
+	                            order by s.updated_at desc nulls last, s.signal_key desc
+	                            limit 1
+	                        ) cs on true
+	                        left join public.mkt_dim_product dp
+	                            on dp.product_key::text = me.evidence_json ->> 'product_key'
+	                            or ((me.evidence_json ->> 'product_key') is null and dp.gtin_norm = me.evidence_json ->> 'gtin')
+	                        where (%(campaign_id)s::int is null or me.campaign_id = %(campaign_id)s)
+	                            and (%(history_date_key)s::int is null or me.date_key <= %(history_date_key)s)
+	                            and (me.client_id is null or me.client_id::text = %(client_id)s)
+	                            and me.evidence_json ->> 'product_key' = %(product_key)s
+	                            and (
+	                              (%(date_key)s::int is not null and me.date_key = %(date_key)s)
+	                              or me.date_key in (select date_key from visible_dates)
+	                              or nullif(me.metrics_json ->> 'previous_date_key', '')::int in (select date_key from visible_dates)
+	                            )
+	                        order by me.date_key desc
                         """,
                         all_chain_params,
                     )
@@ -2976,7 +3824,7 @@ null::numeric(5,2) as discount_pct,
                           select
                             coalesce(%(date_key)s::int, max(o.date_key)) as selected_date_key,
                             max(o.date_key) as latest_history_date_key
-                          from public.mw_app_product_store_activity o
+                          from public.mw_app_product_store_day o
                           where o.client_id::text = %(client_id)s
                             and o.product_key::text = %(product_key)s
                             and o.location_key = %(location_key)s
@@ -3011,7 +3859,7 @@ null::numeric(5,2) as discount_pct,
                             o.product_url,
                             o.image_url,
                             o.source_engine
-                          from public.mw_app_product_store_activity o
+                          from public.mw_app_product_store_day o
                           join selected_scope ss
                             on o.date_key = ss.selected_date_key
                           where o.client_id::text = %(client_id)s
@@ -3056,7 +3904,7 @@ null::numeric(5,2) as discount_pct,
                         select
                           coalesce(%(date_key)s::int, max(o.date_key)) as selected_date_key,
                           max(o.date_key) as latest_history_date_key
-                        from public.mw_app_product_store_activity o
+                        from public.mw_app_product_store_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and o.location_key = %(location_key)s
@@ -3084,7 +3932,7 @@ null::numeric(5,2) as discount_pct,
                           o.district,
                           o.sales_channel,
                           o.region_id
-                        from public.mw_app_product_store_activity o
+                        from public.mw_app_product_store_day o
                         where o.client_id::text = %(client_id)s
                           and o.product_key::text = %(product_key)s
                           and (%(campaign_id)s::int is null or o.campaign_id = %(campaign_id)s)
@@ -3116,9 +3964,15 @@ null::numeric(5,2) as discount_pct,
                             o.discount_pct_display as discount_pct,
                             o.is_listed,
                             o.is_available,
+                            o.available_quantity,
+                            case
+                              when o.is_available then 'available'
+                              when o.is_listed then 'listed_unavailable'
+                              else 'unobserved'
+                            end as availability_state,
                             o.product_url,
                             o.source_engine
-                          from public.mw_app_product_store_activity o
+                          from public.mw_app_product_store_day o
                           where o.client_id::text = %(client_id)s
                             and o.product_key::text = %(product_key)s
                             and o.location_key = %(location_key)s
@@ -3154,6 +4008,8 @@ null::numeric(5,2) as discount_pct,
                           discount_pct,
                           is_listed,
                           is_available,
+                          available_quantity,
+                          availability_state,
                           product_url,
                           source_engine
                         from sequenced
@@ -3170,11 +4026,14 @@ null::numeric(5,2) as discount_pct,
                             "chain": row.get("chain"),
                             "store": row.get("store"),
                             "captured_at_cr": row.get("captured_at_cr"),
-                            "effective_price_amount": row.get("effective_price_amount"),
-                            "reference_price_amount": row.get("reference_price_amount"),
-                            "promo_price_amount": row.get("promo_price_amount"),
+                            "effective_price_amount": row.get("effective_price_amount") if row.get("is_available") else None,
+                            "reference_price_amount": row.get("reference_price_amount") if row.get("is_available") else None,
+                            "promo_price_amount": row.get("promo_price_amount") if row.get("is_available") else None,
                             "promo_detected": row.get("promo_detected"),
                             "discount_pct": row.get("discount_pct"),
+                            "is_listed": row.get("is_listed"),
+                            "is_available": row.get("is_available"),
+                            "availability_state": row.get("availability_state"),
                         }
                         for row in captures
                     ]

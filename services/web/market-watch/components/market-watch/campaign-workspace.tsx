@@ -56,6 +56,16 @@ function productOptionLabel(product: Record<string, unknown>) {
   return `${brand ? `${brand} - ` : ""}${name}${gtin ? ` (${gtin})` : ""}`;
 }
 
+function reportUserOptionLabel(user: Record<string, unknown>) {
+  const displayName = text(user.display_name, "");
+  const email = text(user.email, "");
+  return `${displayName || text(user.username, "User")}${email ? ` (${email})` : ""}`;
+}
+
+function canManageCampaignReports(payload: CampaignWorkspacePayload) {
+  return ["client-admin", "system-admin", "system-user"].includes(payload.context.role);
+}
+
 function normalizeSearch(value: string) {
   return value
     .normalize("NFD")
@@ -282,6 +292,320 @@ function AccessSection({
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+function ReportRecipientActions({
+  campaignId,
+  record,
+  canManage
+}: {
+  campaignId: string;
+  record: Record<string, unknown>;
+  canManage: boolean;
+}) {
+  const [editOpen, setEditOpen] = React.useState(false);
+  const recipientId = text(record.id);
+  const label = text(record.display_name, text(record.email, "recipient"));
+
+  if (!canManage) return null;
+
+  return (
+    <>
+      <div className="flex justify-end gap-1">
+        <Button type="button" variant="ghost" className="h-8 w-8 px-0" title="Edit recipient" onClick={() => setEditOpen(true)}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <form action={`/api/operations/campaigns/${encodeURIComponent(campaignId)}/report-recipients/${encodeURIComponent(recipientId)}`} method="post">
+          <input type="hidden" name="_method" value="patch" />
+          <input type="hidden" name="is_active" value="false" />
+          <Button type="submit" variant="ghost" className="h-8 w-8 px-0" title="Deactivate recipient">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
+
+      <Modal open={editOpen} title={`Edit ${label}`} onClose={() => setEditOpen(false)}>
+        <form action={`/api/operations/campaigns/${encodeURIComponent(campaignId)}/report-recipients/${encodeURIComponent(recipientId)}`} method="post" className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium">
+              <span>Name</span>
+              <input
+                name="display_name"
+                defaultValue={text(record.display_name, "")}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Email</span>
+              <input
+                name="email"
+                type="email"
+                required
+                defaultValue={text(record.email, "")}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Delivery type</span>
+              <select
+                name="recipient_type"
+                defaultValue={text(record.recipient_type, "to")}
+                className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="to">To</option>
+                <option value="cc">CC</option>
+                <option value="bcc">BCC</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Status</span>
+              <select
+                name="is_active"
+                defaultValue={String(record.is_active !== false)}
+                className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="true">active</option>
+                <option value="false">inactive</option>
+              </select>
+            </label>
+          </div>
+          <input type="hidden" name="report_kind" value={text(record.report_kind, "daily_price_radar")} />
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">Update</Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
+function ReportRecipientsSection({
+  payload,
+  records
+}: {
+  payload: CampaignWorkspacePayload;
+  records: Array<Record<string, unknown>>;
+}) {
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const campaignId = text(payload.campaign.id);
+  const canManage = canManageCampaignReports(payload);
+  const userOptions = payload.available_report_users ?? [];
+  const columns: DataGridColumn<Record<string, unknown>>[] = [
+    { id: "display_name", header: "Name" },
+    { id: "email", header: "Email" },
+    { id: "recipient_type", header: "Type" },
+    { id: "report_kind", header: "Report" },
+    { id: "is_active", header: "Active", cell: (record) => boolText(record.is_active) },
+    { id: "updated_at", header: "Updated" },
+    {
+      id: "actions",
+      header: "",
+      sortable: false,
+      className: "w-28 text-right",
+      cell: (record) => <ReportRecipientActions campaignId={campaignId} record={record} canManage={canManage} />
+    }
+  ];
+
+  return (
+    <div className="space-y-4">
+      {canManage ? (
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add recipient
+          </Button>
+        </div>
+      ) : null}
+
+      <DataGrid
+        columns={columns}
+        records={records}
+        emptyTitle="No report recipients"
+        emptyDescription="No recipients are configured for this campaign and tenant yet."
+      />
+
+      <Modal
+        open={createOpen}
+        title="Add report recipient"
+        description="Configure who receives campaign report emails and PDF attachments."
+        onClose={() => setCreateOpen(false)}
+      >
+        <form action={`/api/operations/campaigns/${encodeURIComponent(campaignId)}/report-recipients`} method="post" className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium">
+              <span>Portal user</span>
+              <select
+                name="user_id"
+                defaultValue=""
+                className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">External email</option>
+                {userOptions.map((user) => (
+                  <option key={text(user.id)} value={text(user.id)}>
+                    {reportUserOptionLabel(user)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Delivery type</span>
+              <select
+                name="recipient_type"
+                defaultValue="to"
+                className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="to">To</option>
+                <option value="cc">CC</option>
+                <option value="bcc">BCC</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Name</span>
+              <input
+                name="display_name"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Email</span>
+              <input
+                name="email"
+                type="email"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+          </div>
+          <input type="hidden" name="report_kind" value="daily_price_radar" />
+          <input type="hidden" name="is_active" value="true" />
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">Add</Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function ReportPreviewSection({
+  payload,
+  records
+}: {
+  payload: CampaignWorkspacePayload;
+  records: Array<Record<string, unknown>>;
+}) {
+  const preview = payload.report_preview;
+  const campaignId = text(payload.campaign.id);
+  const businessDate = text(preview?.business_date, "");
+  const kpis = preview?.kpis ?? {};
+  const canSend = canManageCampaignReports(payload);
+  const highlights = preview?.highlights ?? [];
+  const columns: DataGridColumn<Record<string, unknown>>[] = [
+    { id: "headline", header: "Headline", className: "min-w-80" },
+    { id: "chain", header: "Chain" },
+    { id: "brand", header: "Brand" },
+    { id: "product", header: "Product" },
+    { id: "signal_type", header: "Type" },
+    { id: "severity", header: "Severity" },
+    { id: "impact_score", header: "Impact" },
+    { id: "recommended_action", header: "Recommended action", className: "min-w-72" }
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 rounded-md border border-border-2 bg-card p-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-sm font-medium">Daily report preview</div>
+          <div className="mt-1 text-sm text-muted-foreground">Review the campaign signal digest before email and PDF delivery.</div>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <form method="get" action={`/operations/campaigns/${encodeURIComponent(campaignId)}`} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <input type="hidden" name="tab" value="report-preview" />
+            <label className="space-y-1 text-sm font-medium">
+              <span>Business date</span>
+              <input
+                name="business_date"
+                type="date"
+                defaultValue={businessDate}
+                className="h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <Button type="submit" variant="outline">
+              Preview
+            </Button>
+          </form>
+          <form action={`/api/operations/campaigns/${encodeURIComponent(campaignId)}/reports/daily/send`} method="post">
+            <input type="hidden" name="business_date" value={businessDate} />
+            <Button type="submit" disabled={!canSend}>
+              Send email
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-6">
+        {[
+          ["Total signals", kpis.total_signals],
+          ["High severity", kpis.high_severity_signals],
+          ["Price signals", kpis.price_signals],
+          ["Promo signals", kpis.promo_signals],
+          ["Availability", kpis.availability_signals],
+          ["Chains", kpis.chains_with_signals]
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-md border border-border-2 px-3 py-2">
+            <div className="text-lg font-medium">{Number(value ?? 0)}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="text-sm font-semibold uppercase tracking-normal text-foreground">What needs attention today</div>
+        {highlights.length ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {highlights.map((highlight, index) => {
+              const severity = text(highlight.severity, "").toLowerCase();
+              const accent = severity === "critical" || severity === "high"
+                ? "border-l-destructive bg-destructive/5"
+                : severity === "medium"
+                  ? "border-l-primary bg-accent"
+                  : "border-l-secondary bg-accent";
+              return (
+                <div key={`${text(highlight.family_id, "highlight")}-${index}`} className={`rounded-md border border-border-2 border-l-4 p-3 ${accent}`}>
+                  <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{text(highlight.family_label)}</div>
+                  <div className="mt-1 font-medium leading-snug">{text(highlight.headline)}</div>
+                  <div className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {text(highlight.summary, text(highlight.business_reading, "No summary available."))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>{text(highlight.chain)}</span>
+                    <span>{text(highlight.brand)}</span>
+                    <span>{text(highlight.severity)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-md border border-border-2 p-3 text-sm text-muted-foreground">
+            No priority highlights were selected for this campaign and business date.
+          </div>
+        )}
+      </div>
+
+      <DataGrid
+        columns={columns}
+        records={records}
+        emptyTitle="No report signals"
+        emptyDescription="No executive signals were found for this campaign, tenant and business date."
+      />
     </div>
   );
 }
@@ -964,6 +1288,10 @@ export function CampaignWorkspace({
           <CardContent>
             {activeSection.id === "access" ? (
               <AccessSection payload={payload} records={activeSection.records} />
+            ) : activeSection.id === "report-recipients" ? (
+              <ReportRecipientsSection payload={payload} records={activeSection.records} />
+            ) : activeSection.id === "report-preview" ? (
+              <ReportPreviewSection payload={payload} records={activeSection.records} />
             ) : activeSection.id === "chains" ? (
               <ChainsSection payload={payload} records={activeSection.records} />
             ) : activeSection.id === "stores" ? (

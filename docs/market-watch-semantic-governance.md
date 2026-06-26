@@ -53,9 +53,11 @@ Una vista `mw_app_*` se justifica solo si:
 No crear `mw_app_*` para CRUDs simples, formularios administrativos o grids cuyo
 SQL pueda vivir claramente en la API.
 
-Las rutas criticas pueden usar materialized views `mw_app_*` cuando una vista
-normal obligue a recalcular agregaciones caras durante requests web. En ese caso
-deben tener indices de acceso y un punto explicito de refresh despues del ETL.
+Las rutas criticas pueden usar tablas `mw_app_*` pobladas por ETL cuando una
+vista normal obligue a recalcular agregaciones caras durante requests web. No
+usar materialized views para estos contratos del portal: `pg_restore` las
+reconstruye con `REFRESH MATERIALIZED VIEW`, lo que vuelve inviable un restore
+con volumen alto.
 
 ## Catalogo Actual
 
@@ -71,8 +73,8 @@ deben tener indices de acceso y un punto explicito de refresh despues del ETL.
 | `mw_signal_sku_store_observation` | signal | SKU/tienda/captura | evidencia | active | Evidencia verificable por tienda. |
 | `mw_signal_price_change_daily` | signal | evento diario de precio | BI/API | active | Publica cambios de precio diarios. |
 | `mw_signal_promo_daily` | signal | evento diario de promo | BI/API | active | Publica eventos de promo diarios. |
-| `mw_app_product_chain_price_history` | app | cliente/campana/SKU/cadena/dia | Portal/API | active | Materialized view para `/pricing/products/{product_key}` y Product Across Chains. |
-| `mw_app_product_store_activity` | app | cliente/campana/SKU/cadena/tienda/dia/run/listing | Portal/API | active | Materialized view de evidencia y drill-down por tienda para detalle de producto. |
+| `mw_app_product_chain_day` | app | cliente/campana/SKU/cadena/dia | Portal/API | active | Tabla app para `/pricing/products/{product_key}` y Product Across Chains. |
+| `mw_app_product_store_day` | app | cliente/campana/SKU/cadena/tienda/dia | Portal/API | active | Tabla app de evidencia y drill-down por tienda para detalle de producto. |
 | `mw_bi_brand_chain_price_index` | BI | marca/cadena/dia/cliente autorizado | Superset/API futuro | active | Contexto de posicionamiento. |
 | `mw_bi_sku_price_drivers` | BI | SKU/cadena/dia/cliente autorizado | Portal/API | active | Drivers y comparacion contra mejor precio observado. |
 | `mw_bi_sku_store_price_evidence` | BI | SKU/tienda/captura/cliente autorizado | Portal/API | active | Evidencia de precio, promo y URL. |

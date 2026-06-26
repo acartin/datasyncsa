@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import html
 import json
-import random
 import re
-import time
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -18,7 +16,7 @@ from typing import Any
 import urllib3
 
 from etl.chain_runtime_db import load_instaleap_location_runtime_config
-from etl.http_client import BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import BrowserSession, create_browser_session, request_with_retry, set_rate_limiter
 from etl.postgres_cli import parse_env
 
 
@@ -191,6 +189,8 @@ class InstaleapLocationScraper:
         self._request_counter = 0
 
     def _build_session(self) -> BrowserSession:
+        domain = self.config.graphql_v2_endpoint.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         urllib3.disable_warnings()
         return create_browser_session(
             headers={
@@ -207,9 +207,7 @@ class InstaleapLocationScraper:
         )
 
     def _sleep_if_needed(self) -> None:
-        if self._request_counter <= 0:
-            return
-        time.sleep(random.uniform(0.35, 0.85))
+        return
 
     def fetch_source_html(self) -> str:
         response = request_with_retry(
@@ -346,14 +344,17 @@ class InstaleapLocationScraper:
         self._sleep_if_needed()
         response = request_with_retry(
             self.session,
-            "POST",
+            "GET",
             self.config.graphql_v2_endpoint,
             timeout=GRAPHQL_TIMEOUT,
             verify=False,
-            json=payload,
+            params={
+                "operationName": payload["operationName"],
+                "query": payload["query"],
+                "variables": json.dumps(payload["variables"], separators=(",", ":")),
+            },
             headers={
                 "Accept": "application/json, text/plain, */*",
-                "Content-Type": "application/json",
                 "Origin": "https://www.megasuper.com",
                 "Referer": "https://www.megasuper.com/",
             },

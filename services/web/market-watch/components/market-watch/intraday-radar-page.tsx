@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { Activity, AlertTriangle, Bell, Percent } from "lucide-react";
 import { FocusModeToggle } from "@/components/portal/focus-mode-toggle";
 import { DataViewToolbar, DataViewFilterConfig } from "@/components/market-watch/data-view-toolbar";
 import { IntradayRadarGrid } from "@/components/market-watch/intraday-radar-grid";
+import { IntradayRadarPagination } from "@/components/market-watch/intraday-radar-pagination";
 import { KpiCard } from "@/components/market-watch/kpi-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { costaRicaYesterdayInputValue } from "@/lib/closed-day";
 import { IntradayRadarPayload, IntradayRadarSearchParams } from "@/lib/pricing-types";
@@ -92,8 +91,8 @@ export function IntradayRadarPage({
             {payload.kpis.prior_closed_date_key ? <Badge>Base DoD {displayDateKey(payload.kpis.prior_closed_date_key)}</Badge> : null}
             {payload.kpis.latest_capture ? <Badge>Latest capture {payload.kpis.latest_capture}</Badge> : null}
           </div>
-          <h1 className="text-[22px] font-light leading-tight tracking-[-0.01em]">Price and promotion radar</h1>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-ink-muted">
+          <h1 className="text-page-title font-light leading-tight">Price and promotion radar</h1>
+          <p className="mt-1 max-w-3xl text-page-subtitle text-ink-muted">
             Day-over-day changes for the latest closed day compared with the previous day, grouped by product and chain.
           </p>
         </div>
@@ -121,8 +120,8 @@ export function IntradayRadarPage({
       <Card className="focus-grid-card">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
-            <div className="text-[13px] font-medium">Day-over-day movements</div>
-            <div className="mt-1 text-[11px] text-ink-muted">
+            <div className="text-card-title font-medium">Day-over-day movements</div>
+            <div className="mt-1 text-meta text-ink-muted">
               Compares regular price, promotional price and promotion status across consecutive closed days.
             </div>
           </div>
@@ -135,14 +134,12 @@ export function IntradayRadarPage({
               {payload.items.length ? payload.offset + 1 : 0}-{Math.min(payload.offset + payload.items.length, payload.kpis.total_events)} of{" "}
               {payload.kpis.total_events}
             </div>
-            <div className="flex gap-2">
-              <Button asChild variant="outline" disabled={payload.offset <= 0}>
-                <Link href={pageHref(filters, payload.offset - payload.limit, payload.limit)}>Prev</Link>
-              </Button>
-              <Button asChild variant="outline" disabled={payload.offset + payload.limit >= payload.kpis.total_events}>
-                <Link href={pageHref(filters, payload.offset + payload.limit, payload.limit)}>Next</Link>
-              </Button>
-            </div>
+            <IntradayRadarPagination
+              previousHref={pageHref(filters, payload.offset - payload.limit, payload.limit)}
+              nextHref={pageHref(filters, payload.offset + payload.limit, payload.limit)}
+              previousDisabled={payload.offset <= 0}
+              nextDisabled={payload.offset + payload.limit >= payload.kpis.total_events}
+            />
           </div>
         </CardContent>
       </Card>

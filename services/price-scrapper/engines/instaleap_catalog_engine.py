@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 import re
 import time
 from dataclasses import dataclass
@@ -21,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from etl.chain_runtime_db import load_catalog_runtime_payload
-from etl.http_client import BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import BrowserSession, create_browser_session, request_with_retry, set_rate_limiter
 from etl.normalize import normalize_ean
 from etl.postgres_cli import parse_env
 
@@ -470,8 +469,8 @@ class InstaleapCatalogScraper:
         root_categories: list[RootCategorySelection],
         output_dir: Path,
         page_size: int = DEFAULT_PAGE_SIZE,
-        sleep_min: float = 1.25,
-        sleep_max: float = 3.00,
+        sleep_min: float = 0.0,
+        sleep_max: float = 0.0,
         max_categories: int | None = None,
         max_pages_per_category: int | None = None,
         selected_root_slugs: list[str] | None = None,
@@ -495,6 +494,8 @@ class InstaleapCatalogScraper:
         self.missing_root_categories: list[dict[str, Any]] = []
 
     def _build_session(self) -> BrowserSession:
+        domain = self.config.graphql_endpoint.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         return create_browser_session(
             headers={
                 "Accept": "application/json, text/plain, */*",
@@ -511,9 +512,7 @@ class InstaleapCatalogScraper:
         )
 
     def _sleep_if_needed(self) -> None:
-        if self.request_counter <= 0:
-            return
-        time.sleep(random.uniform(self.sleep_min, self.sleep_max))
+        return
 
     def fetch_products_page(
         self,
@@ -530,18 +529,16 @@ class InstaleapCatalogScraper:
                 "pageSize": page_size,
             }
         }
-        body = {
-            "operationName": "GetProductsByCategory",
-            "variables": variables,
-            "query": PRODUCTS_BY_CATEGORY_QUERY,
-        }
-
         self._sleep_if_needed()
         response = request_with_retry(
             self.session,
-            "POST",
+            "GET",
             self.config.graphql_endpoint,
-            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            params={
+                "operationName": "GetProductsByCategory",
+                "query": PRODUCTS_BY_CATEGORY_QUERY,
+                "variables": json.dumps(variables, separators=(",", ":")),
+            },
             timeout=REQUEST_TIMEOUT,
         )
         self.request_counter += 1
@@ -816,14 +813,14 @@ def build_arg_parser(*, description: str, default_output_dir: Path | None = None
     parser.add_argument(
         "--sleep-min",
         type=float,
-        default=1.25,
-        help="Sleep minimo entre requests.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--sleep-max",
         type=float,
-        default=3.00,
-        help="Sleep maximo entre requests.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--max-categories",

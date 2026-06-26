@@ -65,10 +65,18 @@ export type CampaignWorkspacePayload = {
     can_manage_access?: boolean;
   };
   campaign: Record<string, unknown>;
+  report_preview?: {
+    business_date: string;
+    kpis: Record<string, number>;
+    diagnostics?: Record<string, unknown>;
+    highlights?: Array<Record<string, unknown>>;
+    records: Array<Record<string, unknown>>;
+  };
   available_clients?: Array<Record<string, unknown>>;
   available_chains?: Array<Record<string, unknown>>;
   available_stores?: Array<Record<string, unknown>>;
   available_products?: Array<Record<string, unknown>>;
+  available_report_users?: Array<Record<string, unknown>>;
   summary: Record<string, number>;
   sections: CampaignWorkspaceSection[];
 };

@@ -1,14 +1,16 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PasswordInput } from "@/components/ui/password-input";
 import { sessionCookieName } from "@/lib/api";
 
 export default async function LoginPage({
   searchParams
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; reset?: string }>;
 }) {
   const cookieStore = await cookies();
   if (cookieStore.get(sessionCookieName)?.value) {
@@ -17,6 +19,7 @@ export default async function LoginPage({
 
   const resolvedSearchParams = await searchParams;
   const hasError = resolvedSearchParams?.error === "1";
+  const resetSuccess = resolvedSearchParams?.reset === "1";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10 text-foreground">
@@ -50,10 +53,9 @@ export default async function LoginPage({
               <label htmlFor="password" className="text-sm font-medium">
                 Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 autoComplete="current-password"
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 required
@@ -64,6 +66,16 @@ export default async function LoginPage({
                 Invalid username or password.
               </div>
             ) : null}
+            {resetSuccess ? (
+              <div className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-body-sm text-foreground">
+                Your password has been updated. You can sign in now.
+              </div>
+            ) : null}
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="text-body-sm text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <Button type="submit" className="w-full">
               Sign in
             </Button>

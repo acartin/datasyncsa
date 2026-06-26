@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import json
-import random
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from etl.http_client import BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import BrowserSession, create_browser_session, request_with_retry, set_rate_limiter
 
 
 REQUEST_TIMEOUT = 30
@@ -135,8 +134,8 @@ class InstaleapAnalyticScraper:
         *,
         chain: InstaleapAnalyticChainConfig,
         location: InstaleapAnalyticLocation,
-        sleep_min: float = 1.25,
-        sleep_max: float = 3.00,
+        sleep_min: float = 0.0,
+        sleep_max: float = 0.0,
     ) -> None:
         self.chain = chain
         self.location = location
@@ -148,6 +147,8 @@ class InstaleapAnalyticScraper:
         self.session = self._build_session()
 
     def _build_session(self) -> BrowserSession:
+        domain = self.chain.graphql_endpoint.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         return create_browser_session(
             headers={
                 "Accept": "application/json, text/plain, */*",
@@ -164,9 +165,7 @@ class InstaleapAnalyticScraper:
         )
 
     def _sleep_if_needed(self) -> None:
-        if self.request_counter <= 0:
-            return
-        time.sleep(random.uniform(self.sleep_min, self.sleep_max))
+        return
 
     def fetch_products_by_skus(self, skus: list[str]) -> list[dict[str, Any]]:
         payload = {
@@ -183,11 +182,15 @@ class InstaleapAnalyticScraper:
         self._sleep_if_needed()
         response = request_with_retry(
             self.session,
-            "POST",
+            "GET",
             self.chain.graphql_endpoint,
             timeout=REQUEST_TIMEOUT,
             verify=False,
-            json=payload,
+            params={
+                "operationName": payload["operationName"],
+                "query": payload["query"],
+                "variables": json.dumps(payload["variables"], separators=(",", ":")),
+            },
         )
         self.request_counter += 1
         response.raise_for_status()

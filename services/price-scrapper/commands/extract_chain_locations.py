@@ -121,14 +121,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sleep-min",
         type=float,
-        default=0.80,
-        help="Sleep minimo entre requests del engine VTEX.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--sleep-max",
         type=float,
-        default=1.80,
-        help="Sleep maximo entre requests del engine VTEX.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--postal-code-limit",

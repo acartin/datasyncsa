@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "Error: 'rg' (ripgrep) es requerido." >&2
-  exit 1
-fi
 
 MAX_LINES_PER_FILE="${MAX_LINES_PER_FILE:-180}"
 MAX_FILE_SIZE_KB="${MAX_FILE_SIZE_KB:-256}"
@@ -135,6 +131,7 @@ cat > "$BRAIN_FILE" <<EOF
 | \`services/dagster\` | Orquestacion de Market Watch: assets, jobs, schedules y sensores para coordinar ETL. | 4 |
 | \`services/price-scrapper\` | Bounded context de scraping, ETL, campañas, facts y queries base. | 5 |
 | \`services/market-watch-api\` | API de producto: auth/multitenancy, datasets livianos, control de \`client_id\`. | 5 |
+| \`services/proxy-residencial\` | Proxy residencial BrightData para rotacion de IP en scrappers. | 4 |
 | \`services/web/market-watch\` | Frontend cliente: SEO, dashboards, tablas, pivots y reportes. | 5 |
 | \`.agent\` | Reglas operativas para agentes en el repo recortado. | 4 |
 
@@ -159,6 +156,7 @@ $(compose_services docker-compose.yml)
 $(tree_if_exists services/price-scrapper)
 $(tree_if_exists services/dagster)
 $(tree_if_exists services/market-watch-api)
+$(tree_if_exists services/proxy-residencial)
 $(tree_if_exists services/web/market-watch)
 \`\`\`
 
@@ -168,6 +166,7 @@ $(tree_if_exists services/web/market-watch)
 $(files_if_exists services/price-scrapper)
 $(files_if_exists services/dagster)
 $(files_if_exists services/market-watch-api)
+$(files_if_exists services/proxy-residencial)
 $(files_if_exists services/web/market-watch)
 \`\`\`
 EOF
@@ -200,6 +199,7 @@ append_codeblock text \
 "$(tree_if_exists services/price-scrapper)
 $(tree_if_exists services/dagster)
 $(tree_if_exists services/market-watch-api)
+$(tree_if_exists services/proxy-residencial)
 $(tree_if_exists services/web/market-watch)"
 
 append_section "Archivos Market Watch"
@@ -207,9 +207,11 @@ append_codeblock text \
 "$(files_if_exists services/price-scrapper)
 $(files_if_exists services/dagster)
 $(files_if_exists services/market-watch-api)
+$(files_if_exists services/proxy-residencial)
 $(files_if_exists services/web/market-watch)"
 
 append_section "Extractos de Servicio"
+append_file_excerpt "services/proxy-residencial/brightdata.py"
 append_file_excerpt "services/price-scrapper/README.md"
 append_file_excerpt "services/price-scrapper/requirements.txt"
 append_file_excerpt "services/dagster/README.md"

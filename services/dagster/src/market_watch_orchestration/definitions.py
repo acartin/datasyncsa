@@ -302,6 +302,20 @@ def load_fact_listing_snapshots(
 
 
 @op(required_resource_keys={"price_scrapper"})
+def build_app_product_history(
+    context: OpExecutionContext,
+    plan: dict[str, object],
+) -> dict[str, object]:
+    if not plan.get("facts_loaded"):
+        context.log.warning("Facts were not loaded; skipping app product history build.")
+        return {**plan, "app_product_history_built": False}
+    run_keys = [int(run_key) for run_key in plan.get("run_keys", [])]
+    result = context.resources.price_scrapper.run_build_app_product_history(run_keys=run_keys)
+    _log_process_result(context, "build_app_product_history", result)
+    return {**plan, "app_product_history_built": True}
+
+
+@op(required_resource_keys={"price_scrapper"})
 def validate_daily_analytic_counts(
     context: OpExecutionContext,
     plan: dict[str, object],
@@ -402,7 +416,8 @@ def daily_active_campaigns_analytic_job() -> None:
     listing_load = load_dim_listings(listing_transform)
     snapshot_transform = transform_stage_listing_snapshots(listing_load)
     fact_load = load_fact_listing_snapshots(snapshot_transform)
-    validate_daily_analytic_counts(fact_load)
+    app_history = build_app_product_history(fact_load)
+    validate_daily_analytic_counts(app_history)
 
 
 @job
@@ -425,7 +440,7 @@ def refresh_chain_root_categories_job() -> None:
     config_schema={
         "campaign_id": Field(int, default_value=DEFAULT_CAMPAIGN_ID),
         "business_date": Field(str, default_value="", description="YYYY-MM-DD. Defaults to today Costa Rica."),
-        "skip_llm": Field(bool, default_value=True, description="Skip LLM synthesis, use deterministic narratives."),
+        "skip_llm": Field(bool, default_value=False, description="Skip LLM synthesis, use deterministic narratives."),
     },
 )
 def generate_retail_signals(context: OpExecutionContext) -> dict[str, object]:
@@ -446,6 +461,8 @@ def generate_retail_signals(context: OpExecutionContext) -> dict[str, object]:
 
     env = os.environ.copy()
     env.setdefault("RETAIL_SIGNAL_DB_MODE", "direct")
+    if not skip_llm and not env.get("GOOGLE_API_KEY"):
+        raise RuntimeError("generate_retail_signals requires GOOGLE_API_KEY when skip_llm=false")
 
     result = subprocess.run(
         command,

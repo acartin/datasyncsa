@@ -42,14 +42,16 @@ El Signal Engine no debe depender de vistas de BI.
 Contratos estables para la API y el portal Market Watch. No son vistas por grid:
 deben representar datasets de producto con grano claro.
 
-- `mw_app_product_chain_price_history`: materialized view de historial de producto por cadena y dia.
-- `mw_app_product_store_activity`: materialized view de actividad/evidencia de producto por tienda.
+- `mw_app_product_chain_day`: tabla app de historial de producto por cadena y dia.
+- `mw_app_product_store_day`: tabla app de historial de producto por tienda y dia.
 
-Estas vistas existen como excepcion fundamentada para la ruta critica
-`/pricing/products/{product_key}` y su drill-down por tienda.
+Estas tablas existen para la ruta critica `/pricing/products/{product_key}` y
+su drill-down por tienda. Se pueblan por ETL, no por materialized views, para que
+el restore de la base no ejecute joins pesados via `REFRESH MATERIALIZED VIEW`.
 
-Al ser materializadas, deben refrescarse despues de las cargas ETL que actualizan
-`mkt_fact_listing_snapshot`, `mkt_run`, listings o dimensiones relacionadas.
+Despues de las cargas ETL que actualizan `mkt_fact_listing_snapshot`, `mkt_run`,
+listings o dimensiones relacionadas, debe ejecutarse
+`commands/build_app_product_history.py` para reconstruir los dias afectados.
 
 ## BI / Presentation
 

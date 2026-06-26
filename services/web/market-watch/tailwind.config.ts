@@ -12,12 +12,16 @@ const config: Config = {
       colors: {
         border: "var(--border)",
         "border-2": "var(--border-2)",
+        "border-strong": "var(--border-strong)",
         input: "var(--input)",
         ring: "var(--ring)",
         background: "var(--background)",
         foreground: "var(--foreground)",
         surface: "var(--surface)",
         "surface-2": "var(--surface-2)",
+        "surface-3": "var(--surface-3)",
+        "surface-hover": "var(--surface-hover)",
+        "surface-selected": "var(--surface-selected)",
         ink: {
           primary: "var(--ink-primary)",
           secondary: "var(--ink-secondary)",
@@ -56,7 +60,29 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "sans-serif"],
+        serif: ["var(--font-serif)", "serif"],
         mono: ["var(--font-mono)", "monospace"]
+      },
+      fontSize: {
+        "page-title": ["var(--font-size-page-title)", { lineHeight: "var(--line-height-page-title)" }],
+        "page-subtitle": ["var(--font-size-page-subtitle)", { lineHeight: "var(--line-height-page-subtitle)" }],
+        "section-title": ["var(--font-size-section-title)", { lineHeight: "var(--line-height-section-title)" }],
+        "card-title": ["var(--font-size-card-title)", { lineHeight: "var(--line-height-card-title)" }],
+        body: ["var(--font-size-body)", { lineHeight: "var(--line-height-body)" }],
+        "body-sm": ["var(--font-size-body-sm)", { lineHeight: "var(--line-height-body-sm)" }],
+        label: ["var(--font-size-label)", { lineHeight: "var(--line-height-label)" }],
+        meta: ["var(--font-size-meta)", { lineHeight: "var(--line-height-meta)" }],
+        "grid-header": ["var(--font-size-grid-header)", { lineHeight: "var(--line-height-grid-header)" }],
+        "grid-cell": ["var(--font-size-grid-cell)", { lineHeight: "var(--line-height-grid-cell)" }],
+        "kpi-value": ["var(--font-size-kpi-value)", { lineHeight: "var(--line-height-kpi-value)" }],
+        "kpi-label": ["var(--font-size-kpi-label)", { lineHeight: "var(--line-height-kpi-label)" }]
+      },
+      spacing: {
+        control: "var(--control-height)",
+        "control-sm": "var(--control-height-sm)",
+        "control-lg": "var(--control-height-lg)",
+        "grid-row": "var(--grid-row-height)",
+        toolbar: "var(--toolbar-height)"
       },
       borderRadius: {
         lg: "var(--radius)",

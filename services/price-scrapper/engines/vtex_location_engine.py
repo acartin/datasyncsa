@@ -4,15 +4,13 @@
 from __future__ import annotations
 
 import json
-import random
 import re
-import time
 from dataclasses import dataclass
 from math import ceil
 from typing import Any
 
 from etl.chain_runtime_db import load_vtex_location_runtime_config
-from etl.http_client import BrowserResponse, BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import BrowserResponse, BrowserSession, create_browser_session, request_with_retry, set_rate_limiter
 from etl.postgres_cli import parse_env
 
 
@@ -53,8 +51,8 @@ class VtexLocationScraper:
         self,
         *,
         config: VtexLocationChainConfig,
-        sleep_min: float = 0.80,
-        sleep_max: float = 1.80,
+        sleep_min: float = 0.0,
+        sleep_max: float = 0.0,
         postal_code_limit: int | None = None,
     ) -> None:
         self.config = config
@@ -65,6 +63,8 @@ class VtexLocationScraper:
         self.session = self._build_session()
 
     def _build_session(self) -> BrowserSession:
+        domain = self.config.base_url.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         return create_browser_session(
             headers={
                 "Accept": "application/json, text/plain, */*",
@@ -80,9 +80,7 @@ class VtexLocationScraper:
         )
 
     def _sleep_if_needed(self) -> None:
-        if self.request_counter <= 0:
-            return
-        time.sleep(random.uniform(self.sleep_min, self.sleep_max))
+        return
 
     def _get(self, url: str, **kwargs: Any) -> BrowserResponse:
         self._sleep_if_needed()
@@ -266,8 +264,8 @@ class VtexLocationScraper:
 def discover_locations(
     chain_id: str,
     *,
-    sleep_min: float = 0.80,
-    sleep_max: float = 1.80,
+    sleep_min: float = 0.0,
+    sleep_max: float = 0.0,
     postal_code_limit: int | None = None,
 ) -> list[dict[str, Any]]:
     scraper = VtexLocationScraper(

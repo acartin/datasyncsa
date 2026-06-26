@@ -52,6 +52,20 @@ class AuthRepository:
                 )
                 connection.commit()
 
+    def revoke_sessions_for_user(self, *, user_id: int) -> None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.auth_sessions
+                    set revoked_at = now()
+                    where user_id = %(user_id)s
+                      and revoked_at is null;
+                    """,
+                    {"user_id": user_id},
+                )
+                connection.commit()
+
     def revoke_session(self, *, token_hash: str) -> None:
         with self._connection_factory() as connection:
             with connection.cursor() as cursor:
@@ -65,6 +79,108 @@ class AuthRepository:
                     {"token_hash": token_hash},
                 )
                 connection.commit()
+
+    def create_password_reset_token(
+        self,
+        *,
+        user_id: int,
+        delivery_email: str,
+        token_hash: str,
+        expires_at: str,
+    ) -> None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.auth_password_reset_tokens
+                    set used_at = now()
+                    where user_id = %(user_id)s
+                      and used_at is null;
+                    """,
+                    {"user_id": user_id},
+                )
+                cursor.execute(
+                    """
+                    insert into public.auth_password_reset_tokens (user_id, delivery_email, token_hash, expires_at)
+                    values (%(user_id)s, %(delivery_email)s, %(token_hash)s, %(expires_at)s::timestamptz);
+                    """,
+                    {
+                        "user_id": user_id,
+                        "delivery_email": delivery_email,
+                        "token_hash": token_hash,
+                        "expires_at": expires_at,
+                    },
+                )
+                connection.commit()
+
+    def find_password_reset_token(self, *, token_hash: str) -> dict[str, Any] | None:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select
+                      prt.id,
+                      prt.user_id,
+                      prt.delivery_email,
+                      prt.expires_at,
+                      u.username,
+                      u.email,
+                      u.display_name,
+                      u.status
+                    from public.auth_password_reset_tokens prt
+                    join public.auth_users u
+                      on u.id = prt.user_id
+                    where prt.token_hash = %(token_hash)s
+                      and prt.used_at is null
+                      and prt.expires_at > now()
+                      and u.status = 'active'
+                    limit 1;
+                    """,
+                    {"token_hash": token_hash},
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+
+    def consume_password_reset_token(self, *, token_hash: str, password_hash: str) -> bool:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    update public.auth_password_reset_tokens
+                    set used_at = now()
+                    where token_hash = %(token_hash)s
+                      and used_at is null
+                      and expires_at > now()
+                    returning user_id;
+                    """,
+                    {"token_hash": token_hash},
+                )
+                row = cursor.fetchone()
+                if not row:
+                    connection.commit()
+                    return False
+
+                user_id = int(row["user_id"])
+                cursor.execute(
+                    """
+                    update public.auth_users
+                    set password_hash = %(password_hash)s,
+                        updated_at = now()
+                    where id = %(user_id)s;
+                    """,
+                    {"user_id": user_id, "password_hash": password_hash},
+                )
+                cursor.execute(
+                    """
+                    update public.auth_sessions
+                    set revoked_at = now()
+                    where user_id = %(user_id)s
+                      and revoked_at is null;
+                    """,
+                    {"user_id": user_id},
+                )
+                connection.commit()
+                return True
 
     def session_context(self, *, token_hash: str) -> dict[str, Any] | None:
         with self._connection_factory() as connection:

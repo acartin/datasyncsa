@@ -106,6 +106,13 @@ class PriceScrapperResource(ConfigurableResource):
     def run_load_fact_listing_snapshots(self) -> subprocess.CompletedProcess[str]:
         return self.commands.run_load_fact_listing_snapshots()
 
+    def run_build_app_product_history(
+        self,
+        *,
+        run_keys: list[int],
+    ) -> subprocess.CompletedProcess[str]:
+        return self.commands.run_build_app_product_history(run_keys=run_keys)
+
     def run_campaign_analytic_batch(
         self,
         *,

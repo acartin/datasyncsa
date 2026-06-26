@@ -33,7 +33,7 @@ export function Tabs({
             disabled={item.disabled}
             onClick={() => onValueChange(item.id)}
             className={cn(
-              "min-h-8 border-b border-transparent px-0 text-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50",
+              "min-h-control-sm border-b-2 border-transparent px-0 text-body-sm font-medium text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50",
               active && "border-primary text-foreground",
               !active && "hover:text-foreground"
             )}

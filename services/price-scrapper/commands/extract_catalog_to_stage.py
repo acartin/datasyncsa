@@ -21,6 +21,7 @@ from etl.catalog_stage_loader import (
     load_failed_catalog_stage_run,
     load_successful_catalog_stage_run,
 )
+from etl.http_client import DomainCircuitOpen
 from etl.postgres_cli import parse_env
 from etl.run_runtime_db import find_existing_succeeded_run_key
 
@@ -191,6 +192,16 @@ def main(argv: list[str] | None = None) -> None:
     try:
         records, metadata = scraper.collect_catalog()
     except Exception as exc:
+        extra_metadata: dict[str, Any] = {"write_debug_files": args.write_debug_files}
+        if isinstance(exc, DomainCircuitOpen):
+            extra_metadata.update(
+                {
+                    "blocked_by_circuit_breaker": True,
+                    "blocked_domain": exc.domain,
+                    "block_reason": exc.reason,
+                    "retry_after_seconds": exc.retry_after_seconds,
+                }
+            )
         run_key = record_failed_run(
             chain_id=chain_id,
             engine=engine,
@@ -200,7 +211,7 @@ def main(argv: list[str] | None = None) -> None:
             run_kind=args.run_kind,
             business_date_key=business_date_key,
             exc=exc,
-            extra_metadata={"write_debug_files": args.write_debug_files},
+            extra_metadata=extra_metadata,
         )
         if run_key is not None:
             print(

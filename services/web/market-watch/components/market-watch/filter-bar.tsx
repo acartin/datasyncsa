@@ -17,7 +17,7 @@ export function FilterBar({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-3 rounded-md border bg-card p-3 md:flex-row md:items-center md:justify-between", className)}>
+    <div className={cn("flex flex-col gap-3 rounded-md border border-border-2 bg-card p-3 shadow-[0_1px_2px_var(--shadow-color)] md:flex-row md:items-center md:justify-between", className)}>
       <div className="flex flex-wrap gap-2">
         {filters.map((filter) => (
           <Button key={filter.id} type="button" variant="outline" className="justify-start">

@@ -32,6 +32,21 @@ function status(value: unknown) {
   return value ? "Yes" : "No";
 }
 
+function ProductIdentifier({ value }: { value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-[6px] border border-border-2 bg-surface-2 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+      GTIN
+      <code className="select-all font-mono text-[11px] font-normal tracking-normal text-foreground">{value}</code>
+    </span>
+  );
+}
+
+function numberValue(value: unknown) {
+  if (typeof value !== "number") return "-";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
 function productDetailHref(productKey: string, context: ProductStoreContext) {
   const search = new URLSearchParams();
   if (context.campaignId) search.set("campaign_id", context.campaignId);
@@ -63,6 +78,14 @@ const captureColumns: DataGridColumn<IntradayProductStoreCapture>[] = [
     id: "is_available",
     header: "Available",
     cell: (record) => status(record.is_available)
+  },
+  {
+    id: "available_quantity",
+    header: "Source qty",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{numberValue(record.available_quantity)}</span>,
+    sortValue: (record) => record.available_quantity
   },
   {
     id: "reference_price_amount",
@@ -163,8 +186,6 @@ export function IntradayProductStorePage({
           </Button>
           <span className="text-border-2">/</span>
           <span>{selectedStore.location_name}</span>
-          <span className="text-border-2">/</span>
-          <span className="font-medium text-foreground">{product.product}</span>
         </div>
         <Card>
           <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -178,6 +199,7 @@ export function IntradayProductStorePage({
                 <span>
                   {product.content_quantity ?? "-"} {product.content_unit ?? ""}
                 </span>
+                <ProductIdentifier value={product.gtin} />
                 <span className="text-border-2">/</span>
                 <span>Campaign {product.campaign_id}</span>
               </div>

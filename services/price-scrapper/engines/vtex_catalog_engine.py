@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import random
 import re
 import time
 from dataclasses import dataclass
@@ -16,7 +15,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from etl.chain_runtime_db import load_catalog_runtime_payload
-from etl.http_client import BrowserResponse, BrowserSession, create_browser_session, request_with_retry
+from etl.http_client import BrowserResponse, BrowserSession, create_browser_session, request_with_retry, set_rate_limiter
 from etl.normalize import normalize_ean
 from etl.postgres_cli import parse_env
 
@@ -483,8 +482,8 @@ class VTEXCatalogScraper:
         root_categories: list[RootCategorySelection],
         output_dir: Path,
         page_step: int = PAGE_STEP,
-        sleep_min: float = 1.25,
-        sleep_max: float = 3.00,
+        sleep_min: float = 0.0,
+        sleep_max: float = 0.0,
         request_mode: str = "auto",
         category_tree_depth: int = 10,
         max_categories: int | None = None,
@@ -514,6 +513,8 @@ class VTEXCatalogScraper:
         self.missing_root_categories: list[dict[str, Any]] = []
 
     def _build_session(self) -> BrowserSession:
+        domain = self.config.base_url.removeprefix("https://").removeprefix("http://").split("/")[0]
+        set_rate_limiter(domain)
         referer_slug = ""
         if self.root_categories:
             referer_slug = self.root_categories[0].slug
@@ -556,9 +557,7 @@ class VTEXCatalogScraper:
         return session
 
     def _sleep_if_needed(self) -> None:
-        if self.request_counter <= 0:
-            return
-        time.sleep(random.uniform(self.sleep_min, self.sleep_max))
+        return
 
     def _get_json(
         self,
@@ -950,14 +949,14 @@ def build_arg_parser(*, description: str, default_output_dir: Path | None = None
     parser.add_argument(
         "--sleep-min",
         type=float,
-        default=1.25,
-        help="Sleep minimo entre requests.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--sleep-max",
         type=float,
-        default=3.00,
-        help="Sleep maximo entre requests.",
+        default=0.0,
+        help="Parametro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
     )
     parser.add_argument(
         "--page-step",

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import sleep
+from typing import Any
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 
@@ -40,10 +42,13 @@ from etl.catalog_stage_loader import (
     load_successful_catalog_stage_run,
 )
 from etl.chain_runtime_db import load_chain_row
+from etl.http_client import DomainCircuitOpen
 from etl.postgres_cli import parse_env
 from etl.run_runtime_db import find_existing_succeeded_run_key
 
 CR_TIMEZONE = ZoneInfo("America/Costa_Rica")
+FAILED_RECORD_ERROR_SAMPLE_LIMIT = 25
+FAILED_RECORD_ERROR_TEXT_LIMIT = 600
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,91 @@ class AnalyticWorkUnit:
     scraper: VtexAnalyticScraper | InstaleapAnalyticScraper
     targets: list[VtexAnalyticTarget] | list[InstaleapAnalyticTarget]
     pricing_scope: str
+    source_domain: str
+
+
+def extract_domain(url: str) -> str:
+    parsed = urlparse(url)
+    return parsed.netloc or url.removeprefix("https://").removeprefix("http://").split("/")[0]
+
+
+def _metadata_scalar(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    text = str(value)
+    if len(text) <= FAILED_RECORD_ERROR_TEXT_LIMIT:
+        return text
+    return f"{text[:FAILED_RECORD_ERROR_TEXT_LIMIT]}... [truncated]"
+
+
+def _summarize_record_errors(errors: Any) -> list[dict[str, Any]]:
+    if not isinstance(errors, list):
+        return []
+
+    samples: list[dict[str, Any]] = []
+    for item in errors[:FAILED_RECORD_ERROR_SAMPLE_LIMIT]:
+        if isinstance(item, dict):
+            samples.append({str(key): _metadata_scalar(value) for key, value in item.items()})
+        else:
+            samples.append({"error": _metadata_scalar(item)})
+    return samples
+
+
+def build_failed_analytic_metadata(
+    *,
+    campaign_id: int,
+    location_key: int,
+    location_name: str,
+    requested_targets: int,
+    source_domain: str,
+    scraper_metadata: dict[str, Any] | None = None,
+    error_message: str | None = None,
+) -> dict[str, Any]:
+    raw_metadata: dict[str, Any] = {
+        "campaign_id": campaign_id,
+        "location_key": location_key,
+        "location_name": location_name,
+        "requested_targets": requested_targets,
+        "source_domain": source_domain,
+    }
+    if error_message:
+        raw_metadata["failure_reason"] = _metadata_scalar(error_message)
+
+    metadata = scraper_metadata or {}
+    scalar_keys = (
+        "engine",
+        "chain_id",
+        "catalog_id",
+        "pricing_scope",
+        "started_at",
+        "finished_at",
+        "generated_at",
+        "elapsed_seconds",
+        "catalog_records",
+        "unique_products",
+        "duplicates_skipped",
+        "campaign_record_total_requested",
+        "campaign_record_total_succeeded",
+        "campaign_record_total_failed",
+        "http_request_count",
+        "http_request_body_bytes",
+        "http_response_body_bytes",
+        "http_total_body_bytes",
+        "http_avg_response_body_bytes",
+    )
+    for key in scalar_keys:
+        if key in metadata:
+            raw_metadata[key] = _metadata_scalar(metadata.get(key))
+
+    record_errors = metadata.get("campaign_record_errors")
+    if isinstance(record_errors, list):
+        raw_metadata["campaign_record_error_total"] = len(record_errors)
+        raw_metadata["campaign_record_error_sample"] = _summarize_record_errors(record_errors)
+        raw_metadata["campaign_record_errors_truncated"] = (
+            len(record_errors) > FAILED_RECORD_ERROR_SAMPLE_LIMIT
+        )
+
+    return raw_metadata
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -68,8 +158,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chain-id", action="append", default=None, help="Filtra a una o varias cadenas.")
     parser.add_argument("--max-locations-per-chain", type=int, default=None, help="Limita locations por cadena.")
     parser.add_argument("--max-products-per-chain", type=int, default=None, help="Limita productos por cadena.")
-    parser.add_argument("--sleep-min", type=float, default=1.25, help="Sleep mínimo entre requests.")
-    parser.add_argument("--sleep-max", type=float, default=3.00, help="Sleep máximo entre requests.")
+    parser.add_argument(
+        "--sleep-min",
+        type=float,
+        default=0.0,
+        help="Parámetro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
+    )
+    parser.add_argument(
+        "--sleep-max",
+        type=float,
+        default=0.0,
+        help="Parámetro legacy ignorado; el pacing HTTP vive en etl/http_client.py.",
+    )
     parser.add_argument(
         "--business-date",
         default=None,
@@ -196,6 +296,7 @@ def extract_campaign_analytic_to_stage(
         engine = chain_locations[0].engine
         if engine == "vtex":
             chain_config = build_vtex_chain_config(env, chain_id)
+            source_domain = extract_domain(chain_config.base_url)
             analytic_targets = [
                 VtexAnalyticTarget(
                     product_key=row.product_key,
@@ -221,6 +322,7 @@ def extract_campaign_analytic_to_stage(
             ]
         elif engine == "instaleap":
             chain_config = build_instaleap_chain_config(env, chain_id)
+            source_domain = extract_domain(chain_config.graphql_endpoint)
             analytic_targets = [
                 InstaleapAnalyticTarget(
                     product_key=row.product_key,
@@ -323,6 +425,7 @@ def extract_campaign_analytic_to_stage(
                     scraper=scraper,
                     targets=analytic_targets,
                     pricing_scope=current_pricing_scope,
+                    source_domain=source_domain,
                 )
             )
 
@@ -338,7 +441,16 @@ def extract_campaign_analytic_to_stage(
             flush=True,
         )
 
+    blocked_domains: set[str] = set()
+
     for index, unit in enumerate(planned_units, start=1):
+        if unit.source_domain in blocked_domains:
+            print(
+                f"[analytic] dominio pausado; se omite location pendiente sin request | "
+                f"domain={unit.source_domain} | chain={unit.chain_id} | location={unit.location_name}",
+                flush=True,
+            )
+            continue
         print(
             f"[analytic] ejecutando {index}/{total_units} | "
             f"chain={unit.chain_id} | location={unit.location_name}",
@@ -348,6 +460,7 @@ def extract_campaign_analytic_to_stage(
         analytic_targets = unit.targets
         chain_id = unit.chain_id
         current_pricing_scope = unit.pricing_scope
+        metadata: dict[str, Any] = {}
 
         try:
             records, metadata = scraper.collect_records(analytic_targets)
@@ -369,7 +482,8 @@ def extract_campaign_analytic_to_stage(
                 f"run_key={run_key} | items={inserted_items}",
                 flush=True,
             )
-        except Exception as exc:
+        except DomainCircuitOpen as exc:
+            blocked_domains.add(exc.domain)
             run_key = load_failed_catalog_stage_run(
                 chain_id=chain_id,
                 engine=unit.engine,
@@ -385,7 +499,39 @@ def extract_campaign_analytic_to_stage(
                     "location_key": unit.location_key,
                     "location_name": unit.location_name,
                     "requested_targets": len(analytic_targets),
+                    "source_domain": unit.source_domain,
+                    "blocked_by_circuit_breaker": True,
+                    "blocked_domain": exc.domain,
+                    "block_reason": exc.reason,
+                    "retry_after_seconds": exc.retry_after_seconds,
                 },
+            )
+            print(
+                f"[{chain_id}] dominio pausado por circuit breaker | "
+                f"domain={exc.domain} | location={unit.location_name} | run_key={run_key} | "
+                f"retry_after_seconds={round(exc.retry_after_seconds, 1)}",
+                flush=True,
+            )
+        except Exception as exc:
+            run_key = load_failed_catalog_stage_run(
+                chain_id=chain_id,
+                engine=unit.engine,
+                pricing_scope=current_pricing_scope,
+                started_at=scraper.started_at,
+                error_message=str(exc),
+                run_kind="analytic",
+                business_date_key=business_date_key,
+                location_key=unit.location_key,
+                campaign_id=campaign_id,
+                raw_metadata=build_failed_analytic_metadata(
+                    campaign_id=campaign_id,
+                    location_key=unit.location_key,
+                    location_name=unit.location_name,
+                    requested_targets=len(analytic_targets),
+                    source_domain=unit.source_domain,
+                    scraper_metadata=metadata,
+                    error_message=str(exc),
+                ),
             )
             print(
                 f"[{chain_id}] corrida analítica fallida registrada | "

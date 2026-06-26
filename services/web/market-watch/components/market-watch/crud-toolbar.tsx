@@ -3,6 +3,7 @@
 import { Filter, Plus, Save, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ModulePayload } from "@/lib/types";
 import * as React from "react";
 
@@ -145,7 +146,7 @@ function Field({ field }: { field: FieldConfig }) {
           name={field.name}
           multiple={field.multiple}
           defaultValue={field.multiple ? undefined : field.defaultValue}
-          className="min-h-9 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="min-h-9 w-full rounded-md border border-border-2 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         >
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>
@@ -154,14 +155,25 @@ function Field({ field }: { field: FieldConfig }) {
           ))}
         </select>
       ) : (
-        <input
-          name={field.name}
-          type={field.type ?? "text"}
-          required={field.required ?? true}
-          minLength={field.minLength}
-          defaultValue={field.defaultValue}
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
+        field.type === "password" ? (
+          <PasswordInput
+            name={field.name}
+            required={field.required ?? true}
+            minLength={field.minLength}
+            defaultValue={field.defaultValue}
+            autoComplete="new-password"
+            className="h-9 w-full rounded-md border border-border-2 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          />
+        ) : (
+          <input
+            name={field.name}
+            type={field.type ?? "text"}
+            required={field.required ?? true}
+            minLength={field.minLength}
+            defaultValue={field.defaultValue}
+            className="h-9 w-full rounded-md border border-border-2 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          />
+        )
       )}
     </label>
   );
@@ -174,14 +186,14 @@ export function CrudToolbar({ payload }: { payload: ModulePayload }) {
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-md border bg-card p-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 rounded-md border border-border-2 bg-card p-3 shadow-[0_1px_2px_var(--shadow-color)] md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="relative w-full max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
               placeholder="Search"
-              className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 w-full rounded-md border border-border-2 bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
             />
           </div>
           <Button type="button" variant="outline">

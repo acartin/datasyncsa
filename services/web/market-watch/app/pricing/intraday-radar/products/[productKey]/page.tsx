@@ -18,12 +18,13 @@ export default async function IntradayRadarProductRoute({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ productKey }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const filters = {
-    campaign_id: single(resolvedSearchParams?.campaign_id),
-    date_key: normalizeClosedDateKey(single(resolvedSearchParams?.date_key)),
-    chain: single(resolvedSearchParams?.chain),
-    history_days: single(resolvedSearchParams?.history_days) ?? "30"
-  };
+	  const filters = {
+	    campaign_id: single(resolvedSearchParams?.campaign_id),
+	    date_key: normalizeClosedDateKey(single(resolvedSearchParams?.date_key)),
+	    chain: single(resolvedSearchParams?.chain),
+	    event_id: single(resolvedSearchParams?.event_id),
+	    history_days: single(resolvedSearchParams?.history_days) ?? "30"
+	  };
   const [menu, payload] = await Promise.all([
     getMenu(),
     getIntradayProductDetail(productKey, filters)
@@ -36,10 +37,11 @@ export default async function IntradayRadarProductRoute({
       <ProductIntelligencePage
         payload={payload}
         context={{
-          campaignId: filters.campaign_id,
-          dateKey: filters.date_key,
-          chain: filters.chain,
-          historyDays: filters.history_days,
+	          campaignId: filters.campaign_id,
+	          dateKey: filters.date_key,
+	          chain: filters.chain,
+	          eventId: filters.event_id,
+	          historyDays: filters.history_days,
           source: "radar",
           routeBase: "/pricing/intraday-radar/products",
           viewMode: "event",

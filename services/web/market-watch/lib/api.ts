@@ -48,8 +48,9 @@ export async function getModule(path: string): Promise<ModulePayload> {
   return getJson<ModulePayload>(path);
 }
 
-export async function getCampaignWorkspace(campaignId: string): Promise<CampaignWorkspacePayload> {
-  return getJson<CampaignWorkspacePayload>(`/operations/campaigns/${encodeURIComponent(campaignId)}/workspace`);
+export async function getCampaignWorkspace(campaignId: string, businessDate?: string): Promise<CampaignWorkspacePayload> {
+  const query = businessDate ? `?business_date=${encodeURIComponent(businessDate)}` : "";
+  return getJson<CampaignWorkspacePayload>(`/operations/campaigns/${encodeURIComponent(campaignId)}/workspace${query}`);
 }
 
 export async function getMonitoredProductWorkspace(productKey: string): Promise<MonitoredProductWorkspacePayload> {

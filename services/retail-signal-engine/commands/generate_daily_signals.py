@@ -34,6 +34,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--promo-break-market-gap-threshold-pct", type=float, default=20.0)
     parser.add_argument("--promo-break-min-visible-locations", type=int, default=3)
     parser.add_argument("--promo-break-min-promo-share-pct", type=float, default=50.0)
+    parser.add_argument("--availability-drop-min-locations", type=int, default=2)
     parser.add_argument("--init-schema", action="store_true", help="Apply SQL schema before generating signals.")
     parser.add_argument("--dry-run", action="store_true", help="Build signals but do not persist them.")
     parser.add_argument("--skip-llm", action="store_true", help="Use deterministic narrative templates only.")
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> None:
         promo_break_market_gap_threshold_pct=args.promo_break_market_gap_threshold_pct,
         promo_break_min_visible_locations=args.promo_break_min_visible_locations,
         promo_break_min_promo_share_pct=args.promo_break_min_promo_share_pct,
+        availability_drop_min_locations=args.availability_drop_min_locations,
         dry_run=args.dry_run,
         skip_llm=args.skip_llm,
         include_transitions=args.include_transitions,

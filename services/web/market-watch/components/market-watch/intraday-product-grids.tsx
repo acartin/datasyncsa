@@ -5,7 +5,7 @@ import { ArrowDownRight, ArrowUpRight, ExternalLink, Minus } from "lucide-react"
 import { ChainTag } from "@/components/market-watch/chain-tag";
 import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
 import { Button } from "@/components/ui/button";
-import { changeIndicator, changeToneClass, formatEventValue, showChangeValue } from "@/lib/event-presentation";
+import { changeIndicator, changeToneClass, formatEventChangeValue, formatEventValue, showChangeValue } from "@/lib/event-presentation";
 import { IntradayProductChainSnapshot, IntradayProductStoreEvidence, IntradayRadarEvent } from "@/lib/pricing-types";
 
 function compactDateKey(value: unknown) {
@@ -22,6 +22,11 @@ function percent(value: unknown) {
 function currency(value: unknown) {
   if (typeof value !== "number") return "-";
   return new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(value);
+}
+
+function numberValue(value: unknown) {
+  if (typeof value !== "number") return "-";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function status(value: unknown, activeLabel: string, inactiveLabel: string) {
@@ -72,6 +77,12 @@ const chainColumns: DataGridColumn<IntradayProductChainSnapshot>[] = [
   {
     id: "visible_locations",
     header: "Visible",
+    className: "text-right",
+    headerClassName: "text-right"
+  },
+  {
+    id: "available_locations",
+    header: "Available",
     className: "text-right",
     headerClassName: "text-right"
   },
@@ -140,11 +151,10 @@ const eventColumns: DataGridColumn<IntradayRadarEvent>[] = [
     headerClassName: "text-right",
     cell: (record) => {
       if (!showChangeValue(record)) return <span className="font-mono text-ink-muted">-</span>;
-      const value = record.event_area === "promotion" ? `${record.change_amount?.toFixed(1) ?? "-"} pts` : percent(record.change_pct);
       return (
         <span className={`inline-flex items-center gap-1 font-mono font-medium ${changeToneClass(record)}`}>
           <ChangeIndicatorIcon record={record} />
-          {value}
+          {formatEventChangeValue(record)}
         </span>
       );
     }
@@ -170,6 +180,14 @@ const storeColumns: DataGridColumn<IntradayProductStoreEvidence>[] = [
     id: "is_available",
     header: "Available",
     cell: (record) => status(record.is_available, "Yes", "No")
+  },
+  {
+    id: "available_quantity",
+    header: "Source qty",
+    className: "text-right",
+    headerClassName: "text-right",
+    cell: (record) => <span className="font-mono">{numberValue(record.available_quantity)}</span>,
+    sortValue: (record) => record.available_quantity
   },
   {
     id: "reference_price_amount",

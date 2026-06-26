@@ -10,9 +10,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-md border border-dashed p-8 text-center", className)}>
-      <div className="text-sm font-medium">{title}</div>
-      {description ? <div className="mt-1 text-sm text-muted-foreground">{description}</div> : null}
+    <div className={cn("rounded-md border border-dashed border-border-2 bg-surface-2 p-8 text-center", className)}>
+      <div className="text-card-title font-medium">{title}</div>
+      {description ? <div className="mt-1 text-body-sm text-muted-foreground">{description}</div> : null}
     </div>
   );
 }

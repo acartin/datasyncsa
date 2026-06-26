@@ -33,6 +33,7 @@ class SignalRunConfig:
     promo_break_market_gap_threshold_pct: float = 20.0
     promo_break_min_visible_locations: int = 3
     promo_break_min_promo_share_pct: float = 50.0
+    availability_drop_min_locations: int = 2
     include_transitions: bool = True
     dry_run: bool = False
     skip_llm: bool = False
@@ -51,6 +52,8 @@ def signal_identity(context: dict[str, Any], evidence: dict[str, Any]) -> str | 
     signal_type = str(context.get("event_type") or "")
     if signal_type in {"brand_over_market", "brand_under_market"}:
         return None
+    if signal_type in {"store_offer_became_unavailable", "store_offer_became_available"}:
+        return evidence.get("group_identity") or evidence.get("group_key")
     if signal_type == "driver_sku_detected":
         return evidence.get("group_identity") or evidence.get("group_key")
     return evidence.get("product_key") or evidence.get("gtin") or evidence.get("product") or evidence.get("group_identity")
@@ -98,7 +101,15 @@ def build_navigation(context: dict[str, Any], evidence: dict[str, Any]) -> dict[
         filters["products"] = products
 
     signal_type = str(context.get("event_type") or "")
-    if signal_type in {"sku_price_gap", "driver_sku_detected", "promo_price_break"}:
+    if signal_type in {
+        "sku_price_gap",
+        "driver_sku_detected",
+        "promo_price_break",
+        "chain_available_store_count_dropped",
+        "chain_available_store_count_recovered",
+        "store_offer_became_unavailable",
+        "store_offer_became_available",
+    }:
         target_view = "sku_detail"
         preferred_dataset = "mw_bi_sku_price_drivers"
         evidence_dataset = "mw_bi_sku_store_price_evidence"
@@ -147,6 +158,14 @@ def as_int(value: str | int | None) -> int | None:
 def as_float(value: str | int | float | Decimal | None) -> float | None:
     number = as_decimal(value)
     return float(number) if number is not None else None
+
+
+def as_bool(value: str | bool | int | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return False
+    return str(value).strip().lower() in {"t", "true", "1", "yes", "y"}
 
 
 def json_text(value: Any) -> str:
@@ -629,8 +648,8 @@ def generate_promo_price_breaks(sku_rows: list[dict[str, str]], config: SignalRu
 
 
 def fetch_paired_daily_rows(db: Database, config: SignalRunConfig, date_key: int) -> list[dict[str, str]]:
-    previous_clauses = [f"prev.date_key < {int(date_key)}", "prev.is_available"]
-    clauses = [f"(o.date_key = {int(date_key)} or o.date_key = pd.previous_date_key)", "o.is_available"]
+    previous_clauses = [f"prev.date_key < {int(date_key)}"]
+    clauses = [f"(o.date_key = {int(date_key)} or o.date_key = pd.previous_date_key)"]
     extra = scope_where(config, alias="cca")
     if extra:
         clauses.append(extra)
@@ -660,10 +679,13 @@ daily as (
         o.product_name as producto,
         o.content_quantity::text as contenido,
         o.content_unit as unidad,
-        round(avg(o.reference_price_amount), 2)::text as precio_referencia,
-        round(avg(o.spot_price_amount), 2)::text as precio_promo,
-        bool_or(o.spot_price_amount is not null)::text as promocion_detectada,
-        o.product_url as producto_url
+        count(*)::text as tiendas_observadas,
+        count(*) filter (where o.is_listed)::text as tiendas_visibles,
+        count(*) filter (where o.is_available)::text as tiendas_disponibles,
+        round(avg(o.reference_price_amount) filter (where o.is_available and o.reference_price_amount is not null), 2)::text as precio_referencia,
+        round(avg(o.spot_price_amount) filter (where o.is_available and o.spot_price_amount is not null), 2)::text as precio_promo,
+        bool_or(o.is_available and o.spot_price_amount is not null)::text as promocion_detectada,
+        max(o.product_url) filter (where o.product_url is not null) as producto_url
     from public.mw_core_sku_store_observation o
     join public.mkt_campaign_client_access cca
         on cca.campaign_id = o.campaign_id and cca.is_active
@@ -671,7 +693,7 @@ daily as (
     where ({" and ".join(clauses)})
     group by o.date_key, o.business_date, cca.client_id, o.campaign_id, o.campaign_name,
              o.chain_label, o.product_key, o.gtin_norm, o.brand_name, o.product_name,
-             o.content_quantity, o.content_unit, o.product_url
+             o.content_quantity, o.content_unit
 ),
 previous_dates as (
     select
@@ -704,10 +726,16 @@ select
     curr.precio_referencia,
     curr.precio_promo,
     curr.promocion_detectada,
+    curr.tiendas_observadas,
+    curr.tiendas_visibles,
+    curr.tiendas_disponibles,
     curr.producto_url,
     prev.precio_referencia as precio_referencia_anterior,
     prev.precio_promo as precio_promo_anterior,
-    prev.promocion_detectada as promocion_anterior_detectada
+    prev.promocion_detectada as promocion_anterior_detectada,
+    prev.tiendas_observadas as tiendas_observadas_anterior,
+    prev.tiendas_visibles as tiendas_visibles_anterior,
+    prev.tiendas_disponibles as tiendas_disponibles_anterior
 from daily curr
 left join previous_dates pd
     on pd.client_id = curr.client_id
@@ -723,12 +751,232 @@ where curr.date_key = {int(date_key)}
     )
 
 
+def fetch_store_availability_transition_rows(
+    db: Database,
+    config: SignalRunConfig,
+    date_key: int,
+) -> list[dict[str, str]]:
+    previous_clauses = [f"prev.date_key < {int(date_key)}"]
+    clauses = [f"(o.date_key = {int(date_key)} or o.date_key = pd.previous_date_key)"]
+    extra = scope_where(config, alias="cca")
+    if extra:
+        clauses.append(extra)
+    previous_extra = scope_where(config, alias="prev_cca")
+    if previous_extra:
+        previous_clauses.append(previous_extra)
+
+    return db.fetch_csv(
+        f"""
+with previous_date as (
+    select max(prev.date_key) as previous_date_key
+    from public.mw_core_sku_store_observation prev
+    join public.mkt_campaign_client_access prev_cca
+        on prev_cca.campaign_id = prev.campaign_id and prev_cca.is_active
+    where {" and ".join(previous_clauses)}
+),
+daily as (
+    select
+        o.date_key,
+        o.business_date::text as fecha,
+        cca.client_id::text as client_id,
+        o.campaign_id::text as campaign_id,
+        o.campaign_name as campana,
+        o.chain_label as cadena,
+        o.product_key::text as product_key,
+        o.gtin_norm as gtin,
+        o.brand_name as marca,
+        o.product_name as producto,
+        o.content_quantity::text as contenido,
+        o.content_unit as unidad,
+        o.location_key::text as location_key,
+        coalesce(o.location_name, o.location_code, o.location_key::text) as location_name,
+        o.location_code,
+        o.province,
+        o.canton,
+        o.district,
+        o.sales_channel,
+        o.region_id,
+        bool_or(coalesce(o.is_listed, false))::text as is_listed,
+        bool_or(coalesce(o.is_available, false))::text as is_available,
+        max(o.available_quantity)::text as source_available_quantity,
+        round(avg(o.reference_price_amount) filter (where o.is_available and o.reference_price_amount is not null), 2)::text as reference_price,
+        round(avg(coalesce(o.spot_price_amount, o.effective_price_amount)) filter (where o.is_available and coalesce(o.spot_price_amount, o.effective_price_amount) is not null), 2)::text as effective_price,
+        max(o.product_url) filter (where o.product_url is not null) as product_url,
+        max(o.source_engine) as source_engine
+    from public.mw_core_sku_store_observation o
+    join public.mkt_campaign_client_access cca
+        on cca.campaign_id = o.campaign_id and cca.is_active
+    cross join previous_date pd
+    where ({" and ".join(clauses)})
+      and o.location_key is not null
+    group by
+        o.date_key,
+        o.business_date,
+        cca.client_id,
+        o.campaign_id,
+        o.campaign_name,
+        o.chain_label,
+        o.product_key,
+        o.gtin_norm,
+        o.brand_name,
+        o.product_name,
+        o.content_quantity,
+        o.content_unit,
+        o.location_key,
+        o.location_name,
+        o.location_code,
+        o.province,
+        o.canton,
+        o.district,
+        o.sales_channel,
+        o.region_id
+),
+previous_dates as (
+    select
+        curr.client_id,
+        curr.campaign_id,
+        max(prev.date_key) as previous_date_key
+    from daily curr
+    left join daily prev
+        on prev.client_id = curr.client_id
+        and prev.campaign_id = curr.campaign_id
+        and prev.date_key < curr.date_key
+    where curr.date_key = {int(date_key)}
+    group by curr.client_id, curr.campaign_id
+)
+select
+    curr.date_key as fecha_key,
+    pd.previous_date_key::text as fecha_key_anterior,
+    curr.fecha,
+    prev.fecha as fecha_anterior,
+    curr.client_id,
+    curr.campaign_id,
+    curr.campana,
+    curr.cadena,
+    curr.product_key,
+    curr.gtin,
+    curr.marca,
+    curr.producto,
+    curr.contenido,
+    curr.unidad,
+    curr.location_key,
+    curr.location_name,
+    curr.location_code,
+    curr.province,
+    curr.canton,
+    curr.district,
+    curr.sales_channel,
+    curr.region_id,
+    curr.is_listed as current_is_listed,
+    curr.is_available as current_is_available,
+    curr.source_available_quantity as current_source_available_quantity,
+    curr.reference_price as current_reference_price,
+    curr.effective_price as current_effective_price,
+    curr.product_url,
+    curr.source_engine,
+    prev.is_listed as previous_is_listed,
+    prev.is_available as previous_is_available,
+    prev.source_available_quantity as previous_source_available_quantity,
+    prev.reference_price as previous_reference_price,
+    prev.effective_price as previous_effective_price
+from daily curr
+left join previous_dates pd
+    on pd.client_id = curr.client_id
+    and pd.campaign_id = curr.campaign_id
+left join daily prev
+    on prev.product_key = curr.product_key
+    and prev.cadena = curr.cadena
+    and prev.location_key = curr.location_key
+    and prev.campaign_id = curr.campaign_id
+    and prev.client_id = curr.client_id
+    and prev.date_key = pd.previous_date_key
+where curr.date_key = {int(date_key)}
+	"""
+    )
+
+
+def availability_group_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(row.get("client_id") or ""),
+        str(row.get("campaign_id") or ""),
+        str(row.get("cadena") or ""),
+        str(row.get("product_key") or ""),
+    )
+
+
+def availability_location_payload(
+    row: dict[str, Any],
+    *,
+    previous_qty: float | None,
+    current_qty: float | None,
+) -> dict[str, Any]:
+    return {
+        "location_key": row.get("location_key"),
+        "location_name": row.get("location_name"),
+        "location_code": row.get("location_code"),
+        "province": row.get("province"),
+        "canton": row.get("canton"),
+        "district": row.get("district"),
+        "sales_channel": row.get("sales_channel"),
+        "region_id": row.get("region_id"),
+        "previous_qty": previous_qty,
+        "current_qty": current_qty,
+    }
+
+
+def build_availability_location_changes(
+    store_rows: list[dict[str, str]],
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
+    changes: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for row in store_rows:
+        previous_date_key = as_int(row.get("fecha_key_anterior"))
+        current_date_key = as_int(row.get("fecha_key"))
+        if previous_date_key is None or current_date_key is None:
+            continue
+
+        previous_available = as_bool(row.get("previous_is_available"))
+        current_available = as_bool(row.get("current_is_available"))
+        if previous_available is None or current_available is None or previous_available == current_available:
+            continue
+
+        previous_qty = as_float(row.get("previous_source_available_quantity"))
+        current_qty = as_float(row.get("current_source_available_quantity"))
+        payload = availability_location_payload(
+            row,
+            previous_qty=previous_qty,
+            current_qty=current_qty,
+        )
+        bucket = changes.setdefault(
+            availability_group_key(row),
+            {
+                "recovered_locations": [],
+                "lost_locations": [],
+            },
+        )
+        if not previous_available and current_available:
+            bucket["recovered_locations"].append(payload)
+        elif previous_available and not current_available:
+            bucket["lost_locations"].append(payload)
+
+    for bucket in changes.values():
+        for key in ("recovered_locations", "lost_locations"):
+            bucket[key] = sorted(
+                bucket[key],
+                key=lambda item: str(item.get("location_name") or item.get("location_key") or ""),
+            )
+        bucket["recovered_locations_count"] = len(bucket["recovered_locations"])
+        bucket["lost_locations_count"] = len(bucket["lost_locations"])
+    return changes
+
+
 def generate_day_over_day_transition_events(
     paired_rows: list[dict[str, str]],
     config: SignalRunConfig,
+    availability_location_changes: dict[tuple[str, str, str, str], dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     events: list[dict[str, Any]] = []
     signals: list[dict[str, Any]] = []
+    availability_location_changes = availability_location_changes or {}
 
     for row in paired_rows:
         current_date_key = as_int(row.get("fecha_key"))
@@ -737,8 +985,14 @@ def generate_day_over_day_transition_events(
         previous_ref = as_float(row.get("precio_referencia_anterior"))
         current_promo = as_float(row.get("precio_promo"))
         previous_promo = as_float(row.get("precio_promo_anterior"))
-        current_promo_detected = str(row.get("promocion_detectada") or "").lower() in {"t", "true", "1", "yes"}
-        previous_promo_detected = str(row.get("promocion_anterior_detectada") or "").lower() in {"t", "true", "1", "yes"}
+        current_promo_detected = as_bool(row.get("promocion_detectada"))
+        previous_promo_detected = as_bool(row.get("promocion_anterior_detectada"))
+        current_observed = as_int(row.get("tiendas_observadas"))
+        current_visible = as_int(row.get("tiendas_visibles"))
+        current_available = as_int(row.get("tiendas_disponibles"))
+        previous_observed = as_int(row.get("tiendas_observadas_anterior"))
+        previous_visible = as_int(row.get("tiendas_visibles_anterior"))
+        previous_available = as_int(row.get("tiendas_disponibles_anterior"))
 
         transition_events: list[tuple[str, str, str, float | None, float | None]] = []
 
@@ -757,6 +1011,41 @@ def generate_day_over_day_transition_events(
             effect = "negative" if direction == "increase" else "positive"
             transition_events.append((f"promo_price_{direction}", "price", effect, previous_promo, current_promo))
 
+        price_context_available = any(
+            value is not None and value > 0
+            for value in (current_ref, previous_ref, current_promo, previous_promo)
+        )
+        if (
+            price_context_available
+            and previous_available is not None
+            and current_available is not None
+            and previous_visible is not None
+            and current_visible is not None
+            and current_visible > 0
+        ):
+            availability_delta = current_available - previous_available
+            min_drop = max(1, int(config.availability_drop_min_locations))
+            if availability_delta <= -min_drop or (previous_available > 0 and current_available == 0):
+                transition_events.append(
+                    (
+                        "chain_available_store_count_dropped",
+                        "availability",
+                        "negative",
+                        float(previous_available),
+                        float(current_available),
+                    )
+                )
+            elif availability_delta >= min_drop:
+                transition_events.append(
+                    (
+                        "chain_available_store_count_recovered",
+                        "availability",
+                        "positive",
+                        float(previous_available),
+                        float(current_available),
+                    )
+                )
+
         context = base_context(row, config, signal_type="day_over_day")
         for event_type, event_area, effect, previous_value, current_value in transition_events:
             change_abs = abs((current_value or 0) - (previous_value or 0))
@@ -764,6 +1053,15 @@ def generate_day_over_day_transition_events(
             severity = severity_from_gap(change_abs if event_area == "price" else change_pct or 0)
             impact = clamp(change_abs * 2 + change_pct * 0.5) if change_pct else clamp(change_abs)
             confidence = 90.0 if current_ref and previous_ref else 70.0
+
+            if event_area == "availability":
+                previous_count = previous_available or 0
+                current_count = current_available or 0
+                lost_or_recovered = abs(current_count - previous_count)
+                current_visible_count = current_visible or 0
+                severity = "high" if lost_or_recovered >= 4 else "medium" if lost_or_recovered >= 2 else "low"
+                impact = clamp(lost_or_recovered * 12 + (change_pct or 0) * 0.35)
+                confidence = 95.0 if price_context_available and current_visible_count > 0 else 75.0
 
             metrics: dict[str, Any] = {
                 "current_date_key": current_date_key,
@@ -778,9 +1076,35 @@ def generate_day_over_day_transition_events(
                 "change_abs": round(change_abs, 2),
                 "change_pct": round(change_pct, 2) if change_pct is not None else None,
             }
+            if current_observed is not None:
+                metrics["observed_locations"] = current_observed
+            if current_visible is not None:
+                metrics["visible_locations"] = current_visible
+            if current_available is not None:
+                metrics["available_locations"] = current_available
+            if previous_observed is not None:
+                metrics["previous_observed_locations"] = previous_observed
+            if previous_visible is not None:
+                metrics["previous_visible_locations"] = previous_visible
+            if previous_available is not None:
+                metrics["previous_available_locations"] = previous_available
             if event_area == "promotion":
                 metrics["promo_share_current"] = 100.0 if current_promo_detected else 0.0
                 metrics["promo_share_previous"] = 100.0 if previous_promo_detected else 0.0
+            if event_area == "availability":
+                metrics["availability_rate_pct"] = (
+                    round(((current_available or 0) / current_visible) * 100, 2)
+                    if current_visible and current_visible > 0
+                    else None
+                )
+                metrics["unavailable_locations"] = max((current_visible or 0) - (current_available or 0), 0)
+                metrics["available_locations_previous"] = previous_available
+                metrics["available_locations_current"] = current_available
+                metrics["available_locations_delta"] = (
+                    current_available - previous_available
+                    if current_available is not None and previous_available is not None
+                    else None
+                )
 
             evidence: dict[str, Any] = {
                 "product": row.get("producto"),
@@ -788,13 +1112,39 @@ def generate_day_over_day_transition_events(
                 "gtin": row.get("gtin"),
                 "brand": row.get("marca"),
                 "chain": row.get("cadena"),
+                "product_url": row.get("producto_url"),
                 "previous_ref_price": previous_ref,
                 "current_ref_price": current_ref,
                 "previous_promo_price": previous_promo,
                 "current_promo_price": current_promo,
                 "previous_date_key": previous_date_key,
                 "current_date_key": current_date_key,
-            }
+                "previous_observed_locations": previous_observed,
+                "previous_visible_locations": previous_visible,
+                "previous_available_locations": previous_available,
+                "observed_locations": current_observed,
+                "visible_locations": current_visible,
+                "available_locations": current_available,
+                "available_locations_previous": previous_available,
+                "available_locations_current": current_available,
+                }
+            if event_area == "availability":
+                location_changes = availability_location_changes.get(availability_group_key(row), {})
+                recovered_locations = location_changes.get("recovered_locations") or []
+                lost_locations = location_changes.get("lost_locations") or []
+                evidence.update(
+                    {
+                        "availability_change_summary": {
+                            "previous_available_locations": previous_available,
+                            "current_available_locations": current_available,
+                            "available_locations_delta": metrics.get("available_locations_delta"),
+                            "recovered_locations_count": len(recovered_locations),
+                            "lost_locations_count": len(lost_locations),
+                        },
+                        "recovered_locations": recovered_locations,
+                        "lost_locations": lost_locations,
+                    }
+                )
 
             event_context = {**context, "event_type": event_type, "event_area": event_area}
             if event_type == "promo_ended" and previous_date_key is not None:
@@ -819,16 +1169,166 @@ def generate_day_over_day_transition_events(
     return events, signals
 
 
+def generate_store_availability_transition_events(
+    store_rows: list[dict[str, str]],
+    config: SignalRunConfig,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    events: list[dict[str, Any]] = []
+    signals: list[dict[str, Any]] = []
+
+    for row in store_rows:
+        current_date_key = as_int(row.get("fecha_key"))
+        previous_date_key = as_int(row.get("fecha_key_anterior"))
+        current_listed = as_bool(row.get("current_is_listed"))
+        current_available = as_bool(row.get("current_is_available"))
+        previous_listed = as_bool(row.get("previous_is_listed"))
+        previous_available = as_bool(row.get("previous_is_available"))
+        current_qty = as_float(row.get("current_source_available_quantity"))
+        previous_qty = as_float(row.get("previous_source_available_quantity"))
+        current_ref = as_float(row.get("current_reference_price"))
+        previous_ref = as_float(row.get("previous_reference_price"))
+        current_effective = as_float(row.get("current_effective_price"))
+        previous_effective = as_float(row.get("previous_effective_price"))
+        price_context_available = any(
+            value is not None and value > 0
+            for value in (current_ref, previous_ref, current_effective, previous_effective)
+        )
+
+        if previous_date_key is None or current_date_key is None or not price_context_available:
+            continue
+
+        event_type: str | None = None
+        effect = "negative"
+        previous_value: float | None = previous_qty
+        current_value: float | None = current_qty
+
+        if previous_available and current_listed and not current_available:
+            event_type = "store_offer_became_unavailable"
+            effect = "negative"
+            current_value = 0.0 if current_value is None else current_value
+        elif previous_listed and not previous_available and current_available:
+            event_type = "store_offer_became_available"
+            effect = "positive"
+            previous_value = 0.0 if previous_value is None else previous_value
+
+        if event_type is None:
+            continue
+
+        previous_value = 1.0 if previous_value is None and previous_available else previous_value
+        current_value = 1.0 if current_value is None and current_available else current_value
+        if previous_value is None or current_value is None:
+            continue
+
+        change_abs = abs(current_value - previous_value)
+        change_pct = (change_abs / previous_value * 100) if previous_value > 0 else None
+        severity = "medium"
+        if event_type == "store_offer_became_unavailable":
+            severity = "high" if (previous_qty or 0) >= 10 else "medium"
+            impact = clamp(45 + min(previous_qty or 1, 20) * 2.0)
+            confidence = 95.0 if current_listed and previous_available else 85.0
+        else:
+            severity = "low"
+            impact = clamp(35 + min(current_qty or 1, 20) * 1.5)
+            confidence = 92.0 if current_available and previous_listed else 80.0
+
+        metrics = {
+            "current_date_key": current_date_key,
+            "previous_date_key": previous_date_key,
+            "previous_value": previous_value,
+            "current_value": current_value,
+            "change_abs": round(change_abs, 2),
+            "change_pct": round(change_pct, 2) if change_pct is not None else None,
+            "previous_source_available_quantity": previous_qty,
+            "current_source_available_quantity": current_qty,
+            "previous_is_available": previous_available,
+            "current_is_available": current_available,
+            "previous_is_listed": previous_listed,
+            "current_is_listed": current_listed,
+            "previous_reference_price": previous_ref,
+            "current_reference_price": current_ref,
+            "previous_effective_price": previous_effective,
+            "current_effective_price": current_effective,
+        }
+        location_key = row.get("location_key")
+        group_key = "|".join(
+            str(part or "")
+            for part in (
+                row.get("client_id"),
+                row.get("campaign_id"),
+                row.get("cadena"),
+                row.get("product_key"),
+                location_key,
+            )
+        )
+        evidence = {
+            "group_key": group_key,
+            "group_identity": group_key,
+            "product": row.get("producto"),
+            "product_key": row.get("product_key"),
+            "gtin": row.get("gtin"),
+            "brand": row.get("marca"),
+            "chain": row.get("cadena"),
+            "location_key": location_key,
+            "location_name": row.get("location_name"),
+            "location_code": row.get("location_code"),
+            "province": row.get("province"),
+            "canton": row.get("canton"),
+            "district": row.get("district"),
+            "sales_channel": row.get("sales_channel"),
+            "region_id": row.get("region_id"),
+            "source_engine": row.get("source_engine"),
+            "product_url": row.get("product_url"),
+            "previous_date_key": previous_date_key,
+            "current_date_key": current_date_key,
+            "previous_source_available_quantity": previous_qty,
+            "current_source_available_quantity": current_qty,
+            "previous_reference_price": previous_ref,
+            "current_reference_price": current_ref,
+            "previous_effective_price": previous_effective,
+            "current_effective_price": current_effective,
+            "availability_change_summary": {
+                "transition": (
+                    "store_became_available"
+                    if event_type == "store_offer_became_available"
+                    else "store_became_unavailable"
+                ),
+                "previous_is_available": previous_available,
+                "current_is_available": current_available,
+                "previous_source_available_quantity": previous_qty,
+                "current_source_available_quantity": current_qty,
+            },
+        }
+
+        event, signal = build_event_and_signal(
+            context={**base_context(row, config, signal_type=event_type), "event_area": "availability"},
+            severity=severity,
+            impact_score=impact,
+            confidence_score=confidence,
+            effect=effect,
+            metrics=metrics,
+            evidence=evidence,
+            source_view="mw_core_sku_store_observation",
+        )
+        signal["audience"] = "category_manager"
+        events.append(event)
+        signals.append(signal)
+
+    return events, signals
+
+
 def enrich_signal_narratives(db: Database, signals: list[dict[str, Any]], *, skip_llm: bool) -> tuple[list[dict[str, Any]], bool]:
     env = db.env
     model = env.get("LLM_DEFAULT_MODEL") or DEFAULT_MODEL
     api_key = env.get("GOOGLE_API_KEY")
     llm_used = bool(api_key and not skip_llm)
+    event_guidance = load_event_llm_guidance(db)
 
     enriched: list[dict[str, Any]] = []
     for signal in signals:
+        signal_type = str(signal["signal_type"])
         llm_payload = {
-            "signal_type": signal["signal_type"],
+            "signal_type": signal_type,
+            "llm_guidance": event_guidance.get(signal_type),
             "lifecycle_status": signal.get("lifecycle_status"),
             "perspective_brand": signal.get("perspective_brand"),
             "chain": signal.get("chain"),
@@ -857,6 +1357,21 @@ def enrich_signal_narratives(db: Database, signals: list[dict[str, Any]], *, ski
             }
         )
     return enriched, llm_used
+
+
+def load_event_llm_guidance(db: Database) -> dict[str, str]:
+    rows = db.fetch_csv(
+        """
+select
+    event_type,
+    presentation_config->>'llm_guidance' as llm_guidance
+from public.mkt_dim_market_event_type
+where is_active
+  and presentation_config ? 'llm_guidance'
+  and coalesce(presentation_config->>'llm_guidance', '') <> ''
+"""
+    )
+    return {row["event_type"]: row["llm_guidance"] for row in rows if row.get("llm_guidance")}
 
 
 def dedupe_by_key(rows: list[dict[str, Any]], key_name: str) -> list[dict[str, Any]]:
@@ -891,6 +1406,10 @@ def select_diverse_signals(signals: list[dict[str, Any]], max_signals: int) -> l
         "promo_price_break": 3,
         "brand_over_market": 3,
         "brand_under_market": 3,
+        "chain_available_store_count_dropped": 3,
+        "chain_available_store_count_recovered": 2,
+        "store_offer_became_unavailable": 4,
+        "store_offer_became_available": 2,
     }
 
     def try_add(signal: dict[str, Any], *, enforce_limits: bool) -> None:
@@ -1722,14 +2241,32 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
 
     transition_events: list[dict[str, Any]] = []
     transition_signals: list[dict[str, Any]] = []
+    enriched_transition_signals: list[dict[str, Any]] = []
     if config.include_transitions and date_key > 0:
         try:
             paired_rows = fetch_paired_daily_rows(db, config, date_key)
+            store_rows = fetch_store_availability_transition_rows(db, config, date_key)
+            availability_location_changes = build_availability_location_changes(store_rows)
             trans_events, trans_signals = generate_day_over_day_transition_events(
-                paired_rows, config
+                paired_rows, config, availability_location_changes
             )
-            transition_events = dedupe_by_key(trans_events, "event_key")
-            transition_signals = dedupe_by_key(trans_signals, "signal_key")
+            store_events, store_signals = generate_store_availability_transition_events(
+                store_rows, config
+            )
+            transition_events = dedupe_by_key(trans_events + store_events, "event_key")
+            transition_signals = dedupe_by_key(trans_signals + store_signals, "signal_key")
+            transition_lifecycle_signals = apply_lifecycle_state(
+                db,
+                transition_signals,
+                date_key=date_key,
+                config=config,
+            )
+            enriched_transition_signals, transition_llm_used = enrich_signal_narratives(
+                db,
+                transition_lifecycle_signals,
+                skip_llm=config.skip_llm,
+            )
+            llm_used = llm_used or transition_llm_used
         except Exception as exc:
             pass
 
@@ -1738,15 +2275,17 @@ def run_signal_generation(db: Database, config: SignalRunConfig) -> dict[str, An
             "date_key": date_key,
             "business_date": business_date,
             "market_events": len(selected_events) + len(transition_events),
-            "client_signals": len(enriched_signals),
+            "client_signals": len(enriched_signals) + len(enriched_transition_signals),
             "saved": False,
             "llm_used": llm_used,
         }
 
     delete_existing_scope(db, date_key=date_key, config=config)
-    saved_events, saved_signals = save_signals(db, selected_events, enriched_signals)
-    trans_event_count = save_events_only(db, transition_events)
-    saved_events += trans_event_count
+    saved_events, saved_signals = save_signals(
+        db,
+        selected_events + transition_events,
+        enriched_signals + enriched_transition_signals,
+    )
     return {
         "date_key": date_key,
         "business_date": business_date,

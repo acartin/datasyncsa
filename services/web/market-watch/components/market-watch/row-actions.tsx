@@ -5,6 +5,7 @@ import { Eye, FolderOpen, KeyRound, Pencil, Trash2, Users } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { PasswordInput } from "@/components/ui/password-input";
 import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
 import { ModulePayload } from "@/lib/types";
 
@@ -236,15 +237,26 @@ function Field({
           ))}
         </select>
       ) : (
-        <input
-          name={field.name}
-          type={field.type ?? "text"}
-          required={field.required ?? true}
-          minLength={field.minLength}
-          defaultValue={value}
-          readOnly={fieldReadOnly}
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring read-only:bg-surface-2"
-        />
+        field.type === "password" && !fieldReadOnly ? (
+          <PasswordInput
+            name={field.name}
+            required={field.required ?? true}
+            minLength={field.minLength}
+            defaultValue={value}
+            autoComplete="new-password"
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        ) : (
+          <input
+            name={field.name}
+            type={field.type ?? "text"}
+            required={field.required ?? true}
+            minLength={field.minLength}
+            defaultValue={value}
+            readOnly={fieldReadOnly}
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring read-only:bg-surface-2"
+          />
+        )
       )}
     </label>
   );

@@ -5,13 +5,8 @@ import { ArrowDownRight, ArrowUpRight, ExternalLink, Minus } from "lucide-react"
 import { ChainTag } from "@/components/market-watch/chain-tag";
 import { DataGrid, DataGridColumn } from "@/components/market-watch/data-grid";
 import { Button } from "@/components/ui/button";
-import { changeIndicator, changeToneClass, formatEventValue, showChangeValue } from "@/lib/event-presentation";
+import { changeIndicator, changeToneClass, formatEventChangeValue, formatEventValue, showChangeValue } from "@/lib/event-presentation";
 import { IntradayRadarEvent } from "@/lib/pricing-types";
-
-function percent(value: unknown) {
-  if (typeof value !== "number") return "-";
-  return `${value.toFixed(1)}%`;
-}
 
 function ChangeIndicatorIcon({ record }: { record: IntradayRadarEvent }) {
   const indicator = changeIndicator(record);
@@ -22,16 +17,19 @@ function ChangeIndicatorIcon({ record }: { record: IntradayRadarEvent }) {
 }
 
 function radarProductDetailHref(record: IntradayRadarEvent) {
-  return `/pricing/intraday-radar/products/${record.product_key}?campaign_id=${record.campaign_id}&date_key=${record.date_key}&chain=${encodeURIComponent(record.chain)}&source=radar`;
-}
-
-function genericProductHref(record: IntradayRadarEvent) {
   const search = new URLSearchParams({
+    campaign_id: String(record.campaign_id),
+    date_key: String(record.date_key),
+    chain: record.chain,
+    event_id: record.event_id,
     source: "radar",
   });
+  return `/pricing/intraday-radar/products/${record.product_key}?${search.toString()}`;
+}
+
+function canonicalProductHref(record: IntradayRadarEvent) {
+  const search = new URLSearchParams({ source: "radar" });
   if (record.campaign_id) search.set("campaign_id", String(record.campaign_id));
-  if (record.chain) search.set("chain", record.chain);
-  if (record.date_key) search.set("date_key", String(record.date_key));
   return `/pricing/products/${record.product_key}?${search.toString()}`;
 }
 
@@ -66,7 +64,7 @@ const columns: DataGridColumn<IntradayRadarEvent>[] = [
       record.product_key ? (
         <Link
           className="font-medium text-semantic-blue hover:underline"
-          href={genericProductHref(record)}
+          href={canonicalProductHref(record)}
         >
           {record.product}
         </Link>
@@ -97,11 +95,10 @@ const columns: DataGridColumn<IntradayRadarEvent>[] = [
     headerClassName: "text-right",
     cell: (record) => {
       if (!showChangeValue(record)) return <span className="font-mono text-ink-muted">-</span>;
-      const value = record.event_area === "promotion" ? `${record.change_amount?.toFixed(1) ?? "-"} pts` : percent(record.change_pct);
       return (
         <span className={`inline-flex items-center gap-1 font-mono font-medium ${changeToneClass(record)}`}>
           <ChangeIndicatorIcon record={record} />
-          {value}
+          {formatEventChangeValue(record)}
         </span>
       );
     },

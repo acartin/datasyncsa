@@ -11,13 +11,13 @@ export default async function CampaignWorkspaceRoute({
   searchParams
 }: {
   params: Promise<{ campaignId: string }>;
-  searchParams?: Promise<{ feedback?: string; message?: string; tab?: string }>;
+  searchParams?: Promise<{ feedback?: string; message?: string; tab?: string; business_date?: string }>;
 }) {
   const { campaignId } = await params;
   const resolvedSearchParams = await searchParams;
   const [menu, payload] = await Promise.all([
     getMenu(),
-    getCampaignWorkspace(campaignId)
+    getCampaignWorkspace(campaignId, resolvedSearchParams?.business_date)
   ]);
   const allowed = menu.sections.some((section) => section.items.some((item) => item.href === currentPath));
   if (!allowed) notFound();

@@ -84,6 +84,16 @@ class PriceScrapperCommands:
     def run_load_fact_listing_snapshots(self) -> subprocess.CompletedProcess[str]:
         return self.runner.run(["python3", "commands/load_fact_listing_snapshots.py"])
 
+    def run_build_app_product_history(
+        self,
+        *,
+        run_keys: list[int],
+    ) -> subprocess.CompletedProcess[str]:
+        command = ["python3", "commands/build_app_product_history.py"]
+        for run_key in run_keys:
+            command.extend(["--run-key", str(run_key)])
+        return self.runner.run(command)
+
     def run_campaign_analytic_batch(
         self,
         *,

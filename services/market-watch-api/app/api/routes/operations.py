@@ -1,8 +1,9 @@
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from psycopg import errors
 from pydantic import BaseModel, Field
 
@@ -10,12 +11,15 @@ from app.core.db import get_connection
 from app.core.security import ClientContext, require_client_context
 from app.domain.placeholders import module_payload
 from app.repositories.market_repository import MarketRepository
+from app.services.email_sender import EmailDeliveryError
+from app.services.report_email import send_campaign_daily_report_email
 
 
 router = APIRouter()
 
 CAMPAIGN_EDITOR_ROLES = {"client-admin", "system-admin", "system-user"}
 SYSTEM_OPERATOR_ROLES = {"system-admin", "system-user"}
+CR_TIMEZONE = ZoneInfo("America/Costa_Rica")
 
 
 def get_market_repository() -> MarketRepository:
@@ -36,6 +40,10 @@ def require_campaign_editor(context: ClientContext) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Campaign edit role is required",
         )
+
+
+def default_report_business_date() -> date:
+    return (datetime.now(CR_TIMEZONE) - timedelta(days=1)).date()
 
 
 def normalize_slug(value: str) -> str:
@@ -99,6 +107,23 @@ class CampaignProductAssign(BaseModel):
 
 class CampaignProductUpdate(BaseModel):
     product_role: str | None = Field(default=None, pattern=r"^(owned|competitor|tracked|reference)$")
+
+
+class CampaignReportRecipientCreate(BaseModel):
+    user_id: int | None = Field(default=None, ge=1)
+    email: str | None = Field(default=None, min_length=4, max_length=180)
+    display_name: str | None = Field(default=None, max_length=180)
+    recipient_type: str = Field(default="to", pattern=r"^(to|cc|bcc)$")
+    report_kind: str = Field(default="daily_price_radar", pattern=r"^daily_price_radar$")
+    is_active: bool = True
+
+
+class CampaignReportRecipientUpdate(BaseModel):
+    email: str | None = Field(default=None, min_length=4, max_length=180)
+    display_name: str | None = Field(default=None, max_length=180)
+    recipient_type: str | None = Field(default=None, pattern=r"^(to|cc|bcc)$")
+    report_kind: str | None = Field(default=None, pattern=r"^daily_price_radar$")
+    is_active: bool | None = None
 
 
 class CatalogSourceUpdate(BaseModel):
@@ -181,10 +206,15 @@ def update_campaign(
 @router.get("/campaigns/{campaign_id}/workspace")
 def campaign_workspace(
     campaign_id: int,
+    business_date: date | None = Query(default=None),
     context: ClientContext = Depends(require_client_context),
     repository: MarketRepository = Depends(get_market_repository),
 ) -> dict[str, object]:
-    workspace = repository.fetch_campaign_workspace(client_id=context.client_id, campaign_id=campaign_id)
+    workspace = repository.fetch_campaign_workspace(
+        client_id=context.client_id,
+        campaign_id=campaign_id,
+        report_business_date=business_date or default_report_business_date(),
+    )
     if not workspace:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     can_manage_access = context.role in SYSTEM_OPERATOR_ROLES
@@ -228,6 +258,9 @@ def campaign_workspace(
         else [],
         "available_products": repository.list_campaign_product_options()
         if context.role in SYSTEM_OPERATOR_ROLES
+        else [],
+        "available_report_users": repository.list_campaign_report_recipient_user_options(client_id=context.client_id)
+        if context.role in CAMPAIGN_EDITOR_ROLES
         else [],
         **workspace,
     }
@@ -402,6 +435,139 @@ def remove_campaign_product(
     return result
 
 
+@router.post("/campaigns/{campaign_id}/report-recipients")
+def create_campaign_report_recipient(
+    campaign_id: int,
+    payload: CampaignReportRecipientCreate,
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
+    require_campaign_editor(context)
+    if payload.user_id is None and not (payload.email and payload.email.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Select a portal user or enter an email address",
+        )
+    try:
+        recipient = repository.create_campaign_report_recipient(
+            campaign_id=campaign_id,
+            client_id=context.client_id,
+            user_id=payload.user_id,
+            email=payload.email,
+            display_name=payload.display_name,
+            recipient_type=payload.recipient_type,
+            report_kind=payload.report_kind,
+            is_active=payload.is_active,
+        )
+    except errors.UniqueViolation as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A recipient with that email, type and report already exists",
+        ) from exc
+    except errors.ForeignKeyViolation as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign, client or user not found") from exc
+    if not recipient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found or not editable")
+    return recipient
+
+
+@router.patch("/campaigns/{campaign_id}/report-recipients/{recipient_id}")
+def update_campaign_report_recipient(
+    campaign_id: int,
+    recipient_id: int,
+    payload: CampaignReportRecipientUpdate,
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
+    require_campaign_editor(context)
+    try:
+        recipient = repository.update_campaign_report_recipient(
+            campaign_id=campaign_id,
+            client_id=context.client_id,
+            recipient_id=recipient_id,
+            email=payload.email,
+            display_name=payload.display_name,
+            recipient_type=payload.recipient_type,
+            report_kind=payload.report_kind,
+            is_active=payload.is_active,
+        )
+    except errors.UniqueViolation as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A recipient with that email, type and report already exists",
+        ) from exc
+    if not recipient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report recipient not found")
+    return recipient
+
+
+@router.post("/campaigns/{campaign_id}/reports/daily/send")
+def send_campaign_daily_report(
+    campaign_id: int,
+    business_date: date | None = Query(default=None),
+    context: ClientContext = Depends(require_client_context),
+    repository: MarketRepository = Depends(get_market_repository),
+) -> dict[str, object]:
+    require_campaign_editor(context)
+    resolved_business_date = business_date or default_report_business_date()
+    workspace = repository.fetch_campaign_workspace(
+        client_id=context.client_id,
+        campaign_id=campaign_id,
+        report_business_date=resolved_business_date,
+    )
+    if not workspace:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+
+    recipients = repository.list_active_campaign_report_recipients(
+        campaign_id=campaign_id,
+        client_id=context.client_id,
+    )
+    if not recipients:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No active report recipients configured")
+
+    preview = dict(workspace.get("report_preview") or {})
+    campaign = dict(workspace.get("campaign") or {})
+    try:
+        subject, delivered_recipients = send_campaign_daily_report_email(
+            campaign=campaign,
+            preview=preview,
+            recipients=recipients,
+        )
+    except EmailDeliveryError as exc:
+        delivery = repository.create_campaign_report_delivery(
+            campaign_id=campaign_id,
+            client_id=context.client_id,
+            business_date=resolved_business_date,
+            report_kind="daily_price_radar",
+            status="failed",
+            subject=None,
+            recipients=recipients,
+            requested_by_user_id=context.user_id,
+            error_summary=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Report email could not be sent: {exc}",
+        ) from exc
+
+    delivery = repository.create_campaign_report_delivery(
+        campaign_id=campaign_id,
+        client_id=context.client_id,
+        business_date=resolved_business_date,
+        report_kind="daily_price_radar",
+        status="sent",
+        subject=subject,
+        recipients=delivered_recipients,
+        requested_by_user_id=context.user_id,
+    )
+    return {
+        "status": "sent",
+        "delivery": delivery,
+        "recipients": delivered_recipients,
+        "business_date": resolved_business_date.isoformat(),
+    }
+
+
 @router.get("/campaign-access")
 def campaign_access(context: ClientContext = Depends(require_client_context)) -> dict[str, object]:
     require_system_operator(context)
@@ -458,7 +624,7 @@ def monitored_product_workspace(
     repository: MarketRepository = Depends(get_market_repository),
 ) -> dict[str, object]:
     require_system_operator(context)
-    workspace = repository.fetch_monitored_product_workspace(product_key=product_key)
+    workspace = repository.fetch_monitored_product_workspace(product_key=product_key, client_id=context.client_id)
     if not workspace:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return {

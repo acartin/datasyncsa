@@ -36,9 +36,9 @@ export function KpiCard({
           </div>
         ) : null}
         <div className="min-w-0">
-          <div className="truncate font-mono text-2xl font-normal leading-none">{value}</div>
-          <div className="mt-1 text-[10px] font-normal uppercase tracking-[0.07em] text-ink-muted">{label}</div>
-          {detail ? <div className={cn("mt-1 text-xs text-muted-foreground")}>{detail}</div> : null}
+          <div className="truncate font-mono text-kpi-value font-normal">{value}</div>
+          <div className="mt-1 text-kpi-label font-normal uppercase tracking-[0.07em] text-ink-muted">{label}</div>
+          {detail ? <div className={cn("mt-1 text-meta text-muted-foreground")}>{detail}</div> : null}
         </div>
       </CardContent>
     </Card>

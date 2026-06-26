@@ -11,6 +11,15 @@ function eventConfig(event: IntradayRadarEvent | null | undefined): EventPresent
   return (event?.presentation?.config as EventPresentationConfig | undefined) ?? {};
 }
 
+function formatNumeric(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(value);
+}
+
 export function showHeaderMetrics(event: IntradayRadarEvent | null | undefined): boolean {
   if (!event) return false;
   return eventConfig(event).show_header_metrics !== false;
@@ -69,10 +78,30 @@ export function formatEventValue(event: IntradayRadarEvent | null | undefined, v
   }
 
   if (event.presentation?.value_format === "currency" || event.event_area === "price") {
-    return new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(value);
+    return formatCurrency(value);
   }
 
-  return String(value);
+  return formatNumeric(value);
+}
+
+export function formatEventChangeValue(event: IntradayRadarEvent | null | undefined): string {
+  if (!event) return "-";
+
+  if (event.presentation?.change_format === "points" || event.event_area === "promotion") {
+    return event.change_amount == null ? "-" : `${event.change_amount.toFixed(1)} pts`;
+  }
+
+  if (event.presentation?.change_format === "currency") {
+    return event.change_amount == null ? "-" : formatCurrency(event.change_amount);
+  }
+
+  if (event.presentation?.change_format === "percent") {
+    return event.change_pct == null ? "-" : `${event.change_pct.toFixed(1)}%`;
+  }
+
+  const fallback = changeDelta(event);
+  if (fallback == null) return "-";
+  return formatNumeric(Math.abs(fallback));
 }
 
 export function showChangeValue(event: IntradayRadarEvent | null | undefined): boolean {
