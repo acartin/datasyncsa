@@ -1,9 +1,9 @@
 # AI Context Pack
 
-- Generated UTC: `2026-06-19T22:24:00Z`
+- Generated UTC: `2026-09-23T21:17:27Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Junio-12`
-- Git commit: `10b359f`
+- Git branch: `HETZNER-LOCAL-2026-Junio-30`
+- Git commit: `3f0b4f0`
 - Policy: high-signal only; enfocado en Market Watch / pricing.
 
 ## Contexto Maestro
@@ -13,10 +13,10 @@
 ```
 # BRAIN_MAP
 
-- Generated UTC: `2026-06-19T22:24:00Z`
+- Generated UTC: `2026-09-23T21:17:27Z`
 - Repo root: `/srv/datasyncsa`
-- Git branch: `HETZNER-LOCAL-2026-Junio-12`
-- Git commit: `10b359f`
+- Git branch: `HETZNER-LOCAL-2026-Junio-30`
+- Git commit: `3f0b4f0`
 
 ## 1. MAPA DE INTENCIONES (MARKET WATCH)
 
@@ -43,14 +43,14 @@
 
 ```text
 postgres
-admin-console-api
 market-watch-api
-dagster-daemon
+admin-console-api
 dagster-webserver
-redis
-admin-console-web
 market-watch-web
 portainer
+redis
+admin-console-web
+dagster-daemon
 ```
 
 ## 4. TOPOLOGIA DE TRABAJO
@@ -190,7 +190,7 @@ services/price-scrapper/seeds/2026-06-12_create_auth_password_reset_tokens.sql
 services/price-scrapper/seeds/2026-06-12_create_mw_app_product_history_tables.sql
 services/price-scrapper/seeds/2026-06-13_create_mkt_dim_geo_area.sql
 services/price-scrapper/seeds/2026-06-13_link_megasuper_locations_geo_area.sql
-services/price-scrapper/tests/test_extract_campaign_analytic_to_stage.py
+services/price-scrapper/seeds/2026-06-19_create_mkt_campaign_report_delivery.sql
 ```
 
 ## Reglas Operativas
@@ -511,14 +511,14 @@ Regla de ejecucion:
 
 ```text
 postgres
-admin-console-api
 market-watch-api
 dagster-daemon
+redis
+dagster-webserver
 market-watch-web
 portainer
+admin-console-api
 admin-console-web
-dagster-webserver
-redis
 ```
 ### `docker-compose.yml:1-220`
 
@@ -596,6 +596,8 @@ services:
       - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - RETAIL_SIGNAL_DB_MODE=direct
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL:-gemini-2.5-flash-lite}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
@@ -652,6 +654,8 @@ services:
       - RETAIL_SIGNAL_ENGINE_ROOT=/workspace/services/retail-signal-engine
       - PRICE_SCRAPPER_DB_MODE=direct
       - RETAIL_SIGNAL_DB_MODE=direct
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - LLM_DEFAULT_MODEL=${LLM_DEFAULT_MODEL:-gemini-2.5-flash-lite}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME}
@@ -739,10 +743,6 @@ services:
     environment:
       - TZ=${TZ:-UTC}
       - MARKET_WATCH_API_BASE_URL=http://market-watch-api:8000/api/v1
-      - MARKET_WATCH_PUBLIC_SUPERSET_URL=${MARKET_WATCH_SUPERSET_BASE_URL:-http://192.168.10.32:8088}
-      - MARKET_WATCH_SECURE_COOKIES=${MARKET_WATCH_SECURE_COOKIES:-false}
-    depends_on:
-      - market-watch-api
 ```
 ### `.env.example`
 
@@ -984,6 +984,8 @@ services/price-scrapper/seeds/2026-06-12_create_auth_password_reset_tokens.sql
 services/price-scrapper/seeds/2026-06-12_create_mw_app_product_history_tables.sql
 services/price-scrapper/seeds/2026-06-13_create_mkt_dim_geo_area.sql
 services/price-scrapper/seeds/2026-06-13_link_megasuper_locations_geo_area.sql
+services/price-scrapper/seeds/2026-06-19_create_mkt_campaign_report_delivery.sql
+services/price-scrapper/seeds/2026-06-26_add_price_event_llm_guidance.sql
 services/price-scrapper/tests/test_extract_campaign_analytic_to_stage.py
 services/price-scrapper/tests/test_http_client.py
 services/price-scrapper/tests/test_vtex_analytic_engine.py
@@ -1021,6 +1023,7 @@ services/market-watch-api/app/repositories/__init__.py
 services/market-watch-api/app/repositories/auth_repository.py
 services/market-watch-api/app/repositories/market_repository.py
 services/market-watch-api/app/services/email_sender.py
+services/market-watch-api/app/services/report_email.py
 services/market-watch-api/main.py
 services/market-watch-api/requirements.txt
 services/proxy-residencial/__init__.py
@@ -1034,6 +1037,7 @@ services/web/market-watch/Dockerfile
 services/web/market-watch/README.md
 services/web/market-watch/app/forgot-password/page.tsx
 services/web/market-watch/app/globals.css
+services/web/market-watch/app/icon.svg
 services/web/market-watch/app/layout.tsx
 services/web/market-watch/app/login/page.tsx
 services/web/market-watch/app/not-found.tsx

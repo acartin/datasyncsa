@@ -1,0 +1,13 @@
+name: datasyncsa-site-production
+
+services:
+  datasyncsa-site:
+    image: ghcr.io/acartin/datasyncsa-site:${DATASYNCSA_IMAGE_TAG:-main}
+    container_name: datasyncsa-site
+    restart: unless-stopped
+    networks:
+      - web-ingress
+
+networks:
+  web-ingress:
+    external: true
